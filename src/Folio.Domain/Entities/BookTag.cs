@@ -13,3 +13,4 @@ public class BookTag
 
     public DateTimeOffset AddedAt { get; set; } = DateTimeOffset.UtcNow;
 }
+

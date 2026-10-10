@@ -13,3 +13,4 @@ public interface IOcrEngine
 {
     Task<OcrResult> RecognizeImageAsync(string imagePath, CancellationToken cancellationToken = default);
 }
+

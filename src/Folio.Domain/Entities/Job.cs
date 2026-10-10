@@ -33,3 +33,4 @@ public class Job : BaseEntity
     // Navigation property
     public Book? Book { get; set; }
 }
+

@@ -14,3 +14,4 @@ public class Tag : BaseEntity
     // Navigation property
     public ICollection<BookTag> BookTags { get; set; } = new List<BookTag>();
 }
+

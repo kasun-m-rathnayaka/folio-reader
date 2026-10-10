@@ -13,3 +13,4 @@ public interface IJobRepository
     Task AddAsync(Job job, CancellationToken cancellationToken = default);
     void Update(Job job);
 }
+

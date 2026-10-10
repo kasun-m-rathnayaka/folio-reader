@@ -13,3 +13,4 @@ public interface IPdfRasterizer
         uint? maxDimensionPx = null,
         CancellationToken cancellationToken = default);
 }
+

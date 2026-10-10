@@ -32,3 +32,4 @@ public interface IPdfTextExtractor
     Task<ExtractedPage> ExtractPageAsync(string pdfPath, int pageIndex, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ExtractedPage>> ExtractAllPagesAsync(string pdfPath, IProgress<double>? progress = null, CancellationToken cancellationToken = default);
 }
+

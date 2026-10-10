@@ -33,3 +33,4 @@ public class Bookmark : BaseEntity
     // Navigation property
     public Book? Book { get; set; }
 }
+

@@ -32,3 +32,4 @@ public class EntityTests
         Assert.Empty(book.BookTags);
     }
 }
+

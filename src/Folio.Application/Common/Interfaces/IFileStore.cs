@@ -21,3 +21,4 @@ public interface IFileStore
     string GetCoverPath(string sha256);
     bool BookExists(string sha256);
 }
+

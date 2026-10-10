@@ -47,3 +47,4 @@ public class Book : BaseEntity
 
     public ICollection<BookTag> BookTags { get; set; } = new List<BookTag>();
 }
+

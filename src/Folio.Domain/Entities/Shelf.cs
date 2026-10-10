@@ -14,3 +14,4 @@ public class Shelf : BaseEntity
     // Navigation property
     public ICollection<BookShelf> BookShelves { get; set; } = new List<BookShelf>();
 }
+

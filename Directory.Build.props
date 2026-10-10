@@ -1,12 +1,11 @@
 <Project>
   <PropertyGroup>
-    <TargetFrameworkVersion>net10.0</TargetFrameworkVersion>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <Company>Folio</Company>
     <Product>Folio PDF Reader</Product>
     <Copyright>Copyright © 2026 Folio</Copyright>
+    <DefaultItemExcludes>$(DefaultItemExcludes);**/*_wpftmp.csproj</DefaultItemExcludes>
   </PropertyGroup>
 </Project>
-

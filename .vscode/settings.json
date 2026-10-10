@@ -1,0 +1,6 @@
+{
+  "dotnet.defaultSolution": "Folio.sln",
+  "files.exclude": {
+    "**/*_wpftmp*": true
+  }
+}

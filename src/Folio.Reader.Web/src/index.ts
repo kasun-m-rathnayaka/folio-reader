@@ -31,3 +31,4 @@ export interface ReaderCommands {
 }
 
 console.log('[Folio.Reader.Web] Module initialized.');
+

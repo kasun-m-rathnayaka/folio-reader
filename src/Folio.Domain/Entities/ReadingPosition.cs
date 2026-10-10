@@ -39,3 +39,4 @@ public class ReadingPosition : BaseEntity
     // Navigation property
     public Book? Book { get; set; }
 }
+

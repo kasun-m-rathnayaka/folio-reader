@@ -38,3 +38,4 @@ public class Annotation : BaseEntity
     // Navigation property
     public Book? Book { get; set; }
 }
+
