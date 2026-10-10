@@ -1,0 +1,92 @@
+{
+  "fixture_id": 1,
+  "filename": "01_single_column_book_300p.pdf",
+  "description": "Clean single-column book, 300 pages with outline, headers, footers, and uniform typography.",
+  "page_count": 300,
+  "has_outline": true,
+  "sample_pages": [
+    {
+      "page_index": 0,
+      "page_number": 1,
+      "running_headers": [
+        "FOLIO CLASSICAL STUDIES \u00b7 VOLUME I"
+      ],
+      "running_footers": [
+        "Page 1"
+      ],
+      "sentences": [
+        "In a world of constant notification and fleeting attention, deep reading remains one of humanity's finest arts.",
+        "A book demands patience, tactile familiarity, and a quiet space free from algorithmic interruptions.",
+        "When software honors the calm nature of paper, the reader ceases to notice the digital medium."
+      ],
+      "is_scanned": false
+    },
+    {
+      "page_index": 1,
+      "page_number": 2,
+      "running_headers": [
+        "FOLIO CLASSICAL STUDIES \u00b7 VOLUME I"
+      ],
+      "running_footers": [
+        "Page 2"
+      ],
+      "sentences": [
+        "Paragraph 2.1 continues the exploration into structured knowledge systems.",
+        "Every thought captured in the margin forms an indelible thread in the personal tapestry of comprehension.",
+        "We observe that the physical sensation of turning pages anchors memory far deeper than transient scrolling.",
+        "Therefore, continuous scroll must retain the deliberate spatial landmarks of discrete pagination."
+      ],
+      "is_scanned": false
+    },
+    {
+      "page_index": 50,
+      "page_number": 51,
+      "running_headers": [
+        "FOLIO CLASSICAL STUDIES \u00b7 VOLUME I"
+      ],
+      "running_footers": [
+        "Page 51"
+      ],
+      "sentences": [
+        "In a world of constant notification and fleeting attention, deep reading remains one of humanity's finest arts.",
+        "A book demands patience, tactile familiarity, and a quiet space free from algorithmic interruptions.",
+        "When software honors the calm nature of paper, the reader ceases to notice the digital medium."
+      ],
+      "is_scanned": false
+    },
+    {
+      "page_index": 149,
+      "page_number": 150,
+      "running_headers": [
+        "FOLIO CLASSICAL STUDIES \u00b7 VOLUME I"
+      ],
+      "running_footers": [
+        "Page 150"
+      ],
+      "sentences": [
+        "Paragraph 150.1 continues the exploration into structured knowledge systems.",
+        "Every thought captured in the margin forms an indelible thread in the personal tapestry of comprehension.",
+        "We observe that the physical sensation of turning pages anchors memory far deeper than transient scrolling.",
+        "Therefore, continuous scroll must retain the deliberate spatial landmarks of discrete pagination."
+      ],
+      "is_scanned": false
+    },
+    {
+      "page_index": 299,
+      "page_number": 300,
+      "running_headers": [
+        "FOLIO CLASSICAL STUDIES \u00b7 VOLUME I"
+      ],
+      "running_footers": [
+        "Page 300"
+      ],
+      "sentences": [
+        "Paragraph 300.1 continues the exploration into structured knowledge systems.",
+        "Every thought captured in the margin forms an indelible thread in the personal tapestry of comprehension.",
+        "We observe that the physical sensation of turning pages anchors memory far deeper than transient scrolling.",
+        "Therefore, continuous scroll must retain the deliberate spatial landmarks of discrete pagination."
+      ],
+      "is_scanned": false
+    }
+  ]
+}

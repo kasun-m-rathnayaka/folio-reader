@@ -1,0 +1,15 @@
+{
+  "SingleColumnPagesProcessed": 300,
+  "ExtractionThroughputPagesPerSec": 192.2,
+  "ExtractionTimeMs": 1561,
+  "HeaderExclusionRecallPercent": 100,
+  "FooterExclusionRecallPercent": 100,
+  "OverallExclusionPercent": 100,
+  "MultiColumnDeinterleavingVerified": true,
+  "CitationRuleDetectionVerified": true,
+  "FootnoteSeparationVerified": true,
+  "RotatedPagesExtractionVerified": true,
+  "CorruptPdfResilienceVerified": true,
+  "MemoryDeltaMb": 31,
+  "Timestamp": "2026-10-10T02:25:39.4065853Z"
+}

@@ -1,0 +1,36 @@
+{
+  "fixture_id": 10,
+  "filename": "10_existing_annotations.pdf",
+  "annotations": [
+    {
+      "type": "highlight",
+      "color_rgb": [
+        1.0,
+        1.0,
+        0.0
+      ],
+      "rect": [
+        72,
+        668,
+        480,
+        684
+      ],
+      "quote": "This paragraph contains a yellow highlight"
+    },
+    {
+      "type": "text_note",
+      "color_rgb": [
+        0.2,
+        0.8,
+        0.2
+      ],
+      "rect": [
+        500,
+        635,
+        520,
+        655
+      ],
+      "contents": "Review this section before submitting draft."
+    }
+  ]
+}

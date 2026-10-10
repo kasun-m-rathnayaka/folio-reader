@@ -1,0 +1,31 @@
+{
+  "fixture_id": 2,
+  "filename": "02_two_column_paper.pdf",
+  "sample_pages": [
+    {
+      "page_index": 0,
+      "page_number": 1,
+      "running_headers": [
+        "IEEE TRANSACTIONS ON CALM COMPUTING, VOL. 42, NO. 1, 2026"
+      ],
+      "running_footers": [
+        "1"
+      ],
+      "reading_order": [
+        "Title & Author",
+        "Abstract",
+        "Column 1 (Left)",
+        "Column 2 (Right)"
+      ],
+      "citations": [
+        "[1]",
+        "[2]",
+        "[3]",
+        "(Knuth, 1984)"
+      ],
+      "footnotes": [
+        "Manuscript received October 8, 2026. Corresponding author: J. Doe."
+      ]
+    }
+  ]
+}

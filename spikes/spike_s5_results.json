@@ -1,0 +1,14 @@
+{
+  "ScanDetectionAccuracyPercent": 100,
+  "Rasterizer": "Windows.Data.Pdf (WinRT)",
+  "TargetDpi": 300,
+  "RasterDimensions": "3400x4400",
+  "RasterLatencyMs": 1151,
+  "OcrEngine": "Windows.Media.Ocr (WinRT)",
+  "OcrLanguage": "en-US",
+  "OcrLatencyMs": 460,
+  "WordsRecognized": 63,
+  "CoordinateNormalizationVerified": true,
+  "MemoryDeltaMb": 209,
+  "Timestamp": "2026-10-10T02:29:34.6739808Z"
+}

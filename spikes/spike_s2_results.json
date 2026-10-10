@@ -1,0 +1,14 @@
+{
+  "ModelFormat": "Kokoro-82M FP16 ONNX",
+  "ModelFileSizeBytes": 163636560,
+  "ModelLoadTimeMs": 3320,
+  "ModelMemoryDeltaMb": 218,
+  "FirstAudioLatencyMs": 5140,
+  "AudioDurationSec": 5.31,
+  "RealTimeFactor": 1.03,
+  "VoiceUsed": "af_heart",
+  "WasapiBufferVerified": true,
+  "TimestampSupportVerified": false,
+  "IdleUnloadVerified": true,
+  "Timestamp": "2026-10-10T01:58:12.483832Z"
+}

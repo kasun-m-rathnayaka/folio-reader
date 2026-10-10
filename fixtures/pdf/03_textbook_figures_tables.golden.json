@@ -1,0 +1,44 @@
+{
+  "fixture_id": 3,
+  "filename": "03_textbook_figures_tables.pdf",
+  "figures": [
+    {
+      "label": "Figure 4.1",
+      "kind": "figure",
+      "bbox_pt": [
+        72,
+        480,
+        540,
+        640
+      ],
+      "caption": "Audio synthesis maintains a 20-second lookahead buffer to absorb CPU spikes during background OCR."
+    }
+  ],
+  "tables": [
+    {
+      "label": "Table 4.2",
+      "kind": "table",
+      "bbox_pt": [
+        72,
+        310,
+        540,
+        400
+      ],
+      "caption": "Table 4.2: Resource Budgets by Milestone"
+    }
+  ],
+  "sidebars": [
+    {
+      "title": "Key Insight: Single Writer Queue",
+      "bbox_pt": [
+        72,
+        180,
+        540,
+        270
+      ]
+    }
+  ],
+  "footnotes": [
+    "* Note: Benchmarks measured on Intel Core i7-1370P CPU-only reference machine."
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "name": "folio-reader-web",
+  "version": "0.1.0",
+  "description": "TypeScript pdf.js facade, canvas virtualization, and overlay layers for Folio",
+  "main": "dist/folio-reader.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0",
+    "vitest": "^3.0.0"
+  },
+  "dependencies": {
+    "pdfjs-dist": "^4.10.38"
+  }
+}

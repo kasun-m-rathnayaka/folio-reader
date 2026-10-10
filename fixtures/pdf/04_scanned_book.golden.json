@@ -1,0 +1,9 @@
+{
+  "fixture_id": 4,
+  "filename": "04_scanned_book.pdf",
+  "is_fully_scanned": true,
+  "has_native_text": false,
+  "page_count": 3,
+  "expected_detection": "scanned",
+  "description": "Composed strictly of bitmap images with no PDF text operators (BT/ET)."
+}

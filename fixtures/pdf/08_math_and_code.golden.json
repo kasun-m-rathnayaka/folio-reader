@@ -1,0 +1,20 @@
+{
+  "fixture_id": 8,
+  "filename": "08_math_and_code.pdf",
+  "code_blocks": [
+    {
+      "bbox_pt": [
+        72,
+        380,
+        540,
+        530
+      ],
+      "language": "C#",
+      "skip_in_narration": true
+    }
+  ],
+  "formulas": [
+    "L(x, lambda, nu) = f_0(x) + Sum_{i=1}^m lambda_i f_i(x) + Sum_{i=1}^p nu_i h_i(x)",
+    "grad f_0(x*) + Sum lambda_i* grad f_i(x*) = 0, with lambda_i* >= 0"
+  ]
+}

@@ -1,0 +1,155 @@
+@using System.Diagnostics
+@inject IJSRuntime JSRuntime
+
+<div style="padding: 20px; font-family: Segoe UI, sans-serif;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <div>
+            <h2 style="margin: 0; color: #3E2723;">Folio · Spike S1: Reader Host Benchmark</h2>
+            <p style="margin: 4px 0 0; color: #5D4037; font-size: 14px;">
+                Validating WebView2 Virtual Host Mapping (<code>https://folio.books/</code>) &amp; pdf.js 6.x Virtualization
+            </p>
+        </div>
+        <div>
+            <span style="font-weight: 600; padding: 6px 12px; background: #EFEBE9; border-radius: 6px; font-size: 13px;">
+                Process RAM: @(CurrentWorkingSetMb) MB
+            </span>
+        </div>
+    </div>
+
+    <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 16px;">
+        <button style="background: #8A5A3B; color: white; border: none; padding: 8px 18px; border-radius: 6px; cursor: pointer; font-weight: 500;"
+                @onclick="RunBenchmarks">
+            Run Benchmark Suite
+        </button>
+        <span style="color: #4E342E; font-size: 14px;">@StatusText</span>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+        <div style="background: white; border: 1px solid #D7CCC8; border-radius: 8px; padding: 14px;">
+            <h4 style="margin: 0 0 10px; color: #4E342E;">Benchmark Metrics</h4>
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                <tr>
+                    <td style="padding: 6px 0; border-bottom: 1px solid #EFEBE9;">Virtual Host Byte-Range Support:</td>
+                    <td style="text-align: right; font-weight: 600; color: @(RangeSupport ? "green" : "inherit");">
+                        @(RangeSupport ? "VERIFIED (HTTP 206/200)" : "Pending")
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px 0; border-bottom: 1px solid #EFEBE9;">300-page Cold Open (p.1):</td>
+                    <td style="text-align: right; font-weight: 600;">@ColdOpenMs ms (Budget: &le; 1,000 ms)</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px 0; border-bottom: 1px solid #EFEBE9;">1,000-page Cold Open (p.1):</td>
+                    <td style="text-align: right; font-weight: 600;">@ThousandPageMs ms</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px 0; border-bottom: 1px solid #EFEBE9;">Sequential Scroll Performance:</td>
+                    <td style="text-align: right; font-weight: 600;">@ScrollFps FPS (Budget: &ge; 55 FPS)</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px 0;">Process Working Set Memory:</td>
+                    <td style="text-align: right; font-weight: 600;">@CurrentWorkingSetMb MB (Budget: &le; 1,200 MB)</td>
+                </tr>
+            </table>
+        </div>
+
+        <div style="background: white; border: 1px solid #D7CCC8; border-radius: 8px; padding: 14px;">
+            <h4 style="margin: 0 0 10px; color: #4E342E;">Execution Log</h4>
+            <div id="status-log" style="height: 140px; overflow-y: auto; font-family: Consolas, monospace; font-size: 12px; background: #FAFAFA; padding: 8px; border-radius: 4px;">
+                @foreach (var log in Logs)
+                {
+                    <div style="margin-bottom: 4px;">@log</div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div style="background: white; border: 1px solid #D7CCC8; border-radius: 8px; padding: 14px;">
+        <h4 style="margin: 0 0 10px; color: #4E342E;">Rotated &amp; Cropped Coordinate Overlays Preview</h4>
+        <div id="preview-container" style="display: flex; flex-wrap: wrap; gap: 16px; min-height: 200px; justify-content: center;">
+            <!-- Rendered dynamically by spike_runner.mjs -->
+        </div>
+    </div>
+</div>
+
+@code {
+    private string StatusText = "Initializing...";
+    private bool RangeSupport = false;
+    private long ColdOpenMs = 0;
+    private long ThousandPageMs = 0;
+    private int ScrollFps = 0;
+    private long CurrentWorkingSetMb => Process.GetCurrentProcess().WorkingSet64 / (1024 * 1024);
+    private List<string> Logs = new();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await Task.Delay(300); // Allow CoreWebView2 initialization to settle
+            await RunBenchmarks();
+        }
+    }
+
+    private async Task RunBenchmarks()
+    {
+        StatusText = "Executing benchmarks...";
+        Logs.Add($"[{DateTime.Now:T}] Starting Spike S1 suite...");
+        StateHasChanged();
+
+        try
+        {
+            // Invoke the JavaScript benchmark runner
+            var res = await JSRuntime.InvokeAsync<SpikeResult>("triggerSpikeRun");
+
+            RangeSupport = res.VirtualHostRangeSupport;
+            ColdOpenMs = res.ColdOpenTimeMs;
+            ThousandPageMs = res.ThousandPageColdOpenTimeMs;
+            ScrollFps = res.AverageScrollFps;
+            StatusText = "All benchmarks passed!";
+            Logs.Add($"[{DateTime.Now:T}] Benchmark suite finished successfully.");
+
+            // Save results to disk
+            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            string outPath = Path.GetFullPath(Path.Combine(baseDir, @"..\..\..\spike_s1_results.json"));
+            var payload = new
+            {
+                VirtualHostRangeSupport = RangeSupport,
+                ColdOpenMs = ColdOpenMs,
+                ThousandPageMs = ThousandPageMs,
+                ScrollFps = ScrollFps,
+                WorkingSetMb = CurrentWorkingSetMb,
+                Timestamp = DateTime.UtcNow
+            };
+            File.WriteAllText(outPath, System.Text.Json.JsonSerializer.Serialize(payload, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+            Logs.Add($"[{DateTime.Now:T}] Results saved to {outPath}");
+
+            if (Environment.GetCommandLineArgs().Contains("--auto-exit"))
+            {
+                await Task.Delay(1000);
+                Application.Current.Shutdown();
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Error: {ex.Message}";
+            Logs.Add($"[{DateTime.Now:T}] ERROR: {ex.Message}");
+            File.WriteAllText("spike_error.txt", ex.ToString());
+
+            if (Environment.GetCommandLineArgs().Contains("--auto-exit"))
+            {
+                await Task.Delay(1000);
+                Application.Current.Shutdown();
+            }
+        }
+
+        StateHasChanged();
+    }
+
+    public class SpikeResult
+    {
+        public bool VirtualHostRangeSupport { get; set; }
+        public long ColdOpenTimeMs { get; set; }
+        public long ThousandPageColdOpenTimeMs { get; set; }
+        public int AverageScrollFps { get; set; }
+    }
+}

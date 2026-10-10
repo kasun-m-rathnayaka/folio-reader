@@ -1,0 +1,21 @@
+{
+  "fixture_id": 5,
+  "filename": "05_mixed_text_and_scan.pdf",
+  "page_classification": [
+    {
+      "page_index": 0,
+      "has_native_text": true,
+      "needs_ocr": false
+    },
+    {
+      "page_index": 1,
+      "has_native_text": false,
+      "needs_ocr": true
+    },
+    {
+      "page_index": 2,
+      "has_native_text": true,
+      "needs_ocr": false
+    }
+  ]
+}

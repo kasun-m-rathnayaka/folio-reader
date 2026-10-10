@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Folio.Domain\Folio.Domain.csproj" />
+    <ProjectReference Include="..\Folio.Application\Folio.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="KokoroSharp.CPU" Version="0.8.4" />
+  </ItemGroup>
+
+</Project>

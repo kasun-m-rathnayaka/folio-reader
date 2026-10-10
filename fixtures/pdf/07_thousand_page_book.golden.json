@@ -1,0 +1,10 @@
+{
+  "fixture_id": 7,
+  "filename": "07_thousand_page_book.pdf",
+  "total_pages": 1000,
+  "target_benchmarks": {
+    "ram_cap_mb": 1200,
+    "scroll_fps": 55,
+    "cold_open_s": 1.0
+  }
+}

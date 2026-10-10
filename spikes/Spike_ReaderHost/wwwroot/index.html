@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Folio Spike S1 — Reader Host & Virtual Host</title>
+  <link rel="stylesheet" href="lib/pdfjs/pdf_viewer.css" />
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 16px;
+      background-color: #f7f5f0;
+      color: #2b2825;
+    }
+    h1 {
+      margin-top: 0;
+      font-size: 20px;
+    }
+    .toolbar {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+      align-items: center;
+    }
+    button {
+      background-color: #8A5A3B;
+      color: #fff;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    button:hover {
+      background-color: #6e462d;
+    }
+    #status-log {
+      background: #ffffff;
+      border: 1px solid #dcd7ce;
+      border-radius: 8px;
+      padding: 12px;
+      height: 180px;
+      overflow-y: auto;
+      font-family: Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.4;
+      margin-bottom: 16px;
+    }
+    #preview-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      background: #ffffff;
+      padding: 16px;
+      border-radius: 8px;
+      border: 1px solid #dcd7ce;
+      min-height: 200px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <h1>Folio · Spike S1: Reader Host & Virtual Host Mapping</h1>
+    <div class="toolbar">
+      <button id="btn-run" onclick="triggerSpikeRun()">Run Spike S1 Benchmark</button>
+      <span id="run-status">Ready</span>
+    </div>
+    <div id="status-log"></div>
+    <h3>Rotated / Cropped Alignment Previews</h3>
+    <div id="preview-container"></div>
+  </div>
+
+  <script>
+    // Forward console and errors to C# host via WebView2
+    const originalLog = console.log;
+    console.log = function(...args) {
+      originalLog.apply(console, args);
+      try {
+        if (window.chrome && window.chrome.webview) {
+          window.chrome.webview.postMessage(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
+        }
+      } catch (_) {}
+    };
+
+    window.addEventListener('error', (e) => {
+      try {
+        if (window.chrome && window.chrome.webview) {
+          window.chrome.webview.postMessage("JS ERROR: " + e.message + " at " + e.filename + ":" + e.lineno);
+        }
+      } catch (_) {}
+    });
+  </script>
+
+  <script type="module">
+    import { runSpikeSuite } from './spike_runner.mjs';
+    window.runSpikeSuite = runSpikeSuite;
+
+    window.triggerSpikeRun = async function() {
+      const btn = document.getElementById('btn-run');
+      const statusLabel = document.getElementById('run-status');
+      if (btn) btn.disabled = true;
+      if (statusLabel) statusLabel.textContent = 'Running benchmarks...';
+
+      const results = await runSpikeSuite((msg) => {
+        if (statusLabel) statusLabel.textContent = msg;
+      });
+
+      if (statusLabel) statusLabel.textContent = 'Done!';
+      if (btn) btn.disabled = false;
+      window.lastSpikeResults = results;
+      return results;
+    };
+  </script>
+  <script src="_framework/blazor.webview.js"></script>
+</body>
+</html>
+

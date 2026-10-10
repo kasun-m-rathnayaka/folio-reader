@@ -1,0 +1,6 @@
+{
+  "fixture_id": 11,
+  "filename": "11_corrupt_truncated.pdf",
+  "is_valid": false,
+  "expected_behavior": "Graceful error toast in UI; no crash; categorized as unreadable."
+}

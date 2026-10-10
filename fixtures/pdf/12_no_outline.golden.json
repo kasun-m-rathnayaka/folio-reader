@@ -1,0 +1,43 @@
+{
+  "fixture_id": 12,
+  "filename": "12_no_outline.pdf",
+  "has_outline_dictionary": false,
+  "expected_heuristics_outline": [
+    {
+      "page_index": 0,
+      "title": "Section 1: Cognitive Principles of Information Density",
+      "level": 1,
+      "font_size": 18
+    },
+    {
+      "page_index": 0,
+      "title": "Section 1.1: Typographic Visual Hierarchy",
+      "level": 2,
+      "font_size": 14
+    },
+    {
+      "page_index": 1,
+      "title": "Section 2: Cognitive Principles of Information Density",
+      "level": 1,
+      "font_size": 18
+    },
+    {
+      "page_index": 1,
+      "title": "Section 2.1: Typographic Visual Hierarchy",
+      "level": 2,
+      "font_size": 14
+    },
+    {
+      "page_index": 2,
+      "title": "Section 3: Cognitive Principles of Information Density",
+      "level": 1,
+      "font_size": 18
+    },
+    {
+      "page_index": 2,
+      "title": "Section 3.1: Typographic Visual Hierarchy",
+      "level": 2,
+      "font_size": 14
+    }
+  ]
+}
