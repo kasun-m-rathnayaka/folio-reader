@@ -1,0 +1,505 @@
+@using System.Timers
+@using Folio.Application.Reading
+@using Folio.Application.Reading.DTOs
+@using Folio.Domain.Entities
+@using Folio.Domain.Enums
+@using Folio.Domain.Geometry
+@using Folio.UI.Components
+@using Folio.UI.Services
+@inject ReaderJsBridge ReaderBridge
+@inject IReadingPositionService ReadingPositionService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@implements IAsyncDisposable
+
+<div class="d-flex flex-column @(_isZenMode ? "folio-zen-active" : "")"
+     style="height: 100%; width: 100%; position: relative; overflow: hidden; background-color: var(--md-sys-color-background);"
+     tabindex="0"
+     @onkeydown="HandleKeyDown">
+
+    <!-- Top Reader Toolbar -->
+    <ReaderToolbar Title="@Book.Title"
+                   CurrentPage="@(_currentPageIndex + 1)"
+                   TotalPages="@Math.Max(1, _totalPages)"
+                   Zoom="@_zoom"
+                   LayoutMode="@_layoutMode"
+                   IsOutlineOpen="@_isOutlineOpen"
+                   IsSearchOpen="@_isSearchOpen"
+                   IsZenMode="@_isZenMode"
+                   OnBack="@HandleBack"
+                   OnToggleOutline="@ToggleOutline"
+                   OnPrevPage="@HandlePrevPage"
+                   OnNextPage="@HandleNextPage"
+                   OnOpenGoToPage="@OpenGoToPageDialog"
+                   OnZoomIn="@HandleZoomIn"
+                   OnZoomOut="@HandleZoomOut"
+                   OnFitWidth="@HandleFitWidth"
+                   OnFitPage="@HandleFitPage"
+                   OnToggleLayoutMode="@ToggleLayoutMode"
+                   OnRotateClockwise="@RotateClockwise"
+                   OnToggleSearch="@ToggleSearch"
+                   OnToggleZenMode="@ToggleZenMode" />
+
+    <!-- In-Book Search Floating Bar -->
+    @if (_isSearchOpen)
+    {
+        <FindInBookBar Query="@_searchQuery"
+                       CurrentMatch="@_currentSearchMatch"
+                       TotalMatches="@_totalSearchMatches"
+                       OnQueryChanged="@HandleSearchQueryChanged"
+                       OnFindNext="@HandleFindNext"
+                       OnFindPrevious="@HandleFindPrevious"
+                       OnClose="@(() => _isSearchOpen = false)" />
+    }
+
+    <!-- Main Reader Workspace -->
+    <div class="d-flex" style="flex: 1; height: calc(100% - 48px); width: 100%; overflow: hidden; position: relative;">
+        <!-- Collapsible Table of Contents Sidebar -->
+        @if (_isOutlineOpen)
+        {
+            <OutlineDrawer Outline="@_outline"
+                           CurrentPageIndex="@_currentPageIndex"
+                           OnSelectPage="@HandleSelectOutlinePage"
+                           OnClose="@ToggleOutline" />
+        }
+
+        <!-- PDF.js Canvas & TextLayer Host Container -->
+        <div id="folio-pdf-container" style="flex: 1; height: 100%; width: 100%; position: relative;">
+            <div class="folio-reader-loading">
+                Initializing reader...
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public Book Book { get; set; } = default!;
+    [Parameter] public EventCallback OnBackToLibrary { get; set; }
+
+    private DotNetObjectReference<ReaderView>? _dotNetRef;
+    private int _currentPageIndex = 0;
+    private int _totalPages = 1;
+    private double _zoom = 1.0;
+    private double _currentOffsetPercent = 0.0;
+    private ReaderViewMode _layoutMode = ReaderViewMode.Continuous;
+
+    private bool _isOutlineOpen = false;
+    private bool _isSearchOpen = false;
+    private bool _isZenMode = false;
+    private bool _hasInitializedViewer = false;
+
+    private string _searchQuery = "";
+    private int _currentSearchMatch = 0;
+    private int _totalSearchMatches = 0;
+    private List<OutlineNodeDto> _outline = new();
+
+    // Telemetry and session active reading tracker (FR-MEM-01..04)
+    private DateTimeOffset _lastInteractionTime = DateTimeOffset.UtcNow;
+    private long _accumulatedActiveSeconds = 0;
+    private Timer? _activeTimer;
+    private Timer? _debounceAutosaveTimer;
+
+    protected override void OnInitialized()
+    {
+        _dotNetRef = DotNetObjectReference.Create(this);
+
+        // 1-second interval timer for tracking active reading time (FR-MEM-04)
+        _activeTimer = new Timer(1000);
+        _activeTimer.Elapsed += OnActiveTimerTick;
+        _activeTimer.AutoReset = true;
+        _activeTimer.Start();
+
+        // 2-second debounce timer for position persistence
+        _debounceAutosaveTimer = new Timer(2000);
+        _debounceAutosaveTimer.Elapsed += OnDebounceTimerElapsed;
+        _debounceAutosaveTimer.AutoReset = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_hasInitializedViewer)
+        {
+            _hasInitializedViewer = true;
+
+            // Load saved reading position from SQLite
+            var savedPos = await ReadingPositionService.GetPositionAsync(Book.Id);
+            if (savedPos != null)
+            {
+                _currentPageIndex = savedPos.PageIndex;
+                _currentOffsetPercent = savedPos.OffsetPercent;
+                _zoom = savedPos.Zoom > 0 ? savedPos.Zoom : 1.0;
+                _layoutMode = savedPos.ViewMode;
+            }
+
+            // Initialize JavaScript PDF engine
+            await ReaderBridge.InitAsync("folio-pdf-container", _dotNetRef!);
+
+            string pdfUrl = $"https://folio.books/{Book.Sha256}.pdf";
+            string layoutModeStr = _layoutMode == ReaderViewMode.SinglePage ? "single" : "continuous";
+
+            await ReaderBridge.LoadDocumentAsync(
+                pdfUrl,
+                _currentPageIndex,
+                _currentOffsetPercent,
+                _zoom,
+                layoutModeStr);
+
+            // Display resume toast if resumed past page 1 (FR-MEM-02)
+            if (_currentPageIndex > 0)
+            {
+                Snackbar.Add($"Resumed at page {_currentPageIndex + 1}", Severity.Info, config =>
+                {
+                    config.Action = "Start from beginning";
+                    config.ActionColor = Color.Primary;
+                    config.OnClick = _ => HandleGoToPage(0);
+                });
+            }
+        }
+    }
+
+    private void RecordActivity()
+    {
+        _lastInteractionTime = DateTimeOffset.UtcNow;
+    }
+
+    private void OnActiveTimerTick(object? sender, ElapsedEventArgs e)
+    {
+        // Pause timer if user is idle for more than 2 minutes (FR-MEM-04)
+        if (DateTimeOffset.UtcNow - _lastInteractionTime <= TimeSpan.FromMinutes(2))
+        {
+            _accumulatedActiveSeconds++;
+        }
+    }
+
+    private async void OnDebounceTimerElapsed(object? sender, ElapsedEventArgs e)
+    {
+        await PersistPositionAsync();
+    }
+
+    private async Task PersistPositionAsync()
+    {
+        try
+        {
+            await ReadingPositionService.SavePositionAsync(
+                Book.Id,
+                _currentPageIndex,
+                _currentOffsetPercent,
+                _zoom,
+                _layoutMode,
+                _accumulatedActiveSeconds);
+            _accumulatedActiveSeconds = 0;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Failed to persist reading position: {ex.Message}");
+        }
+    }
+
+    [JSInvokable]
+    public void OnDocumentLoaded(DocumentLoadedPayload payload)
+    {
+        _totalPages = payload.TotalPages > 0 ? payload.TotalPages : Book.PageCount;
+        _outline = payload.Outline ?? new List<OutlineNodeDto>();
+        InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public void OnPositionChanged(PositionPayload payload)
+    {
+        RecordActivity();
+        _currentPageIndex = payload.PageIndex;
+        _currentOffsetPercent = payload.OffsetPercent;
+        if (payload.Zoom > 0)
+        {
+            _zoom = payload.Zoom;
+        }
+
+        // Trigger 2s debounced auto-save
+        _debounceAutosaveTimer?.Stop();
+        _debounceAutosaveTimer?.Start();
+
+        InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public void OnTextSelected(TextSelectionDto payload)
+    {
+        RecordActivity();
+        // Dispatched on text selection in viewport
+    }
+
+    [JSInvokable]
+    public void OnSearchMatch(SearchMatchPayload payload)
+    {
+        RecordActivity();
+        _currentSearchMatch = payload.CurrentMatch;
+        _totalSearchMatches = payload.TotalMatches;
+        _currentPageIndex = payload.PageIndex;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task HandleBack()
+    {
+        await PersistPositionAsync();
+        if (OnBackToLibrary.HasDelegate)
+        {
+            await OnBackToLibrary.InvokeAsync();
+        }
+    }
+
+    private async Task HandlePrevPage()
+    {
+        RecordActivity();
+        if (_currentPageIndex > 0)
+        {
+            await HandleGoToPage(_currentPageIndex - 1);
+        }
+    }
+
+    private async Task HandleNextPage()
+    {
+        RecordActivity();
+        if (_currentPageIndex < _totalPages - 1)
+        {
+            await HandleGoToPage(_currentPageIndex + 1);
+        }
+    }
+
+    private async Task HandleGoToPage(int pageIndex)
+    {
+        RecordActivity();
+        _currentPageIndex = Math.Clamp(pageIndex, 0, _totalPages - 1);
+        await ReaderBridge.GoToPageAsync(_currentPageIndex, 0.0);
+        StateHasChanged();
+    }
+
+    private async Task OpenGoToPageDialog()
+    {
+        RecordActivity();
+        var parameters = new DialogParameters<GoToPageDialog>
+        {
+            { x => x.CurrentPage, _currentPageIndex + 1 },
+            { x => x.TotalPages, _totalPages }
+        };
+
+        var dialog = await DialogService.ShowAsync<GoToPageDialog>("Go to Page", parameters);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled && result.Data is int targetPage)
+        {
+            await HandleGoToPage(targetPage - 1);
+        }
+    }
+
+    private async Task HandleZoomIn()
+    {
+        RecordActivity();
+        double current = _zoom > 0 ? _zoom : 1.0;
+        _zoom = Math.Min(4.0, Math.Round(current + 0.25, 2));
+        await ReaderBridge.SetZoomAsync(_zoom);
+    }
+
+    private async Task HandleZoomOut()
+    {
+        RecordActivity();
+        double current = _zoom > 0 ? _zoom : 1.0;
+        _zoom = Math.Max(0.25, Math.Round(current - 0.25, 2));
+        await ReaderBridge.SetZoomAsync(_zoom);
+    }
+
+    private async Task HandleFitWidth()
+    {
+        RecordActivity();
+        _zoom = -1;
+        await ReaderBridge.SetFitWidthAsync();
+    }
+
+    private async Task HandleFitPage()
+    {
+        RecordActivity();
+        _zoom = -2;
+        await ReaderBridge.SetFitPageAsync();
+    }
+
+    private async Task ToggleLayoutMode()
+    {
+        RecordActivity();
+        _layoutMode = _layoutMode == ReaderViewMode.Continuous
+            ? ReaderViewMode.SinglePage
+            : ReaderViewMode.Continuous;
+
+        string mode = _layoutMode == ReaderViewMode.SinglePage ? "single" : "continuous";
+        await ReaderBridge.SetLayoutModeAsync(mode);
+    }
+
+    private async Task RotateClockwise()
+    {
+        RecordActivity();
+        await ReaderBridge.SetRotationAsync(90);
+    }
+
+    private void ToggleOutline()
+    {
+        RecordActivity();
+        _isOutlineOpen = !_isOutlineOpen;
+    }
+
+    private void ToggleSearch()
+    {
+        RecordActivity();
+        _isSearchOpen = !_isSearchOpen;
+        if (!_isSearchOpen)
+        {
+            _searchQuery = "";
+            _ = ReaderBridge.ClearSearchAsync();
+        }
+    }
+
+    private void ToggleZenMode()
+    {
+        RecordActivity();
+        _isZenMode = !_isZenMode;
+    }
+
+    private async Task HandleSelectOutlinePage(int pageIndex)
+    {
+        await HandleGoToPage(pageIndex);
+    }
+
+    private async Task HandleSearchQueryChanged(string query)
+    {
+        RecordActivity();
+        _searchQuery = query;
+        if (!string.IsNullOrWhiteSpace(_searchQuery))
+        {
+            await ReaderBridge.SearchAsync(_searchQuery, forward: true);
+        }
+        else
+        {
+            _currentSearchMatch = 0;
+            _totalSearchMatches = 0;
+            await ReaderBridge.ClearSearchAsync();
+        }
+    }
+
+    private async Task HandleFindNext()
+    {
+        RecordActivity();
+        if (!string.IsNullOrWhiteSpace(_searchQuery))
+        {
+            await ReaderBridge.SearchAsync(_searchQuery, forward: true);
+        }
+    }
+
+    private async Task HandleFindPrevious()
+    {
+        RecordActivity();
+        if (!string.IsNullOrWhiteSpace(_searchQuery))
+        {
+            await ReaderBridge.SearchAsync(_searchQuery, forward: false);
+        }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        RecordActivity();
+
+        if (e.CtrlKey && e.Key.Equals("g", StringComparison.OrdinalIgnoreCase))
+        {
+            await OpenGoToPageDialog();
+        }
+        else if (e.CtrlKey && e.Key.Equals("f", StringComparison.OrdinalIgnoreCase))
+        {
+            ToggleSearch();
+        }
+        else if (e.CtrlKey && e.Key.Equals("k", StringComparison.OrdinalIgnoreCase))
+        {
+            await OpenCommandPaletteAsync();
+        }
+        else if (e.Key == "F11")
+        {
+            ToggleZenMode();
+        }
+        else if (e.Key == "Escape")
+        {
+            if (_isSearchOpen)
+            {
+                ToggleSearch();
+            }
+            else if (_isOutlineOpen)
+            {
+                ToggleOutline();
+            }
+            else if (_isZenMode)
+            {
+                ToggleZenMode();
+            }
+            else
+            {
+                await HandleBack();
+            }
+        }
+    }
+
+    private async Task OpenCommandPaletteAsync()
+    {
+        var dialog = await DialogService.ShowAsync<CommandPalette>("Command Palette");
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled && result.Data is string action)
+        {
+            switch (action)
+            {
+                case "goto": await OpenGoToPageDialog(); break;
+                case "find": ToggleSearch(); break;
+                case "fitwidth": await HandleFitWidth(); break;
+                case "fitpage": await HandleFitPage(); break;
+                case "zoomin": await HandleZoomIn(); break;
+                case "zoomout": await HandleZoomOut(); break;
+                case "rotate": await RotateClockwise(); break;
+                case "layout": await ToggleLayoutMode(); break;
+                case "toc": ToggleOutline(); break;
+                case "zen": ToggleZenMode(); break;
+                case "back": await HandleBack(); break;
+            }
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _activeTimer?.Stop();
+        _activeTimer?.Dispose();
+        _debounceAutosaveTimer?.Stop();
+        _debounceAutosaveTimer?.Dispose();
+
+        await PersistPositionAsync();
+
+        if (_dotNetRef != null)
+        {
+            _dotNetRef.Dispose();
+            _dotNetRef = null;
+        }
+
+        await ReaderBridge.DisposeAsync();
+    }
+
+    public class DocumentLoadedPayload
+    {
+        public int TotalPages { get; set; }
+        public List<OutlineNodeDto>? Outline { get; set; }
+    }
+
+    public class PositionPayload
+    {
+        public int PageIndex { get; set; }
+        public double OffsetPercent { get; set; }
+        public double Zoom { get; set; }
+    }
+
+    public class SearchMatchPayload
+    {
+        public int CurrentMatch { get; set; }
+        public int TotalMatches { get; set; }
+        public int PageIndex { get; set; }
+    }
+}

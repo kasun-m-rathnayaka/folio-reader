@@ -19,3 +19,4 @@ public interface IBookImportService
         IProgress<double>? progress = null,
         CancellationToken cancellationToken = default);
 }
+

@@ -70,3 +70,4 @@ public class BackgroundJobQueueTests : IDisposable
         Assert.Equal(job.Id, activeJobs[0].Id);
     }
 }
+

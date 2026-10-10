@@ -8,3 +8,4 @@ public interface IBatteryMonitor
     bool IsRunningOnBattery { get; }
     int? BatteryPercent { get; }
 }
+

@@ -12,3 +12,4 @@ public interface IBackgroundJobQueue
     Task<IReadOnlyList<Job>> GetActiveJobsAsync(CancellationToken cancellationToken = default);
     event Action<Job>? JobUpdated;
 }
+

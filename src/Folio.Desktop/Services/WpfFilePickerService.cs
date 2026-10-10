@@ -25,3 +25,4 @@ public class WpfFilePickerService : IFilePickerService
         return Task.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
     }
 }
+

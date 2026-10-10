@@ -1,0 +1,49 @@
+@using Folio.Application.Reading.DTOs
+
+<div class="mb-1">
+    <div class="d-flex align-center folio-toc-item @(CurrentPageIndex == Node.PageIndex ? "active" : "")"
+         @onclick="@(() => OnSelectPage.InvokeAsync(Node.PageIndex))">
+        @if (Node.Children.Count > 0)
+        {
+            <MudIconButton Icon="@(_isExpanded ? Icons.Material.Filled.KeyboardArrowDown : Icons.Material.Filled.KeyboardArrowRight)"
+                           Size="Size.Small"
+                           Class="pa-0 mr-1"
+                           OnClick="@ToggleExpand" />
+        }
+        else
+        {
+            <span style="display: inline-block; width: 24px;"></span>
+        }
+        <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1;">
+            @Node.Title
+        </span>
+        <span class="text-caption ml-2" style="opacity: 0.6;">
+            p.@(Node.PageIndex + 1)
+        </span>
+    </div>
+
+    @if (_isExpanded && Node.Children.Count > 0)
+    {
+        <div class="pl-3">
+            @foreach (var child in Node.Children)
+            {
+                <OutlineItem Node="@child"
+                             CurrentPageIndex="@CurrentPageIndex"
+                             OnSelectPage="@OnSelectPage" />
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public OutlineNodeDto Node { get; set; } = default!;
+    [Parameter] public int CurrentPageIndex { get; set; }
+    [Parameter] public EventCallback<int> OnSelectPage { get; set; }
+
+    private bool _isExpanded = false;
+
+    private void ToggleExpand()
+    {
+        _isExpanded = !_isExpanded;
+    }
+}

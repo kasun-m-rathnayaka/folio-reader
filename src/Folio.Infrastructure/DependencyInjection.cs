@@ -41,6 +41,7 @@ public static class DependencyInjection
         });
 
         services.AddScoped<IBookRepository, BookRepository>();
+        services.AddScoped<IReadingPositionRepository, ReadingPositionRepository>();
         services.AddScoped<IJobRepository, JobRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IDatabaseMigrator, DatabaseMigrator>();

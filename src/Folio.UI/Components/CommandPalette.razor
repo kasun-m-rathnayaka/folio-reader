@@ -1,0 +1,83 @@
+<MudDialog>
+    <TitleContent>
+        <div class="d-flex align-center gap-2">
+            <MudIcon Icon="@Icons.Material.Filled.Terminal" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">Command Palette</MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <MudTextField @bind-Value="_searchQuery"
+                      Placeholder="Type a command... (e.g. Fit width, Go to page)"
+                      Variant="Variant.Outlined"
+                      Immediate="true"
+                      AutoFocus="true"
+                      Class="mb-3"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search" />
+
+        <MudList T="string" Dense="true" Style="max-height: 280px; overflow-y: auto;">
+            @foreach (var cmd in FilteredCommands)
+            {
+                <MudListItem T="string"
+                             OnClick="@(() => SelectCommand(cmd.Action))"
+                             Class="pa-2 cursor-pointer">
+                    <div class="d-flex justify-space-between align-center" style="width: 100%;">
+                        <div class="d-flex align-center gap-2">
+                            <MudIcon Icon="@cmd.Icon" Size="Size.Small" Color="Color.Primary" />
+                            <MudText Typo="Typo.body2">@cmd.Title</MudText>
+                        </div>
+                        @if (!string.IsNullOrEmpty(cmd.Shortcut))
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Secondary">
+                                @cmd.Shortcut
+                            </MudChip>
+                        }
+                    </div>
+                </MudListItem>
+            }
+        </MudList>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    private string _searchQuery = "";
+
+    private readonly List<ReaderCommandItem> _commands = new()
+    {
+        new("Go to page...", "goto", Icons.Material.Filled.Numbers, "Ctrl+G"),
+        new("Find in book...", "find", Icons.Material.Filled.Search, "Ctrl+F"),
+        new("Fit Width", "fitwidth", Icons.Material.Filled.FitScreen, "W"),
+        new("Fit Page", "fitpage", Icons.Material.Filled.CropFree, "P"),
+        new("Zoom In", "zoomin", Icons.Material.Filled.Add, "Ctrl++"),
+        new("Zoom Out", "zoomout", Icons.Material.Filled.Remove, "Ctrl+-"),
+        new("Rotate 90° Clockwise", "rotate", Icons.Material.Filled.RotateRight, "R"),
+        new("Toggle Continuous / Single Page", "layout", Icons.Material.Filled.ViewStream, "L"),
+        new("Table of Contents", "toc", Icons.Material.Filled.MenuBook, "T"),
+        new("Toggle Zen Mode", "zen", Icons.Material.Filled.Fullscreen, "F11"),
+        new("Back to Library", "back", Icons.Material.Filled.ArrowBack, "Esc")
+    };
+
+    private IEnumerable<ReaderCommandItem> FilteredCommands =>
+        string.IsNullOrWhiteSpace(_searchQuery)
+            ? _commands
+            : _commands.Where(c => c.Title.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                                  c.Action.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase));
+
+    private void SelectCommand(string action)
+    {
+        MudDialog.Close(DialogResult.Ok(action));
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private record ReaderCommandItem(string Title, string Action, string Icon, string Shortcut);
+}

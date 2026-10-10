@@ -78,3 +78,4 @@ public class WinRtPdfRasterizer : IPdfRasterizer
         return outputImagePath;
     }
 }
+

@@ -69,3 +69,4 @@ public class BackgroundJobQueue : IBackgroundJobQueue
         JobUpdated?.Invoke(job);
     }
 }
+

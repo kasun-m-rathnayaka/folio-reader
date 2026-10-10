@@ -1,0 +1,75 @@
+<div class="folio-find-bar">
+    <MudIcon Icon="@Icons.Material.Filled.Search" Size="Size.Small" Color="Color.Primary" />
+    <input type="text"
+           style="border: none; outline: none; background: transparent; font-size: 13px; width: 180px;"
+           placeholder="Find in book... (Ctrl+F)"
+           value="@Query"
+           @oninput="HandleInput"
+           @onkeydown="HandleKeyDown"
+           autofocus />
+
+    @if (TotalMatches > 0)
+    {
+        <MudText Typo="Typo.caption" Class="mx-1" Style="white-space: nowrap;">
+            @(CurrentMatch) of @(TotalMatches)
+        </MudText>
+    }
+    else if (!string.IsNullOrWhiteSpace(Query))
+    {
+        <MudText Typo="Typo.caption" Color="Color.Error" Class="mx-1" Style="white-space: nowrap;">
+            0 matches
+        </MudText>
+    }
+
+    <MudIconButton Icon="@Icons.Material.Filled.KeyboardArrowUp"
+                   Size="Size.Small"
+                   OnClick="@(() => OnFindPrevious.InvokeAsync())"
+                   Disabled="@(TotalMatches == 0)"
+                   title="Previous match (Shift+F3)" />
+
+    <MudIconButton Icon="@Icons.Material.Filled.KeyboardArrowDown"
+                   Size="Size.Small"
+                   OnClick="@(() => OnFindNext.InvokeAsync())"
+                   Disabled="@(TotalMatches == 0)"
+                   title="Next match (F3 / Enter)" />
+
+    <MudIconButton Icon="@Icons.Material.Filled.Close"
+                   Size="Size.Small"
+                   OnClick="@(() => OnClose.InvokeAsync())"
+                   title="Close (Esc)" />
+</div>
+
+@code {
+    [Parameter] public string Query { get; set; } = "";
+    [Parameter] public int CurrentMatch { get; set; }
+    [Parameter] public int TotalMatches { get; set; }
+    [Parameter] public EventCallback<string> OnQueryChanged { get; set; }
+    [Parameter] public EventCallback OnFindNext { get; set; }
+    [Parameter] public EventCallback OnFindPrevious { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private async Task HandleInput(ChangeEventArgs e)
+    {
+        Query = e.Value?.ToString() ?? "";
+        await OnQueryChanged.InvokeAsync(Query);
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            if (e.ShiftKey)
+            {
+                await OnFindPrevious.InvokeAsync();
+            }
+            else
+            {
+                await OnFindNext.InvokeAsync();
+            }
+        }
+        else if (e.Key == "Escape")
+        {
+            await OnClose.InvokeAsync();
+        }
+    }
+}

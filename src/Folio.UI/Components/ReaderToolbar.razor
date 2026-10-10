@@ -1,0 +1,146 @@
+@using Folio.Domain.Enums
+
+<header class="folio-reader-toolbar">
+    <!-- Navigation Back -->
+    <MudTooltip Text="Back to Library (Esc)">
+        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
+                       Size="Size.Small"
+                       OnClick="@(() => OnBack.InvokeAsync())"
+                       aria-label="Back to Library" />
+    </MudTooltip>
+
+    <!-- Table of Contents Toggle -->
+    <MudTooltip Text="Table of Contents">
+        <MudIconButton Icon="@Icons.Material.Filled.MenuBook"
+                       Size="Size.Small"
+                       Color="@(IsOutlineOpen ? Color.Primary : Color.Default)"
+                       OnClick="@(() => OnToggleOutline.InvokeAsync())"
+                       aria-label="Table of Contents" />
+    </MudTooltip>
+
+    <!-- Book Title -->
+    <div class="folio-reader-title mx-2" title="@Title">
+        @Title
+    </div>
+
+    <!-- Page Number & Go To Page -->
+    <div class="d-flex align-center mx-auto gap-1">
+        <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft"
+                       Size="Size.Small"
+                       Disabled="@(CurrentPage <= 1)"
+                       OnClick="@(() => OnPrevPage.InvokeAsync())"
+                       aria-label="Previous Page" />
+
+        <MudButton Variant="Variant.Text"
+                   Size="Size.Small"
+                   Style="text-transform: none; font-size: 13px; font-weight: 500;"
+                   OnClick="@(() => OnOpenGoToPage.InvokeAsync())">
+            Page @CurrentPage of @TotalPages
+        </MudButton>
+
+        <MudIconButton Icon="@Icons.Material.Filled.ChevronRight"
+                       Size="Size.Small"
+                       Disabled="@(CurrentPage >= TotalPages)"
+                       OnClick="@(() => OnNextPage.InvokeAsync())"
+                       aria-label="Next Page" />
+    </div>
+
+    <!-- Zoom Controls -->
+    <div class="d-flex align-center gap-1">
+        <MudIconButton Icon="@Icons.Material.Filled.Remove"
+                       Size="Size.Small"
+                       OnClick="@(() => OnZoomOut.InvokeAsync())"
+                       title="Zoom Out (Ctrl+-)" />
+
+        <MudText Typo="Typo.caption" Style="min-width: 44px; text-align: center; font-weight: 600;">
+            @FormatZoom()
+        </MudText>
+
+        <MudIconButton Icon="@Icons.Material.Filled.Add"
+                       Size="Size.Small"
+                       OnClick="@(() => OnZoomIn.InvokeAsync())"
+                       title="Zoom In (Ctrl++)" />
+
+        <MudTooltip Text="Fit Width">
+            <MudIconButton Icon="@Icons.Material.Filled.FitScreen"
+                           Size="Size.Small"
+                           OnClick="@(() => OnFitWidth.InvokeAsync())"
+                           aria-label="Fit Width" />
+        </MudTooltip>
+
+        <MudTooltip Text="Fit Page">
+            <MudIconButton Icon="@Icons.Material.Filled.CropFree"
+                           Size="Size.Small"
+                           OnClick="@(() => OnFitPage.InvokeAsync())"
+                           aria-label="Fit Page" />
+        </MudTooltip>
+    </div>
+
+    <div class="folio-divider-vertical mx-2" style="width: 1px; height: 24px; background-color: var(--md-sys-color-outline-variant);"></div>
+
+    <!-- Layout Mode (Continuous vs Single Page) -->
+    <MudTooltip Text="@(LayoutMode == ReaderViewMode.Continuous ? "Switch to Single Page" : "Switch to Continuous Scroll")">
+        <MudIconButton Icon="@(LayoutMode == ReaderViewMode.Continuous ? Icons.Material.Filled.ViewStream : Icons.Material.Filled.SingleBed)"
+                       Size="Size.Small"
+                       OnClick="@(() => OnToggleLayoutMode.InvokeAsync())"
+                       aria-label="Toggle Layout Mode" />
+    </MudTooltip>
+
+    <!-- Rotate Clockwise -->
+    <MudTooltip Text="Rotate 90° Clockwise">
+        <MudIconButton Icon="@Icons.Material.Filled.RotateRight"
+                       Size="Size.Small"
+                       OnClick="@(() => OnRotateClockwise.InvokeAsync())"
+                       aria-label="Rotate Clockwise" />
+    </MudTooltip>
+
+    <!-- Find in Book -->
+    <MudTooltip Text="Find in Book (Ctrl+F)">
+        <MudIconButton Icon="@Icons.Material.Filled.Search"
+                       Size="Size.Small"
+                       Color="@(IsSearchOpen ? Color.Primary : Color.Default)"
+                       OnClick="@(() => OnToggleSearch.InvokeAsync())"
+                       aria-label="Find in Book" />
+    </MudTooltip>
+
+    <!-- Zen / Fullscreen Mode -->
+    <MudTooltip Text="Zen Mode (F11)">
+        <MudIconButton Icon="@(IsZenMode ? Icons.Material.Filled.FullscreenExit : Icons.Material.Filled.Fullscreen)"
+                       Size="Size.Small"
+                       Color="@(IsZenMode ? Color.Primary : Color.Default)"
+                       OnClick="@(() => OnToggleZenMode.InvokeAsync())"
+                       aria-label="Zen Mode" />
+    </MudTooltip>
+</header>
+
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public int CurrentPage { get; set; } = 1;
+    [Parameter] public int TotalPages { get; set; } = 1;
+    [Parameter] public double Zoom { get; set; } = 1.0;
+    [Parameter] public ReaderViewMode LayoutMode { get; set; } = ReaderViewMode.Continuous;
+    [Parameter] public bool IsOutlineOpen { get; set; }
+    [Parameter] public bool IsSearchOpen { get; set; }
+    [Parameter] public bool IsZenMode { get; set; }
+
+    [Parameter] public EventCallback OnBack { get; set; }
+    [Parameter] public EventCallback OnToggleOutline { get; set; }
+    [Parameter] public EventCallback OnPrevPage { get; set; }
+    [Parameter] public EventCallback OnNextPage { get; set; }
+    [Parameter] public EventCallback OnOpenGoToPage { get; set; }
+    [Parameter] public EventCallback OnZoomIn { get; set; }
+    [Parameter] public EventCallback OnZoomOut { get; set; }
+    [Parameter] public EventCallback OnFitWidth { get; set; }
+    [Parameter] public EventCallback OnFitPage { get; set; }
+    [Parameter] public EventCallback OnToggleLayoutMode { get; set; }
+    [Parameter] public EventCallback OnRotateClockwise { get; set; }
+    [Parameter] public EventCallback OnToggleSearch { get; set; }
+    [Parameter] public EventCallback OnToggleZenMode { get; set; }
+
+    private string FormatZoom()
+    {
+        if (Zoom <= -1.5) return "Page";
+        if (Zoom <= -0.5) return "Width";
+        return $"{(int)Math.Round(Zoom * 100)}%";
+    }
+}

@@ -9,98 +9,105 @@
 <MudSnackbarProvider />
 
 <div class="d-flex" style="height: 100vh; width: 100vw; overflow: hidden; background-color: var(--md-sys-color-background);" data-theme="@(_isDarkMode ? "dark" : "light")">
-    <!-- Left Navigation Rail (80px) -->
-    <nav class="folio-nav-rail">
-        <div class="folio-nav-item @(_activeNav == "Library" ? "active" : "")"
-             @onclick='@(() => SetNav("Library"))'
-             title="Library">
-            <MudIcon Icon="@Icons.Material.Filled.LocalLibrary" Size="Size.Medium" />
-            <span>Library</span>
-        </div>
-
-        <div class="folio-nav-item @(_activeNav == "Notebook" ? "active" : "")"
-             @onclick='@(() => SetNav("Notebook"))'
-             title="Notebook">
-            <MudIcon Icon="@Icons.Material.Filled.EditNote" Size="Size.Medium" />
-            <span>Notebook</span>
-        </div>
-
-        <div class="folio-nav-item @(_activeNav == "Study" ? "active" : "")"
-             @onclick='@(() => SetNav("Study"))'
-             title="Study">
-            <MudIcon Icon="@Icons.Material.Filled.School" Size="Size.Medium" />
-            <span>Study</span>
-        </div>
-
-        <div class="folio-nav-item @(_activeNav == "Models" ? "active" : "")"
-             @onclick='@(() => SetNav("Models"))'
-             title="Local Models">
-            <MudIcon Icon="@Icons.Material.Filled.Memory" Size="Size.Medium" />
-            <span>Models</span>
-        </div>
-
-        <div class="mt-auto folio-nav-item @(_activeNav == "Settings" ? "active" : "")"
-             @onclick='@(() => SetNav("Settings"))'
-             title="Settings">
-            <MudIcon Icon="@Icons.Material.Filled.Settings" Size="Size.Medium" />
-            <span>Settings</span>
-        </div>
-    </nav>
-
-    <!-- Main Content Area -->
-    <div class="d-flex flex-column" style="flex: 1; height: 100%; overflow: hidden;">
-        <!-- Top App Bar -->
-        <header class="folio-top-app-bar">
-            <div class="folio-logo">
-                <MudIcon Icon="@Icons.Material.Filled.AutoStories" Size="Size.Large" Color="Color.Primary" />
-                <span>Folio</span>
+    @if (_openedBook != null)
+    {
+        <Folio.UI.Pages.ReaderView Book="@_openedBook" OnBackToLibrary="@HandleCloseBook" />
+    }
+    else
+    {
+        <!-- Left Navigation Rail (80px) -->
+        <nav class="folio-nav-rail">
+            <div class="folio-nav-item @(_activeNav == "Library" ? "active" : "")"
+                 @onclick='@(() => SetNav("Library"))'
+                 title="Library">
+                <MudIcon Icon="@Icons.Material.Filled.LocalLibrary" Size="Size.Medium" />
+                <span>Library</span>
             </div>
 
-            <!-- Global Search Bar -->
-            <div class="folio-search-bar ml-4">
-                <MudIcon Icon="@Icons.Material.Filled.Search" Size="Size.Small" />
-                <input class="folio-search-input"
-                       type="text"
-                       placeholder="Search books, notes, authors... (Ctrl+K)"
-                       @bind="_searchQuery"
-                       @bind:event="oninput" />
+            <div class="folio-nav-item @(_activeNav == "Notebook" ? "active" : "")"
+                 @onclick='@(() => SetNav("Notebook"))'
+                 title="Notebook">
+                <MudIcon Icon="@Icons.Material.Filled.EditNote" Size="Size.Medium" />
+                <span>Notebook</span>
             </div>
 
-            <div class="ml-auto d-flex align-center gap-3">
-                <Folio.UI.Components.ActivityMonitorPopover />
-
-                <MudButton Variant="Variant.Filled"
-                           Color="Color.Primary"
-                           StartIcon="@Icons.Material.Filled.Add"
-                           Style="border-radius: 20px; text-transform: none; font-weight: 500;"
-                           OnClick="@OpenImportDialog">
-                    Add books
-                </MudButton>
-
-                <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
-                               Color="Color.Default"
-                               OnClick="@ToggleDarkMode"
-                               aria-label="Toggle dark mode" />
+            <div class="folio-nav-item @(_activeNav == "Study" ? "active" : "")"
+                 @onclick='@(() => SetNav("Study"))'
+                 title="Study">
+                <MudIcon Icon="@Icons.Material.Filled.School" Size="Size.Medium" />
+                <span>Study</span>
             </div>
-        </header>
 
-        <!-- View Body -->
-        <main style="flex: 1; height: calc(100vh - 64px); overflow: hidden;">
-            @if (_activeNav == "Library")
-            {
-                <Folio.UI.Pages.LibraryView @ref="_libraryView" SearchQuery="@_searchQuery" />
-            }
-            else
-            {
-                <div class="d-flex flex-column align-center justify-center" style="height: 100%;">
-                    <MudIcon Icon="@Icons.Material.Filled.HourglassEmpty" Size="Size.Large" Color="Color.Secondary" />
-                    <MudText Typo="Typo.h6" Class="mt-2" Color="Color.Secondary">
-                        @_activeNav view will arrive in the upcoming milestone.
-                    </MudText>
+            <div class="folio-nav-item @(_activeNav == "Models" ? "active" : "")"
+                 @onclick='@(() => SetNav("Models"))'
+                 title="Local Models">
+                <MudIcon Icon="@Icons.Material.Filled.Memory" Size="Size.Medium" />
+                <span>Models</span>
+            </div>
+
+            <div class="mt-auto folio-nav-item @(_activeNav == "Settings" ? "active" : "")"
+                 @onclick='@(() => SetNav("Settings"))'
+                 title="Settings">
+                <MudIcon Icon="@Icons.Material.Filled.Settings" Size="Size.Medium" />
+                <span>Settings</span>
+            </div>
+        </nav>
+
+        <!-- Main Content Area -->
+        <div class="d-flex flex-column" style="flex: 1; height: 100%; overflow: hidden;">
+            <!-- Top App Bar -->
+            <header class="folio-top-app-bar">
+                <div class="folio-logo">
+                    <MudIcon Icon="@Icons.Material.Filled.AutoStories" Size="Size.Large" Color="Color.Primary" />
+                    <span>Folio</span>
                 </div>
-            }
-        </main>
-    </div>
+
+                <!-- Global Search Bar -->
+                <div class="folio-search-bar ml-4">
+                    <MudIcon Icon="@Icons.Material.Filled.Search" Size="Size.Small" />
+                    <input class="folio-search-input"
+                           type="text"
+                           placeholder="Search books, notes, authors... (Ctrl+K)"
+                           @bind="_searchQuery"
+                           @bind:event="oninput" />
+                </div>
+
+                <div class="ml-auto d-flex align-center gap-3">
+                    <Folio.UI.Components.ActivityMonitorPopover />
+
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Add"
+                               Style="border-radius: 20px; text-transform: none; font-weight: 500;"
+                               OnClick="@OpenImportDialog">
+                        Add books
+                    </MudButton>
+
+                    <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
+                                   Color="Color.Default"
+                                   OnClick="@ToggleDarkMode"
+                                   aria-label="Toggle dark mode" />
+                </div>
+            </header>
+
+            <!-- View Body -->
+            <main style="flex: 1; height: calc(100vh - 64px); overflow: hidden;">
+                @if (_activeNav == "Library")
+                {
+                    <Folio.UI.Pages.LibraryView @ref="_libraryView" SearchQuery="@_searchQuery" OnOpenBook="@HandleOpenBook" />
+                }
+                else
+                {
+                    <div class="d-flex flex-column align-center justify-center" style="height: 100%;">
+                        <MudIcon Icon="@Icons.Material.Filled.HourglassEmpty" Size="Size.Large" Color="Color.Secondary" />
+                        <MudText Typo="Typo.h6" Class="mt-2" Color="Color.Secondary">
+                            @_activeNav view will arrive in the upcoming milestone.
+                        </MudText>
+                    </div>
+                }
+            </main>
+        </div>
+    }
 </div>
 
 @code {
@@ -108,6 +115,23 @@
     private string _searchQuery = "";
     private bool _isDarkMode = false;
     private Folio.UI.Pages.LibraryView? _libraryView;
+    private Folio.Domain.Entities.Book? _openedBook;
+
+    private void HandleOpenBook(Folio.Domain.Entities.Book book)
+    {
+        _openedBook = book;
+        StateHasChanged();
+    }
+
+    private async Task HandleCloseBook()
+    {
+        _openedBook = null;
+        if (_libraryView != null)
+        {
+            await _libraryView.RefreshAsync();
+        }
+        StateHasChanged();
+    }
 
     private readonly MudTheme _folioTheme = new()
     {

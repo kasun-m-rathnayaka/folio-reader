@@ -31,6 +31,7 @@ public partial class App : System.Windows.Application
                 services.AddMudServices();
                 services.AddFolioInfrastructure();
                 services.AddFolioApplication();
+                services.AddFolioUI();
                 services.AddSingleton<IFilePickerService, Folio.Desktop.Services.WpfFilePickerService>();
 
                 services.AddSingleton<MainWindow>();
