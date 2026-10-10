@@ -1,0 +1,81 @@
+<div class="folio-book-card" @onclick="@(() => OnOpen.InvokeAsync(Book))">
+    <div style="height: 200px; width: 100%; position: relative; overflow: hidden; background-color: var(--md-sys-color-surface-container-high);">
+        @if (!string.IsNullOrEmpty(Book.CoverPath) && System.IO.File.Exists(Book.CoverPath))
+        {
+            <img class="folio-book-cover"
+                 src="@($"file:///{Book.CoverPath.Replace('\\', '/')}")"
+                 alt="@Book.Title" />
+        }
+        else
+        {
+            <div class="folio-book-spine-placeholder">
+                <MudIcon Icon="@Icons.Material.Filled.MenuBook" Size="Size.Large" Class="mb-2" />
+                <MudText Typo="Typo.subtitle2" Class="font-weight-bold" Style="display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">
+                    @Book.Title
+                </MudText>
+                @if (!string.IsNullOrEmpty(Book.Author))
+                {
+                    <MudText Typo="Typo.caption" Class="mt-1" Style="opacity: 0.85;">
+                        @Book.Author
+                    </MudText>
+                }
+            </div>
+        }
+
+        <div style="position: absolute; top: 8px; right: 8px;">
+            <MudMenu Icon="@Icons.Material.Filled.MoreVert"
+                     Size="Size.Small"
+                     Dense="true"
+                     Style="background: rgba(255, 255, 255, 0.85); border-radius: 50%;">
+                <MudMenuItem Icon="@Icons.Material.Filled.AutoStories" OnClick="@(() => OnOpen.InvokeAsync(Book))">Read</MudMenuItem>
+                <MudMenuItem Icon="@Icons.Material.Filled.BookmarkBorder" OnClick="@(() => OnStatusChanged.InvokeAsync((Book, ReadingStatus.WantToRead)))">Want to Read</MudMenuItem>
+                <MudMenuItem Icon="@Icons.Material.Filled.PlayArrow" OnClick="@(() => OnStatusChanged.InvokeAsync((Book, ReadingStatus.Reading)))">Reading</MudMenuItem>
+                <MudMenuItem Icon="@Icons.Material.Filled.CheckCircle" OnClick="@(() => OnStatusChanged.InvokeAsync((Book, ReadingStatus.Finished)))">Finished</MudMenuItem>
+                <MudDivider />
+                <MudMenuItem Icon="@Icons.Material.Filled.DeleteOutline" OnClick="@(() => OnRemove.InvokeAsync(Book))">Remove</MudMenuItem>
+            </MudMenu>
+        </div>
+    </div>
+
+    <div class="pa-3 d-flex flex-column" style="flex: 1;">
+        <MudText Typo="Typo.subtitle2" Class="font-weight-bold text-truncate">
+            @Book.Title
+        </MudText>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="text-truncate mb-2">
+            @(Book.Author ?? "Unknown Author")
+        </MudText>
+
+        <div class="mt-auto d-flex align-center justify-space-between">
+            <MudChip T="string"
+                     Size="Size.Small"
+                     Variant="Variant.Text"
+                     Color="@GetStatusColor(Book.Status)">
+                @Book.Status
+            </MudChip>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                @Book.PageCount pages
+            </MudText>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public Book Book { get; set; } = null!;
+
+    [Parameter]
+    public EventCallback<Book> OnOpen { get; set; }
+
+    [Parameter]
+    public EventCallback<(Book, ReadingStatus)> OnStatusChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<Book> OnRemove { get; set; }
+
+    private Color GetStatusColor(ReadingStatus status) => status switch
+    {
+        ReadingStatus.Reading => Color.Primary,
+        ReadingStatus.Finished => Color.Success,
+        _ => Color.Default
+    };
+}

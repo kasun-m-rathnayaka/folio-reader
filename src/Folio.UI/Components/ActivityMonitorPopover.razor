@@ -1,0 +1,101 @@
+@inject IBackgroundJobQueue JobQueue
+@inject IBatteryMonitor BatteryMonitor
+@implements IDisposable
+
+<MudMenu Icon="@GetStatusIcon()"
+         Color="@GetStatusColor()"
+         Dense="true"
+         AnchorOrigin="Origin.BottomRight"
+         TransformOrigin="Origin.TopRight"
+         AriaLabel="Background Activity Monitor">
+    <div style="width: 320px; padding: 16px;">
+        <div class="d-flex justify-space-between align-center mb-2">
+            <MudText Typo="Typo.subtitle2" Class="font-weight-bold">Background Activity</MudText>
+            @if (BatteryMonitor.IsRunningOnBattery)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled" Icon="@Icons.Material.Filled.BatteryAlert">
+                    Battery Mode
+                </MudChip>
+            }
+            else
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Text" Icon="@Icons.Material.Filled.Power">
+                    AC Power
+                </MudChip>
+            }
+        </div>
+
+        @if (_activeJobs.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
+                All background tasks are idle.
+            </MudText>
+        }
+        else
+        {
+            <MudList T="Job" Dense="true" Class="pa-0">
+                @foreach (var job in _activeJobs)
+                {
+                    <MudListItem T="Job" Class="pa-1">
+                        <div class="d-flex flex-column" style="width: 100%;">
+                            <div class="d-flex justify-space-between align-center">
+                                <MudText Typo="Typo.caption" Class="font-weight-medium">
+                                    @job.Type (Priority @job.Priority)
+                                </MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    @job.Status
+                                </MudText>
+                            </div>
+                            <MudProgressLinear Color="Color.Primary"
+                                               Value="@((int)(job.Progress * 100))"
+                                               Class="my-1" />
+                        </div>
+                    </MudListItem>
+                }
+            </MudList>
+        }
+    </div>
+</MudMenu>
+
+@code {
+    private List<Job> _activeJobs = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        JobQueue.JobUpdated += OnJobUpdated;
+        await RefreshJobsAsync();
+    }
+
+    private async Task RefreshJobsAsync()
+    {
+        var jobs = await JobQueue.GetActiveJobsAsync();
+        _activeJobs = jobs.ToList();
+        StateHasChanged();
+    }
+
+    private void OnJobUpdated(Job job)
+    {
+        InvokeAsync(RefreshJobsAsync);
+    }
+
+    private string GetStatusIcon()
+    {
+        if (_activeJobs.Any(j => j.Status == JobStatus.Running))
+            return Icons.Material.Filled.Sync;
+        if (_activeJobs.Count > 0)
+            return Icons.Material.Filled.PendingActions;
+        return Icons.Material.Filled.CheckCircleOutline;
+    }
+
+    private Color GetStatusColor()
+    {
+        if (_activeJobs.Any(j => j.Status == JobStatus.Running))
+            return Color.Primary;
+        return Color.Default;
+    }
+
+    public void Dispose()
+    {
+        JobQueue.JobUpdated -= OnJobUpdated;
+    }
+}

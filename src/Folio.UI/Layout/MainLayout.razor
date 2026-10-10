@@ -1,0 +1,182 @@
+@inherits LayoutComponentBase
+@inject ISnackbar Snackbar
+@inject IBookImportService BookImportService
+@inject IFilePickerService FilePickerService
+
+<MudThemeProvider Theme="_folioTheme" IsDarkMode="@_isDarkMode" />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<div class="d-flex" style="height: 100vh; width: 100vw; overflow: hidden; background-color: var(--md-sys-color-background);" data-theme="@(_isDarkMode ? "dark" : "light")">
+    <!-- Left Navigation Rail (80px) -->
+    <nav class="folio-nav-rail">
+        <div class="folio-nav-item @(_activeNav == "Library" ? "active" : "")"
+             @onclick='@(() => SetNav("Library"))'
+             title="Library">
+            <MudIcon Icon="@Icons.Material.Filled.LocalLibrary" Size="Size.Medium" />
+            <span>Library</span>
+        </div>
+
+        <div class="folio-nav-item @(_activeNav == "Notebook" ? "active" : "")"
+             @onclick='@(() => SetNav("Notebook"))'
+             title="Notebook">
+            <MudIcon Icon="@Icons.Material.Filled.EditNote" Size="Size.Medium" />
+            <span>Notebook</span>
+        </div>
+
+        <div class="folio-nav-item @(_activeNav == "Study" ? "active" : "")"
+             @onclick='@(() => SetNav("Study"))'
+             title="Study">
+            <MudIcon Icon="@Icons.Material.Filled.School" Size="Size.Medium" />
+            <span>Study</span>
+        </div>
+
+        <div class="folio-nav-item @(_activeNav == "Models" ? "active" : "")"
+             @onclick='@(() => SetNav("Models"))'
+             title="Local Models">
+            <MudIcon Icon="@Icons.Material.Filled.Memory" Size="Size.Medium" />
+            <span>Models</span>
+        </div>
+
+        <div class="mt-auto folio-nav-item @(_activeNav == "Settings" ? "active" : "")"
+             @onclick='@(() => SetNav("Settings"))'
+             title="Settings">
+            <MudIcon Icon="@Icons.Material.Filled.Settings" Size="Size.Medium" />
+            <span>Settings</span>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <div class="d-flex flex-column" style="flex: 1; height: 100%; overflow: hidden;">
+        <!-- Top App Bar -->
+        <header class="folio-top-app-bar">
+            <div class="folio-logo">
+                <MudIcon Icon="@Icons.Material.Filled.AutoStories" Size="Size.Large" Color="Color.Primary" />
+                <span>Folio</span>
+            </div>
+
+            <!-- Global Search Bar -->
+            <div class="folio-search-bar ml-4">
+                <MudIcon Icon="@Icons.Material.Filled.Search" Size="Size.Small" />
+                <input class="folio-search-input"
+                       type="text"
+                       placeholder="Search books, notes, authors... (Ctrl+K)"
+                       @bind="_searchQuery"
+                       @bind:event="oninput" />
+            </div>
+
+            <div class="ml-auto d-flex align-center gap-3">
+                <Folio.UI.Components.ActivityMonitorPopover />
+
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Add"
+                           Style="border-radius: 20px; text-transform: none; font-weight: 500;"
+                           OnClick="@OpenImportDialog">
+                    Add books
+                </MudButton>
+
+                <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
+                               Color="Color.Default"
+                               OnClick="@ToggleDarkMode"
+                               aria-label="Toggle dark mode" />
+            </div>
+        </header>
+
+        <!-- View Body -->
+        <main style="flex: 1; height: calc(100vh - 64px); overflow: hidden;">
+            @if (_activeNav == "Library")
+            {
+                <Folio.UI.Pages.LibraryView @ref="_libraryView" SearchQuery="@_searchQuery" />
+            }
+            else
+            {
+                <div class="d-flex flex-column align-center justify-center" style="height: 100%;">
+                    <MudIcon Icon="@Icons.Material.Filled.HourglassEmpty" Size="Size.Large" Color="Color.Secondary" />
+                    <MudText Typo="Typo.h6" Class="mt-2" Color="Color.Secondary">
+                        @_activeNav view will arrive in the upcoming milestone.
+                    </MudText>
+                </div>
+            }
+        </main>
+    </div>
+</div>
+
+@code {
+    private string _activeNav = "Library";
+    private string _searchQuery = "";
+    private bool _isDarkMode = false;
+    private Folio.UI.Pages.LibraryView? _libraryView;
+
+    private readonly MudTheme _folioTheme = new()
+    {
+        PaletteLight = new PaletteLight
+        {
+            Primary = "#8A5A3B",
+            PrimaryDarken = "#6E3E21",
+            PrimaryLighten = "#FFDCC5",
+            Secondary = "#755846",
+            Background = "#FFF8F5",
+            Surface = "#FFF8F5",
+            AppbarBackground = "#FFF8F5",
+            DrawerBackground = "#F6ECE6",
+            TextPrimary = "#221A15",
+            TextSecondary = "#52443C",
+            ActionDefault = "#52443C",
+            LinesDefault = "#D7C2B8"
+        },
+        PaletteDark = new PaletteDark
+        {
+            Primary = "#FFB68B",
+            PrimaryDarken = "#8A5A3B",
+            PrimaryLighten = "#FFDCC5",
+            Secondary = "#E5BEA6",
+            Background = "#19120E",
+            Surface = "#19120E",
+            AppbarBackground = "#19120E",
+            DrawerBackground = "#221A15",
+            TextPrimary = "#EFE0D9",
+            TextSecondary = "#D7C2B8",
+            ActionDefault = "#D7C2B8",
+            LinesDefault = "#52443C"
+        }
+    };
+
+    private void SetNav(string nav)
+    {
+        _activeNav = nav;
+    }
+
+    private void ToggleDarkMode()
+    {
+        _isDarkMode = !_isDarkMode;
+    }
+
+    private async Task OpenImportDialog()
+    {
+        var fileNames = await FilePickerService.PickPdfFilesAsync();
+
+        if (fileNames.Count > 0)
+        {
+            Snackbar.Add($"Importing {fileNames.Count} book(s)...", Severity.Info);
+            var results = await BookImportService.ImportFilesAsync(fileNames);
+
+            int newCount = results.Count(r => r.IsNew);
+            int existingCount = results.Count(r => !r.IsNew && r.Error == null);
+
+            if (newCount > 0)
+            {
+                Snackbar.Add($"Successfully imported {newCount} new book(s)!", Severity.Success);
+            }
+            if (existingCount > 0)
+            {
+                Snackbar.Add($"{existingCount} book(s) were already in your library.", Severity.Normal);
+            }
+
+            if (_libraryView != null)
+            {
+                await _libraryView.RefreshAsync();
+            }
+        }
+    }
+}

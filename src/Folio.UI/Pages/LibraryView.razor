@@ -1,0 +1,226 @@
+@inject IBookRepository BookRepository
+@inject IUnitOfWork UnitOfWork
+@inject IBookImportService BookImportService
+@inject ISnackbar Snackbar
+
+<div class="pa-6" style="height: 100%; overflow-y: auto; background-color: var(--md-sys-color-background);">
+    <!-- Continue Reading Row -->
+    <ContinueReadingCarousel Books="@_recentlyReadBooks" OnOpenBook="@HandleOpenBook" />
+
+    <!-- Filter & Sort Bar -->
+    <div class="d-flex flex-wrap justify-space-between align-center mb-6 gap-3">
+        <div class="d-flex align-center gap-2">
+            <MudChip T="string"
+                     Variant="@(_filterStatus == null ? Variant.Filled : Variant.Outlined)"
+                     Color="Color.Primary"
+                     OnClick="@(() => SetFilter(null))">
+                All (@_allBooks.Count)
+            </MudChip>
+            <MudChip T="string"
+                     Variant="@(_filterStatus == ReadingStatus.Reading ? Variant.Filled : Variant.Outlined)"
+                     Color="Color.Primary"
+                     OnClick="@(() => SetFilter(ReadingStatus.Reading))">
+                Reading (@_allBooks.Count(b => b.Status == ReadingStatus.Reading))
+            </MudChip>
+            <MudChip T="string"
+                     Variant="@(_filterStatus == ReadingStatus.WantToRead ? Variant.Filled : Variant.Outlined)"
+                     Color="Color.Primary"
+                     OnClick="@(() => SetFilter(ReadingStatus.WantToRead))">
+                Want to Read (@_allBooks.Count(b => b.Status == ReadingStatus.WantToRead))
+            </MudChip>
+            <MudChip T="string"
+                     Variant="@(_filterStatus == ReadingStatus.Finished ? Variant.Filled : Variant.Outlined)"
+                     Color="Color.Primary"
+                     OnClick="@(() => SetFilter(ReadingStatus.Finished))">
+                Finished (@_allBooks.Count(b => b.Status == ReadingStatus.Finished))
+            </MudChip>
+        </div>
+
+        <div class="d-flex align-center gap-2">
+            <MudSelect T="string" Value="@_sortOption" ValueChanged="@OnSortChanged" Dense="true" Margin="Margin.Dense" Style="width: 140px;">
+                <MudSelectItem Value="@("Recent")">Recent</MudSelectItem>
+                <MudSelectItem Value="@("Title")">Title</MudSelectItem>
+                <MudSelectItem Value="@("Author")">Author</MudSelectItem>
+            </MudSelect>
+
+            <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
+                <MudIconButton Icon="@Icons.Material.Filled.GridView"
+                               Color="@(_isGridView ? Color.Primary : Color.Default)"
+                               OnClick="@(() => _isGridView = true)"
+                               aria-label="Grid view" />
+                <MudIconButton Icon="@Icons.Material.Filled.ViewList"
+                               Color="@(!_isGridView ? Color.Primary : Color.Default)"
+                               OnClick="@(() => _isGridView = false)"
+                               aria-label="List view" />
+            </MudButtonGroup>
+        </div>
+    </div>
+
+    <!-- Empty State -->
+    @if (FilteredBooks.Count == 0)
+    {
+        <div class="d-flex flex-column align-center justify-center py-12">
+            <MudIcon Icon="@Icons.Material.Filled.MenuBook" Size="Size.Large" Color="Color.Secondary" Style="font-size: 64px; opacity: 0.5;" />
+            <MudText Typo="Typo.h6" Class="mt-4 font-weight-medium" Color="Color.Secondary">
+                Your bookshelf is peaceful and empty.
+            </MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">
+                Import PDF books to begin your reading session.
+            </MudText>
+        </div>
+    }
+    else if (_isGridView)
+    {
+        <!-- Virtualized Responsive Grid -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 24px;">
+            @foreach (var book in FilteredBooks)
+            {
+                <BookCard Book="@book"
+                          OnOpen="@HandleOpenBook"
+                          OnStatusChanged="@HandleStatusChanged"
+                          OnRemove="@HandleRemoveBook" />
+            }
+        </div>
+    }
+    else
+    {
+        <!-- List View -->
+        <MudTable Items="@FilteredBooks" Hover="true" Dense="true" Elevation="1" Style="border-radius: 12px;">
+            <HeaderContent>
+                <MudTh>Title</MudTh>
+                <MudTh>Author</MudTh>
+                <MudTh>Pages</MudTh>
+                <MudTh>Status</MudTh>
+                <MudTh Style="text-align: right;">Actions</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Title" Class="font-weight-medium" Style="cursor: pointer;" @onclick="@(() => HandleOpenBook(context))">
+                    @context.Title
+                </MudTd>
+                <MudTd DataLabel="Author">@(context.Author ?? "Unknown")</MudTd>
+                <MudTd DataLabel="Pages">@context.PageCount</MudTd>
+                <MudTd DataLabel="Status">
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="@GetStatusColor(context.Status)">
+                        @context.Status
+                    </MudChip>
+                </MudTd>
+                <MudTd Style="text-align: right;">
+                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" OnClick="@(() => HandleOpenBook(context))">
+                        Read
+                    </MudButton>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public string? SearchQuery { get; set; }
+
+    [Parameter]
+    public EventCallback<Book> OnOpenBook { get; set; }
+
+    private List<Book> _allBooks = new();
+    private List<Book> _recentlyReadBooks = new();
+    private ReadingStatus? _filterStatus = null;
+    private string _sortOption = "Recent";
+    private bool _isGridView = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadBooksAsync();
+    }
+
+    public async Task RefreshAsync()
+    {
+        await LoadBooksAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadBooksAsync()
+    {
+        var books = await BookRepository.GetAllAsync();
+        _allBooks = books.ToList();
+
+        var recent = await BookRepository.GetRecentlyReadAsync(count: 5);
+        _recentlyReadBooks = recent.ToList();
+    }
+
+    private void SetFilter(ReadingStatus? status)
+    {
+        _filterStatus = status;
+    }
+
+    private void OnSortChanged(string sort)
+    {
+        _sortOption = sort;
+    }
+
+    private IReadOnlyList<Book> FilteredBooks
+    {
+        get
+        {
+            var query = _allBooks.AsEnumerable();
+
+            if (_filterStatus.HasValue)
+            {
+                query = query.Where(b => b.Status == _filterStatus.Value);
+            }
+
+            if (!string.IsNullOrWhiteSpace(SearchQuery))
+            {
+                query = query.Where(b => b.Title.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase) ||
+                                         (b.Author != null && b.Author.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase)));
+            }
+
+            query = _sortOption switch
+            {
+                "Title" => query.OrderBy(b => b.Title),
+                "Author" => query.OrderBy(b => b.Author ?? string.Empty),
+                _ => query.OrderByDescending(b => b.LastReadAt ?? b.CreatedAt)
+            };
+
+            return query.ToList();
+        }
+    }
+
+    private async Task HandleStatusChanged((Book book, ReadingStatus newStatus) args)
+    {
+        args.book.Status = args.newStatus;
+        BookRepository.Update(args.book);
+        await UnitOfWork.SaveChangesAsync();
+        Snackbar.Add($"Status updated to {args.newStatus}", Severity.Info);
+        StateHasChanged();
+    }
+
+    private async Task HandleRemoveBook(Book book)
+    {
+        BookRepository.Remove(book);
+        await UnitOfWork.SaveChangesAsync();
+        _allBooks.Remove(book);
+        _recentlyReadBooks.Remove(book);
+        Snackbar.Add($"Removed '{book.Title}' from library", Severity.Normal);
+        StateHasChanged();
+    }
+
+    private async Task HandleOpenBook(Book book)
+    {
+        book.Status = ReadingStatus.Reading;
+        book.LastReadAt = DateTimeOffset.UtcNow;
+        BookRepository.Update(book);
+        await UnitOfWork.SaveChangesAsync();
+
+        if (OnOpenBook.HasDelegate)
+        {
+            await OnOpenBook.InvokeAsync(book);
+        }
+    }
+
+    private Color GetStatusColor(ReadingStatus status) => status switch
+    {
+        ReadingStatus.Reading => Color.Primary,
+        ReadingStatus.Finished => Color.Success,
+        _ => Color.Default
+    };
+}
