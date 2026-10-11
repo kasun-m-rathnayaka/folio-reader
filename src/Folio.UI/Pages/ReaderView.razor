@@ -1,6 +1,8 @@
 @using System.Timers
 @using Folio.Application.Reading
 @using Folio.Application.Reading.DTOs
+@using Folio.Application.Annotations
+@using Folio.Application.Annotations.DTOs
 @using Folio.Domain.Entities
 @using Folio.Domain.Enums
 @using Folio.Domain.Geometry
@@ -8,8 +10,12 @@
 @using Folio.UI.Services
 @inject ReaderJsBridge ReaderBridge
 @inject IReadingPositionService ReadingPositionService
+@inject IBookmarkService BookmarkService
+@inject IAnnotationService AnnotationService
+@inject IAnnotationExportService ExportService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject IJSRuntime JS
 @implements IAsyncDisposable
 
 <div class="d-flex flex-column @(_isZenMode ? "folio-zen-active" : "")"
@@ -26,8 +32,13 @@
                    IsOutlineOpen="@_isOutlineOpen"
                    IsSearchOpen="@_isSearchOpen"
                    IsZenMode="@_isZenMode"
+                   IsDogEared="@_isDogEared"
+                   IsNotesOpen="@_isNotesOpen"
                    OnBack="@HandleBack"
                    OnToggleOutline="@ToggleOutline"
+                   OnToggleDogEar="@ToggleDogEarAsync"
+                   OnToggleNotes="@ToggleNotes"
+                   OnOpenNotebook="@OpenNotebookAsync"
                    OnPrevPage="@HandlePrevPage"
                    OnNextPage="@HandleNextPage"
                    OnOpenGoToPage="@OpenGoToPageDialog"
@@ -75,10 +86,30 @@
                               OnToolChanged="@HandleToolChanged"
                               OnMoreOptions="@OpenCommandPaletteAsync" />
 
+            <!-- Floating Selection Quick Bar (FR-ANN-01) -->
+            <SelectionQuickBar IsVisible="@_isSelectionBarVisible"
+                               ClientX="@_selectionClientX"
+                               ClientY="@_selectionClientY"
+                               OnApplyHighlight="@HandleApplyHighlight"
+                               OnAddNote="@HandleAddNoteFromSelection"
+                               OnCopyQuote="@HandleCopyQuoteFromSelection"
+                               OnDismiss="@HandleDismissSelection" />
+
             <div class="folio-reader-loading">
                 Initializing reader...
             </div>
         </div>
+
+        <!-- Marginalia Lane (FR-ANN-02) -->
+        @if (_isNotesOpen)
+        {
+            <MarginaliaLane Annotations="@_pageAnnotations"
+                            ActiveAnnotationId="@_activeAnnotationId"
+                            OnSelectAnnotation="@HandleSelectAnnotationCard"
+                            OnDeleteAnnotation="@HandleDeleteAnnotation"
+                            OnSaveNote="@HandleSaveNote"
+                            OnClose="@(() => _isNotesOpen = false)" />
+        }
     </div>
 </div>
 
@@ -97,6 +128,17 @@
     private bool _isSearchOpen = false;
     private bool _isZenMode = false;
     private bool _hasInitializedViewer = false;
+
+    private bool _isDogEared = false;
+    private bool _isNotesOpen = false;
+    private List<AnnotationDto> _pageAnnotations = new();
+    private Guid? _activeAnnotationId;
+
+    private bool _isSelectionBarVisible = false;
+    private double _selectionClientX = 300;
+    private double _selectionClientY = 150;
+    private string? _selectedText;
+    private IReadOnlyList<NormalizedRect> _selectedRects = Array.Empty<NormalizedRect>();
 
     private string _searchQuery = "";
     private int _currentSearchMatch = 0;
@@ -207,17 +249,19 @@
     }
 
     [JSInvokable]
-    public void OnDocumentLoaded(DocumentLoadedPayload payload)
+    public async Task OnDocumentLoaded(DocumentLoadedPayload payload)
     {
         _totalPages = payload.TotalPages > 0 ? payload.TotalPages : Book.PageCount;
         _outline = payload.Outline ?? new List<OutlineNodeDto>();
-        InvokeAsync(StateHasChanged);
+        await LoadPageAnnotationsAndBookmarksAsync(_currentPageIndex);
+        await InvokeAsync(StateHasChanged);
     }
 
     [JSInvokable]
-    public void OnPositionChanged(PositionPayload payload)
+    public async Task OnPositionChanged(PositionPayload payload)
     {
         RecordActivity();
+        int prevPage = _currentPageIndex;
         _currentPageIndex = payload.PageIndex;
         _currentOffsetPercent = payload.OffsetPercent;
         if (payload.Zoom > 0)
@@ -225,18 +269,200 @@
             _zoom = payload.Zoom;
         }
 
+        if (prevPage != _currentPageIndex)
+        {
+            await LoadPageAnnotationsAndBookmarksAsync(_currentPageIndex);
+        }
+
         // Trigger 2s debounced auto-save
         _debounceAutosaveTimer?.Stop();
         _debounceAutosaveTimer?.Start();
 
-        InvokeAsync(StateHasChanged);
+        await InvokeAsync(StateHasChanged);
     }
 
     [JSInvokable]
     public void OnTextSelected(TextSelectionDto payload)
     {
         RecordActivity();
-        // Dispatched on text selection in viewport
+        _selectedText = payload.SelectedText;
+        _selectedRects = payload.Rects;
+        _isSelectionBarVisible = true;
+        _selectionClientX = 350;
+        _selectionClientY = 160;
+        InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public async Task OnSnipCompleted(SnipPayload payload)
+    {
+        RecordActivity();
+        var ann = await AnnotationService.CreateAnnotationAsync(new CreateAnnotationDto(
+            BookId: Book.Id,
+            PageIndex: payload.PageIndex,
+            Type: AnnotationType.AreaSnip,
+            Color: HighlightColor.Blue,
+            Rects: new[] { payload.Rect },
+            Note: "Area Snip"
+        ));
+        _pageAnnotations.Add(ann);
+        await RedrawPageAnnotationsAsync();
+        _isNotesOpen = true;
+        Snackbar.Add("Area snip captured", Severity.Success);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public async Task OnDogEarToggled(int pageIndex)
+    {
+        RecordActivity();
+        var result = await BookmarkService.ToggleDogEarAsync(Book.Id, pageIndex);
+        _isDogEared = result != null;
+        await ReaderBridge.SetDogEarAsync(pageIndex, _isDogEared);
+        Snackbar.Add(_isDogEared ? $"Page {pageIndex + 1} dog-eared" : $"Page {pageIndex + 1} dog-ear removed", Severity.Info);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public void OnAnnotationClicked(string annId)
+    {
+        RecordActivity();
+        if (Guid.TryParse(annId, out var id))
+        {
+            _activeAnnotationId = id;
+            _isNotesOpen = true;
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task LoadPageAnnotationsAndBookmarksAsync(int pageIndex)
+    {
+        _isDogEared = await BookmarkService.IsPageDogEaredAsync(Book.Id, pageIndex);
+        var annotations = await AnnotationService.GetAnnotationsForPageAsync(Book.Id, pageIndex);
+        _pageAnnotations = annotations.ToList();
+        await RedrawPageAnnotationsAsync();
+        await ReaderBridge.SetDogEarAsync(pageIndex, _isDogEared);
+    }
+
+    private async Task RedrawPageAnnotationsAsync()
+    {
+        var rawList = _pageAnnotations.Select(a => new
+        {
+            id = a.Id.ToString(),
+            type = a.Type.ToString(),
+            colorHex = a.Color.ToHex(),
+            rects = a.Rects
+        }).ToList();
+        await ReaderBridge.DrawAnnotationsAsync(_currentPageIndex, rawList);
+    }
+
+    private async Task ToggleDogEarAsync()
+    {
+        await OnDogEarToggled(_currentPageIndex);
+    }
+
+    private void ToggleNotes()
+    {
+        _isNotesOpen = !_isNotesOpen;
+    }
+
+    private async Task OpenNotebookAsync()
+    {
+        var parameters = new DialogParameters<NotebookView>
+        {
+            { x => x.BookId, Book.Id },
+            { x => x.BookTitle, Book.Title },
+            { x => x.Author, Book.Author },
+            { x => x.OnJumpToPage, EventCallback.Factory.Create<int>(this, HandleGoToPage) }
+        };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Large };
+        await DialogService.ShowAsync<NotebookView>("Notebook", parameters, options);
+    }
+
+    private async Task HandleSelectAnnotationCard(Guid annId)
+    {
+        _activeAnnotationId = annId;
+        await ReaderBridge.PulseAnnotationAsync(annId);
+    }
+
+    private async Task HandleDeleteAnnotation(Guid annId)
+    {
+        await AnnotationService.DeleteAnnotationAsync(annId);
+        _pageAnnotations.RemoveAll(a => a.Id == annId);
+        await RedrawPageAnnotationsAsync();
+        Snackbar.Add("Annotation deleted", Severity.Info);
+    }
+
+    private async Task HandleSaveNote((Guid Id, string Note) data)
+    {
+        await AnnotationService.UpdateAnnotationAsync(new UpdateAnnotationDto(data.Id, Note: data.Note));
+        var idx = _pageAnnotations.FindIndex(a => a.Id == data.Id);
+        if (idx >= 0)
+        {
+            var old = _pageAnnotations[idx];
+            _pageAnnotations[idx] = old with { Note = data.Note };
+        }
+        Snackbar.Add("Note updated", Severity.Success);
+    }
+
+    private async Task HandleApplyHighlight((HighlightColor Color, AnnotationType Type) option)
+    {
+        if (string.IsNullOrEmpty(_selectedText) || _selectedRects.Count == 0) return;
+
+        var ann = await AnnotationService.CreateAnnotationAsync(new CreateAnnotationDto(
+            BookId: Book.Id,
+            PageIndex: _currentPageIndex,
+            Type: option.Type,
+            Color: option.Color,
+            Rects: _selectedRects,
+            SelectedText: _selectedText
+        ));
+
+        _pageAnnotations.Add(ann);
+        await RedrawPageAnnotationsAsync();
+        _isSelectionBarVisible = false;
+        await ReaderBridge.ClearSelectionBoxAsync();
+        Snackbar.Add($"{option.Type} created", Severity.Success);
+    }
+
+    private async Task HandleAddNoteFromSelection()
+    {
+        if (string.IsNullOrEmpty(_selectedText) || _selectedRects.Count == 0) return;
+
+        var ann = await AnnotationService.CreateAnnotationAsync(new CreateAnnotationDto(
+            BookId: Book.Id,
+            PageIndex: _currentPageIndex,
+            Type: AnnotationType.MarginNote,
+            Color: HighlightColor.Yellow,
+            Rects: _selectedRects,
+            SelectedText: _selectedText,
+            Note: "Note added from selection"
+        ));
+
+        _pageAnnotations.Add(ann);
+        await RedrawPageAnnotationsAsync();
+        _activeAnnotationId = ann.Id;
+        _isNotesOpen = true;
+        _isSelectionBarVisible = false;
+        await ReaderBridge.ClearSelectionBoxAsync();
+    }
+
+    private async Task HandleCopyQuoteFromSelection()
+    {
+        if (!string.IsNullOrEmpty(_selectedText))
+        {
+            string citation = ExportService.FormatQuoteCitation(_selectedText, Book.Title, Book.Author, _currentPageIndex);
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", citation);
+            Snackbar.Add("Quote citation copied to clipboard", Severity.Success);
+        }
+        _isSelectionBarVisible = false;
+        await ReaderBridge.ClearSelectionBoxAsync();
+    }
+
+    private async Task HandleDismissSelection()
+    {
+        _isSelectionBarVisible = false;
+        await ReaderBridge.ClearSelectionBoxAsync();
     }
 
     [JSInvokable]
@@ -349,10 +575,30 @@
         await ReaderBridge.SetRotationAsync(90);
     }
 
-    private void HandleToolChanged(string tool)
+    private async Task HandleToolChanged(string tool)
     {
         RecordActivity();
         _activeTool = tool;
+        if (tool == "snip")
+        {
+            await ReaderBridge.SetSnipModeAsync(true);
+            Snackbar.Add("Drag a rectangle on the page to snip an area", Severity.Info);
+        }
+        else if (tool == "note")
+        {
+            _isNotesOpen = true;
+        }
+        else if (tool == "highlight")
+        {
+            if (!string.IsNullOrEmpty(_selectedText))
+            {
+                await HandleApplyHighlight((HighlightColor.Yellow, AnnotationType.Highlight));
+            }
+        }
+        else
+        {
+            await ReaderBridge.SetSnipModeAsync(false);
+        }
     }
 
     private async Task RotateDegrees(int delta)
@@ -431,6 +677,10 @@
         {
             await OpenGoToPageDialog();
         }
+        else if (e.CtrlKey && e.Key.Equals("d", StringComparison.OrdinalIgnoreCase))
+        {
+            await ToggleDogEarAsync();
+        }
         else if (e.CtrlKey && e.Key.Equals("f", StringComparison.OrdinalIgnoreCase))
         {
             ToggleSearch();
@@ -438,6 +688,14 @@
         else if (e.CtrlKey && e.Key.Equals("k", StringComparison.OrdinalIgnoreCase))
         {
             await OpenCommandPaletteAsync();
+        }
+        else if (e.Key.Equals("h", StringComparison.OrdinalIgnoreCase) && !e.CtrlKey && !e.AltKey && !string.IsNullOrEmpty(_selectedText))
+        {
+            await HandleApplyHighlight((HighlightColor.Yellow, AnnotationType.Highlight));
+        }
+        else if (e.Key.Equals("c", StringComparison.OrdinalIgnoreCase) && !e.CtrlKey && !e.AltKey && !string.IsNullOrEmpty(_selectedText))
+        {
+            await HandleAddNoteFromSelection();
         }
         else if (e.Key == "F11")
         {
@@ -482,6 +740,7 @@
                 case "rotate": await RotateClockwise(); break;
                 case "layout": await ToggleLayoutMode(); break;
                 case "toc": ToggleOutline(); break;
+                case "notebook": await OpenNotebookAsync(); break;
                 case "zen": ToggleZenMode(); break;
                 case "back": await HandleBack(); break;
             }
@@ -524,6 +783,12 @@
         public int CurrentMatch { get; set; }
         public int TotalMatches { get; set; }
         public int PageIndex { get; set; }
+    }
+
+    public class SnipPayload
+    {
+        public int PageIndex { get; set; }
+        public NormalizedRect Rect { get; set; }
     }
 }
 

@@ -42,6 +42,8 @@ public static class DependencyInjection
 
         services.AddScoped<IBookRepository, BookRepository>();
         services.AddScoped<IReadingPositionRepository, ReadingPositionRepository>();
+        services.AddScoped<IBookmarkRepository, BookmarkRepository>();
+        services.AddScoped<IAnnotationRepository, AnnotationRepository>();
         services.AddScoped<IJobRepository, JobRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IDatabaseMigrator, DatabaseMigrator>();

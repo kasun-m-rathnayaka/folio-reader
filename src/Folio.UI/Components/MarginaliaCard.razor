@@ -1,0 +1,91 @@
+@using Folio.Application.Annotations.DTOs
+@using Folio.Domain.Enums
+
+<div class="folio-marginalia-card @(IsActive ? "active" : "")"
+     @onclick="HandleCardClick">
+    <!-- Color Stripe -->
+    <div class="folio-marginalia-card-stripe"
+         style="background-color: @Annotation.Color.ToHex();"></div>
+
+    <div class="d-flex justify-space-between align-center mb-1">
+        <span style="font-size: 10px; font-weight: 700; color: #8C8C8C; text-transform: uppercase;">
+            @Annotation.Type · Page @(Annotation.PageIndex + 1)
+        </span>
+        <div class="d-flex align-center gap-1">
+            <button class="folio-subtle-btn" style="width: 22px; height: 22px; padding: 0;"
+                    @onclick:stopPropagation="true"
+                    @onclick="ToggleEdit"
+                    title="Edit Note">
+                <MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Style="font-size: 14px;" />
+            </button>
+            <button class="folio-subtle-btn" style="width: 22px; height: 22px; padding: 0;"
+                    @onclick:stopPropagation="true"
+                    @onclick="@(() => OnDelete.InvokeAsync(Annotation.Id))"
+                    title="Delete Note">
+                <MudIcon Icon="@Icons.Material.Filled.DeleteOutline" Size="Size.Small" Style="font-size: 14px; color: #E57373;" />
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Annotation.SelectedText))
+    {
+        <div class="folio-marginalia-quote">
+            "@Annotation.SelectedText"
+        </div>
+    }
+
+    @if (_isEditing)
+    {
+        <div @onclick:stopPropagation="true" class="mt-2">
+            <textarea class="folio-input-field"
+                      style="width: 100%; min-height: 60px; font-size: 12px; resize: vertical;"
+                      @bind="_editedNote"
+                      placeholder="Add note text..."></textarea>
+            <div class="d-flex justify-end gap-2 mt-2">
+                <button class="folio-subtle-btn" style="font-size: 11px; padding: 3px 8px;"
+                        @onclick="CancelEdit">Cancel</button>
+                <button class="folio-primary-btn" style="font-size: 11px; padding: 3px 10px;"
+                        @onclick="SaveEdit">Save</button>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="folio-marginalia-content">
+            @(string.IsNullOrWhiteSpace(Annotation.Note) ? "(No comment added)" : Annotation.Note)
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public AnnotationDto Annotation { get; set; } = default!;
+    [Parameter] public bool IsActive { get; set; }
+    [Parameter] public EventCallback<Guid> OnSelect { get; set; }
+    [Parameter] public EventCallback<Guid> OnDelete { get; set; }
+    [Parameter] public EventCallback<(Guid Id, string Note)> OnSaveNote { get; set; }
+
+    private bool _isEditing;
+    private string _editedNote = string.Empty;
+
+    private async Task HandleCardClick()
+    {
+        await OnSelect.InvokeAsync(Annotation.Id);
+    }
+
+    private void ToggleEdit()
+    {
+        _editedNote = Annotation.Note ?? string.Empty;
+        _isEditing = !_isEditing;
+    }
+
+    private void CancelEdit()
+    {
+        _isEditing = false;
+    }
+
+    private async Task SaveEdit()
+    {
+        _isEditing = false;
+        await OnSaveNote.InvokeAsync((Annotation.Id, _editedNote));
+    }
+}

@@ -72,8 +72,12 @@ public class FolioDbContext : DbContext
             entity.Property(e => e.Type).HasConversion<int>();
             entity.Property(e => e.Color).HasConversion<int>();
             entity.Property(e => e.RectsJson).IsRequired();
+            entity.Property(e => e.AnchorPrefix).HasMaxLength(100);
+            entity.Property(e => e.AnchorSuffix).HasMaxLength(100);
+            entity.Property(e => e.Tags).HasMaxLength(500);
 
             entity.HasIndex(e => new { e.BookId, e.PageIndex });
+            entity.HasIndex(e => e.Type);
 
             entity.HasOne(e => e.Book)
                   .WithMany(b => b.Annotations)

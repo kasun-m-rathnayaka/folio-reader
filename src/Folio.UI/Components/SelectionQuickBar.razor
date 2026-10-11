@@ -1,0 +1,69 @@
+@using Folio.Domain.Enums
+
+@if (IsVisible)
+{
+    <div class="folio-selection-quick-bar" style="@_positionStyle">
+        <!-- Preset Colors -->
+        <button class="folio-color-circle-btn" style="background-color: #FFEB3B;"
+                @onclick="@(() => OnApplyHighlight.InvokeAsync((HighlightColor.Yellow, AnnotationType.Highlight)))"
+                title="Highlight Yellow"></button>
+
+        <button class="folio-color-circle-btn" style="background-color: #81C784;"
+                @onclick="@(() => OnApplyHighlight.InvokeAsync((HighlightColor.Green, AnnotationType.Highlight)))"
+                title="Highlight Green"></button>
+
+        <button class="folio-color-circle-btn" style="background-color: #64B5F6;"
+                @onclick="@(() => OnApplyHighlight.InvokeAsync((HighlightColor.Blue, AnnotationType.Highlight)))"
+                title="Highlight Blue"></button>
+
+        <button class="folio-color-circle-btn" style="background-color: #F48FB1;"
+                @onclick="@(() => OnApplyHighlight.InvokeAsync((HighlightColor.Pink, AnnotationType.Highlight)))"
+                title="Highlight Pink"></button>
+
+        <button class="folio-color-circle-btn" style="background-color: #BA68C8;"
+                @onclick="@(() => OnApplyHighlight.InvokeAsync((HighlightColor.Purple, AnnotationType.Highlight)))"
+                title="Highlight Purple"></button>
+
+        <div style="height: 16px; width: 1px; background: #383838; margin: 0 2px;"></div>
+
+        <!-- Underline -->
+        <button class="folio-subtle-btn" style="width: 26px; height: 26px; padding: 0;"
+                @onclick="@(() => OnApplyHighlight.InvokeAsync((HighlightColor.Blue, AnnotationType.Underline)))"
+                title="Underline Text">
+            <u><strong>U</strong></u>
+        </button>
+
+        <!-- Add Note -->
+        <button class="folio-subtle-btn" style="width: 26px; height: 26px; padding: 0;"
+                @onclick="@(() => OnAddNote.InvokeAsync())"
+                title="Attach Margin Note">
+            <MudIcon Icon="@Icons.Material.Filled.ChatBubbleOutline" Size="Size.Small" Style="font-size: 16px;" />
+        </button>
+
+        <!-- Copy Quote Citation -->
+        <button class="folio-subtle-btn" style="width: 26px; height: 26px; padding: 0;"
+                @onclick="@(() => OnCopyQuote.InvokeAsync())"
+                title="Copy as Quote Citation">
+            <MudIcon Icon="@Icons.Material.Filled.FormatQuote" Size="Size.Small" Style="font-size: 16px;" />
+        </button>
+
+        <!-- Dismiss / Clear -->
+        <button class="folio-subtle-btn" style="width: 26px; height: 26px; padding: 0;"
+                @onclick="@(() => OnDismiss.InvokeAsync())"
+                title="Dismiss">
+            <MudIcon Icon="@Icons.Material.Filled.Close" Size="Size.Small" Style="font-size: 14px;" />
+        </button>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public double ClientX { get; set; } = 300;
+    [Parameter] public double ClientY { get; set; } = 150;
+    [Parameter] public EventCallback<(HighlightColor Color, AnnotationType Type)> OnApplyHighlight { get; set; }
+    [Parameter] public EventCallback OnAddNote { get; set; }
+    [Parameter] public EventCallback OnCopyQuote { get; set; }
+    [Parameter] public EventCallback OnDismiss { get; set; }
+
+    private string _positionStyle => $"left: {Math.Max(20, ClientX - 100)}px; top: {Math.Max(70, ClientY - 45)}px;";
+}

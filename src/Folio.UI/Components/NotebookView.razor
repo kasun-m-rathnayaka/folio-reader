@@ -1,0 +1,204 @@
+@using Folio.Application.Annotations
+@using Folio.Application.Annotations.DTOs
+@using Folio.Domain.Enums
+@inject IAnnotationService AnnotationService
+@inject IBookmarkService BookmarkService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <div class="d-flex justify-space-between align-center" style="color: #FFFFFF; width: 100%;">
+            <div class="d-flex align-center gap-2">
+                <MudIcon Icon="@Icons.Material.Filled.MenuBook" Style="color: #1473E6;" />
+                <span style="font-weight: 700; font-size: 16px;">Notebook — @BookTitle</span>
+                <span style="color: #8C8C8C; font-size: 13px;">(@_filteredAnnotations.Count items)</span>
+            </div>
+            <button class="folio-primary-btn" @onclick="OpenExportModal">
+                <MudIcon Icon="@Icons.Material.Filled.FileUpload" Size="Size.Small" Class="mr-1" />
+                Export Notes
+            </button>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <!-- Search & Filter Controls -->
+        <div class="d-flex align-center gap-3 mb-4 flex-wrap">
+            <div style="flex: 1; min-width: 200px;">
+                <input type="text"
+                       class="folio-input-field"
+                       style="width: 100%; height: 34px; font-size: 12px;"
+                       placeholder="Search notes, quotes, tags..."
+                       @bind="_searchText"
+                       @bind:event="oninput"
+                       @bind:after="ApplyFilters" />
+            </div>
+
+            <!-- Type Filter Chips -->
+            <div class="d-flex align-center gap-1">
+                <button class="folio-subtle-btn @(_filterType == null ? "active" : "")"
+                        @onclick="@(() => SetTypeFilter(null))">All</button>
+                <button class="folio-subtle-btn @(_filterType == AnnotationType.Highlight ? "active" : "")"
+                        @onclick="@(() => SetTypeFilter(AnnotationType.Highlight))">Highlights</button>
+                <button class="folio-subtle-btn @(_filterType == AnnotationType.MarginNote ? "active" : "")"
+                        @onclick="@(() => SetTypeFilter(AnnotationType.MarginNote))">Notes</button>
+                <button class="folio-subtle-btn @(_filterType == AnnotationType.AreaSnip ? "active" : "")"
+                        @onclick="@(() => SetTypeFilter(AnnotationType.AreaSnip))">Snips</button>
+            </div>
+        </div>
+
+        <!-- Annotation List -->
+        <div style="max-height: 500px; overflow-y: auto; padding-right: 8px;">
+            @if (_filteredAnnotations.Count == 0)
+            {
+                <div class="pa-8 text-center" style="color: #666666;">
+                    <MudIcon Icon="@Icons.Material.Filled.SearchOff" Size="Size.Large" Style="color: #444444;" />
+                    <p class="mt-2">No matching annotations found.</p>
+                </div>
+            }
+            else
+            {
+                @foreach (var group in _filteredAnnotations.GroupBy(a => a.PageIndex).OrderBy(g => g.Key))
+                {
+                    <div class="mb-4">
+                        <div class="d-flex align-center justify-space-between mb-2 pb-1"
+                             style="border-bottom: 1px solid #2C2C2C;">
+                            <span style="font-size: 11px; font-weight: 700; color: #1473E6; letter-spacing: 0.05em;">
+                                PAGE @(group.Key + 1)
+                            </span>
+                            <button class="folio-subtle-btn" style="font-size: 11px; padding: 2px 8px;"
+                                    @onclick="@(() => JumpToPage(group.Key))">
+                                Jump to Page
+                            </button>
+                        </div>
+
+                        <div class="d-flex flex-column gap-2">
+                            @foreach (var ann in group)
+                            {
+                                <div class="folio-marginalia-card" style="margin-bottom: 4px;">
+                                    <div class="folio-marginalia-card-stripe"
+                                         style="background-color: @ann.Color.ToHex();"></div>
+
+                                    <div class="d-flex justify-space-between align-center mb-1">
+                                        <span style="font-size: 10px; font-weight: 600; color: #8C8C8C;">
+                                            @ann.Type · @ann.CreatedAt.ToString("MMM d, yyyy h:mm tt")
+                                        </span>
+                                        <button class="folio-subtle-btn" style="width: 20px; height: 20px; padding: 0;"
+                                                @onclick="@(() => DeleteAnnotation(ann.Id))"
+                                                title="Delete Annotation">
+                                            <MudIcon Icon="@Icons.Material.Filled.DeleteOutline" Size="Size.Small" Style="font-size: 13px; color: #E57373;" />
+                                        </button>
+                                    </div>
+
+                                    @if (!string.IsNullOrWhiteSpace(ann.SelectedText))
+                                    {
+                                        <div class="folio-marginalia-quote">
+                                            "@ann.SelectedText"
+                                        </div>
+                                    }
+
+                                    @if (!string.IsNullOrWhiteSpace(ann.Note))
+                                    {
+                                        <div class="folio-marginalia-content mb-1">
+                                            @ann.Note
+                                        </div>
+                                    }
+
+                                    @if (!string.IsNullOrWhiteSpace(ann.Tags))
+                                    {
+                                        <div style="font-size: 10px; color: #8C9EFF;">
+                                            Tags: @ann.Tags
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <button class="folio-subtle-btn" @onclick="Close">Close</button>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public Guid BookId { get; set; }
+    [Parameter] public string BookTitle { get; set; } = string.Empty;
+    [Parameter] public string? Author { get; set; }
+    [Parameter] public EventCallback<int> OnJumpToPage { get; set; }
+
+    private List<AnnotationDto> _allAnnotations = new();
+    private List<AnnotationDto> _filteredAnnotations = new();
+    private string _searchText = string.Empty;
+    private AnnotationType? _filterType;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAnnotationsAsync();
+    }
+
+    private async Task LoadAnnotationsAsync()
+    {
+        var list = await AnnotationService.GetAnnotationsForBookAsync(BookId);
+        _allAnnotations = list.ToList();
+        ApplyFilters();
+    }
+
+    private void SetTypeFilter(AnnotationType? type)
+    {
+        _filterType = type;
+        ApplyFilters();
+    }
+
+    private void ApplyFilters()
+    {
+        var query = _allAnnotations.AsEnumerable();
+
+        if (_filterType.HasValue)
+        {
+            query = query.Where(a => a.Type == _filterType.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(_searchText))
+        {
+            string term = _searchText.Trim().ToLower();
+            query = query.Where(a =>
+                (a.SelectedText != null && a.SelectedText.ToLower().Contains(term)) ||
+                (a.Note != null && a.Note.ToLower().Contains(term)) ||
+                (a.Tags != null && a.Tags.ToLower().Contains(term)));
+        }
+
+        _filteredAnnotations = query.ToList();
+    }
+
+    private async Task DeleteAnnotation(Guid id)
+    {
+        await AnnotationService.DeleteAnnotationAsync(id);
+        await LoadAnnotationsAsync();
+        Snackbar.Add("Annotation deleted", Severity.Info);
+    }
+
+    private async Task JumpToPage(int pageIndex)
+    {
+        MudDialog.Close(DialogResult.Ok(true));
+        await OnJumpToPage.InvokeAsync(pageIndex);
+    }
+
+    private async Task OpenExportModal()
+    {
+        var parameters = new DialogParameters<ExportDialog>
+        {
+            { x => x.BookId, BookId },
+            { x => x.BookTitle, BookTitle },
+            { x => x.Author, Author },
+            { x => x.Annotations, _allAnnotations }
+        };
+
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Medium };
+        await DialogService.ShowAsync<ExportDialog>("Export Annotations", parameters, options);
+    }
+
+    private void Close() => MudDialog.Cancel();
+}

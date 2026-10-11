@@ -22,6 +22,12 @@ class FolioReaderEngine {
         this.currentSearchQuery = '';
         this.scrollDebounceTimer = null;
         this.resizeObserver = null;
+        this.isSnipMode = false;
+        this.isSnipDragging = false;
+        this.snipStartX = 0;
+        this.snipStartY = 0;
+        this.snipActivePage = null;
+        this.snipDragEl = null;
     }
 
     init(containerElementId, dotNetHelper) {
@@ -40,6 +46,11 @@ class FolioReaderEngine {
 
         // Selection listener for text extraction
         this.container.addEventListener('mouseup', () => this.handleTextSelection());
+
+        // Area snip drag listeners
+        this.container.addEventListener('mousedown', (e) => this.handleSnipMouseDown(e));
+        window.addEventListener('mousemove', (e) => this.handleSnipMouseMove(e));
+        window.addEventListener('mouseup', (e) => this.handleSnipMouseUp(e));
 
         // Keyboard navigation
         window.addEventListener('keydown', (e) => this.handleKeyDown(e));
@@ -124,6 +135,20 @@ class FolioReaderEngine {
                 overlayLayer.className = 'folio-overlay-layer';
                 pageEl.appendChild(overlayLayer);
 
+                // Dog-ear folded corner (FR-BKM-01)
+                const dogEar = document.createElement('div');
+                dogEar.className = 'folio-dog-ear';
+                dogEar.title = 'Dog-ear Page (Ctrl+D)';
+                dogEar.innerHTML = '<div class="folio-dog-ear-triangle"></div>';
+                const pageIdx = i - 1;
+                dogEar.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (this.dotNetHelper) {
+                        this.dotNetHelper.invokeMethodAsync('OnDogEarToggled', pageIdx);
+                    }
+                });
+                pageEl.appendChild(dogEar);
+
                 this.container.appendChild(pageEl);
 
                 this.pages.push({
@@ -134,6 +159,7 @@ class FolioReaderEngine {
                     canvasWrap: canvasWrap,
                     textLayer: textLayer,
                     overlayLayer: overlayLayer,
+                    dogEar: dogEar,
                     rendered: false,
                     rendering: false,
                     renderTask: null
@@ -525,6 +551,149 @@ class FolioReaderEngine {
         if (page && page.overlayLayer) {
             page.overlayLayer.innerHTML = '';
         }
+    }
+
+    drawAnnotations(pageIndex, annotations) {
+        const page = this.pages[pageIndex];
+        if (!page || !page.overlayLayer) return;
+
+        // Clear existing annotation elements on this page
+        page.overlayLayer.querySelectorAll('.folio-annotation-item').forEach(el => el.remove());
+
+        if (!annotations || !Array.isArray(annotations)) return;
+
+        annotations.forEach(ann => {
+            const rects = ann.rects || [];
+            rects.forEach(r => {
+                const el = document.createElement('div');
+                el.className = `folio-annotation-item folio-annotation-${(ann.type || 'highlight').toLowerCase()}`;
+                el.dataset.annotationId = ann.id;
+                el.style.left = `${r.x * 100}%`;
+                el.style.top = `${r.y * 100}%`;
+                el.style.width = `${r.width * 100}%`;
+                el.style.height = `${r.height * 100}%`;
+
+                if (ann.type === 'Highlight' || ann.type === 0) {
+                    el.style.backgroundColor = ann.colorHex || '#FFEB3B';
+                    el.style.opacity = '0.35';
+                } else if (ann.type === 'Underline' || ann.type === 1) {
+                    el.style.borderBottom = `2px solid ${ann.colorHex || '#1473E6'}`;
+                } else if (ann.type === 'Strike' || ann.type === 2) {
+                    el.style.borderTop = `2px solid ${ann.colorHex || '#FF5252'}`;
+                    el.style.marginTop = `${(r.height * 100) / 2}%`;
+                } else if (ann.type === 'AreaSnip' || ann.type === 5) {
+                    el.style.border = `2px dashed ${ann.colorHex || '#1473E6'}`;
+                    el.style.backgroundColor = 'rgba(20, 115, 230, 0.1)';
+                    el.style.borderRadius = '4px';
+                }
+
+                el.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (this.dotNetHelper) {
+                        this.dotNetHelper.invokeMethodAsync('OnAnnotationClicked', ann.id);
+                    }
+                });
+
+                page.overlayLayer.appendChild(el);
+            });
+        });
+    }
+
+    pulseAnnotation(annotationId) {
+        const els = document.querySelectorAll(`[data-annotation-id="${annotationId}"]`);
+        els.forEach(el => {
+            el.classList.add('folio-annotation-pulsing');
+            setTimeout(() => el.classList.remove('folio-annotation-pulsing'), 1400);
+        });
+    }
+
+    setDogEar(pageIndex, isFolded) {
+        const page = this.pages[pageIndex];
+        if (page && page.dogEar) {
+            if (isFolded) {
+                page.dogEar.classList.add('active');
+            } else {
+                page.dogEar.classList.remove('active');
+            }
+        }
+    }
+
+    setSnipMode(enabled) {
+        this.isSnipMode = enabled;
+        if (enabled) {
+            this.container.classList.add('folio-snip-active');
+        } else {
+            this.container.classList.remove('folio-snip-active');
+        }
+    }
+
+    handleSnipMouseDown(e) {
+        if (!this.isSnipMode) return;
+        const pageWrapper = e.target.closest('.folio-page-wrapper');
+        if (!pageWrapper) return;
+
+        this.isSnipDragging = true;
+        this.snipActivePage = pageWrapper;
+        const rect = pageWrapper.getBoundingClientRect();
+        this.snipStartX = e.clientX - rect.left;
+        this.snipStartY = e.clientY - rect.top;
+
+        this.snipDragEl = document.createElement('div');
+        this.snipDragEl.className = 'folio-snip-drag-rect';
+        this.snipDragEl.style.left = `${this.snipStartX}px`;
+        this.snipDragEl.style.top = `${this.snipStartY}px`;
+        this.snipDragEl.style.width = '0px';
+        this.snipDragEl.style.height = '0px';
+        pageWrapper.appendChild(this.snipDragEl);
+        e.preventDefault();
+    }
+
+    handleSnipMouseMove(e) {
+        if (!this.isSnipMode || !this.isSnipDragging || !this.snipActivePage || !this.snipDragEl) return;
+        const rect = this.snipActivePage.getBoundingClientRect();
+        const currentX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+        const currentY = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
+
+        const left = Math.min(this.snipStartX, currentX);
+        const top = Math.min(this.snipStartY, currentY);
+        const width = Math.abs(currentX - this.snipStartX);
+        const height = Math.abs(currentY - this.snipStartY);
+
+        this.snipDragEl.style.left = `${left}px`;
+        this.snipDragEl.style.top = `${top}px`;
+        this.snipDragEl.style.width = `${width}px`;
+        this.snipDragEl.style.height = `${height}px`;
+    }
+
+    handleSnipMouseUp(e) {
+        if (!this.isSnipMode || !this.isSnipDragging || !this.snipActivePage || !this.snipDragEl) return;
+        this.isSnipDragging = false;
+        const rect = this.snipActivePage.getBoundingClientRect();
+        const currentX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+        const currentY = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
+
+        const left = Math.min(this.snipStartX, currentX);
+        const top = Math.min(this.snipStartY, currentY);
+        const width = Math.abs(currentX - this.snipStartX);
+        const height = Math.abs(currentY - this.snipStartY);
+
+        this.snipDragEl.remove();
+        this.snipDragEl = null;
+
+        if (width > 15 && height > 15 && this.dotNetHelper) {
+            const pageIndex = parseInt(this.snipActivePage.dataset.pageIndex, 10);
+            this.setSnipMode(false);
+            this.dotNetHelper.invokeMethodAsync('OnSnipCompleted', {
+                pageIndex: pageIndex,
+                rect: {
+                    x: left / rect.width,
+                    y: top / rect.height,
+                    width: width / rect.width,
+                    height: height / rect.height
+                }
+            });
+        }
+        this.snipActivePage = null;
     }
 
     async search(query, forward = true) {

@@ -31,9 +31,39 @@ public class Annotation : BaseEntity
     public string? SelectedText { get; set; }
 
     /// <summary>
+    /// Leading context (~32 chars) for fuzzy re-anchoring across layout/OCR updates (§8.5).
+    /// </summary>
+    public string? AnchorPrefix { get; set; }
+
+    /// <summary>
+    /// Trailing context (~32 chars) for fuzzy re-anchoring across layout/OCR updates (§8.5).
+    /// </summary>
+    public string? AnchorSuffix { get; set; }
+
+    /// <summary>
+    /// 0-based character offset within canonical page text.
+    /// </summary>
+    public int? CharacterOffset { get; set; }
+
+    /// <summary>
+    /// Version of the extraction engine that produced this anchor.
+    /// </summary>
+    public int ExtractorVersion { get; set; } = 1;
+
+    /// <summary>
+    /// True if the text span could not be re-anchored and requires manual relocation.
+    /// </summary>
+    public bool IsDetached { get; set; }
+
+    /// <summary>
     /// Optional user comment or markdown marginalia note.
     /// </summary>
     public string? Note { get; set; }
+
+    /// <summary>
+    /// Optional comma-separated tags (e.g. "quote,research").
+    /// </summary>
+    public string? Tags { get; set; }
 
     // Navigation property
     public Book? Book { get; set; }

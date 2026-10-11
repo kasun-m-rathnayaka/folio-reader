@@ -9,5 +9,6 @@ public enum AnnotationType
     Underline = 1,
     Strike = 2,
     MarginNote = 3,
-    Freehand = 4
+    Freehand = 4,
+    AreaSnip = 5
 }

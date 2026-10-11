@@ -103,6 +103,32 @@
                        aria-label="Find in Book" />
     </MudTooltip>
 
+    <!-- Dog-ear Bookmark (FR-BKM-01) -->
+    <MudTooltip Text="Dog-ear Page (Ctrl+D)">
+        <MudIconButton Icon="@(IsDogEared ? Icons.Material.Filled.Bookmark : Icons.Material.Filled.BookmarkBorder)"
+                       Size="Size.Small"
+                       Style="@(IsDogEared ? "color: #E0A82E;" : "")"
+                       OnClick="@(() => OnToggleDogEar.InvokeAsync())"
+                       aria-label="Toggle Dog-ear" />
+    </MudTooltip>
+
+    <!-- Marginalia Notes Toggle (FR-ANN-02) -->
+    <MudTooltip Text="Margin Notes">
+        <MudIconButton Icon="@Icons.Material.Filled.RateReview"
+                       Size="Size.Small"
+                       Color="@(IsNotesOpen ? Color.Primary : Color.Default)"
+                       OnClick="@(() => OnToggleNotes.InvokeAsync())"
+                       aria-label="Toggle Margin Notes" />
+    </MudTooltip>
+
+    <!-- Notebook (FR-ANN-05) -->
+    <MudTooltip Text="Open Notebook">
+        <MudIconButton Icon="@Icons.Material.Filled.Notes"
+                       Size="Size.Small"
+                       OnClick="@(() => OnOpenNotebook.InvokeAsync())"
+                       aria-label="Open Notebook" />
+    </MudTooltip>
+
     <!-- Zen / Fullscreen Mode -->
     <MudTooltip Text="Zen Mode (F11)">
         <MudIconButton Icon="@(IsZenMode ? Icons.Material.Filled.FullscreenExit : Icons.Material.Filled.Fullscreen)"
@@ -122,9 +148,14 @@
     [Parameter] public bool IsOutlineOpen { get; set; }
     [Parameter] public bool IsSearchOpen { get; set; }
     [Parameter] public bool IsZenMode { get; set; }
+    [Parameter] public bool IsDogEared { get; set; }
+    [Parameter] public bool IsNotesOpen { get; set; }
 
     [Parameter] public EventCallback OnBack { get; set; }
     [Parameter] public EventCallback OnToggleOutline { get; set; }
+    [Parameter] public EventCallback OnToggleDogEar { get; set; }
+    [Parameter] public EventCallback OnToggleNotes { get; set; }
+    [Parameter] public EventCallback OnOpenNotebook { get; set; }
     [Parameter] public EventCallback OnPrevPage { get; set; }
     [Parameter] public EventCallback OnNextPage { get; set; }
     [Parameter] public EventCallback OnOpenGoToPage { get; set; }

@@ -1,0 +1,41 @@
+@using Folio.Application.Annotations.DTOs
+
+<div class="folio-marginalia-lane">
+    <div class="folio-marginalia-lane-header">
+        <span>MARGIN NOTES (@Annotations.Count)</span>
+        <button class="folio-subtle-btn" style="width: 20px; height: 20px; padding: 0;"
+                @onclick="@(() => OnClose.InvokeAsync())"
+                title="Hide Notes Lane">
+            <MudIcon Icon="@Icons.Material.Filled.Close" Size="Size.Small" Style="font-size: 14px;" />
+        </button>
+    </div>
+
+    @if (Annotations.Count == 0)
+    {
+        <div class="pa-4 text-center" style="color: #666666; font-size: 12px; margin-top: 40px;">
+            <MudIcon Icon="@Icons.Material.Filled.RateReview" Size="Size.Large" Style="color: #444444; margin-bottom: 8px;" />
+            <p>No margin notes on this page.</p>
+            <p style="font-size: 11px; color: #555555;">Select text to highlight or add note.</p>
+        </div>
+    }
+    else
+    {
+        @foreach (var ann in Annotations)
+        {
+            <MarginaliaCard Annotation="@ann"
+                            IsActive="@(ActiveAnnotationId == ann.Id)"
+                            OnSelect="@OnSelectAnnotation"
+                            OnDelete="@OnDeleteAnnotation"
+                            OnSaveNote="@OnSaveNote" />
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public IReadOnlyList<AnnotationDto> Annotations { get; set; } = Array.Empty<AnnotationDto>();
+    [Parameter] public Guid? ActiveAnnotationId { get; set; }
+    [Parameter] public EventCallback<Guid> OnSelectAnnotation { get; set; }
+    [Parameter] public EventCallback<Guid> OnDeleteAnnotation { get; set; }
+    [Parameter] public EventCallback<(Guid Id, string Note)> OnSaveNote { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+}

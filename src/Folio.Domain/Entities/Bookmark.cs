@@ -30,6 +30,11 @@ public class Bookmark : BaseEntity
     /// </summary>
     public bool IsDogEar { get; set; }
 
+    /// <summary>
+    /// Optional character offset for sentence-level bookmarking (FR-BKM-04).
+    /// </summary>
+    public int? CharacterOffset { get; set; }
+
     // Navigation property
     public Book? Book { get; set; }
 }

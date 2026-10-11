@@ -75,6 +75,31 @@ public class ReaderJsBridge : IAsyncDisposable
         await _jsRuntime.InvokeVoidAsync("folioReader.clearOverlays", pageIndex);
     }
 
+    public async ValueTask DrawAnnotationsAsync(int pageIndex, object annotations)
+    {
+        await _jsRuntime.InvokeVoidAsync("folioReader.drawAnnotations", pageIndex, annotations);
+    }
+
+    public async ValueTask PulseAnnotationAsync(Guid annotationId)
+    {
+        await _jsRuntime.InvokeVoidAsync("folioReader.pulseAnnotation", annotationId.ToString());
+    }
+
+    public async ValueTask SetDogEarAsync(int pageIndex, bool isFolded)
+    {
+        await _jsRuntime.InvokeVoidAsync("folioReader.setDogEar", pageIndex, isFolded);
+    }
+
+    public async ValueTask SetSnipModeAsync(bool enabled)
+    {
+        await _jsRuntime.InvokeVoidAsync("folioReader.setSnipMode", enabled);
+    }
+
+    public async ValueTask ClearSelectionBoxAsync()
+    {
+        await _jsRuntime.InvokeVoidAsync("folioReader.clearSelectionBox");
+    }
+
     public async ValueTask DisposeAsync()
     {
         try
