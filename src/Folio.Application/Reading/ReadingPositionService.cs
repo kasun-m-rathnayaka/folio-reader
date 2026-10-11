@@ -76,3 +76,4 @@ public class ReadingPositionService : IReadingPositionService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 }
+

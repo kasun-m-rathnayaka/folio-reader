@@ -22,3 +22,4 @@ public class OutlineNodeDto
     /// </summary>
     public List<OutlineNodeDto> Children { get; set; } = new();
 }
+

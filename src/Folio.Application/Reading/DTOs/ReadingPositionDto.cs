@@ -34,3 +34,4 @@ public class ReadingPositionDto
     /// </summary>
     public long ActiveReadingSeconds { get; set; }
 }
+

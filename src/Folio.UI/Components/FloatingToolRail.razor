@@ -1,0 +1,65 @@
+<!-- Floating Vertical Tool Rail (Matches Acrobat / Creative Suite dark pill from screenshot) -->
+<div class="folio-floating-tool-rail">
+    <!-- Pointer / Select Tool -->
+    <button class="folio-tool-btn @(ActiveTool == "select" ? "active" : "")"
+            @onclick='@(() => SelectTool("select"))'
+            title="Selection Tool (V)">
+        <MudIcon Icon="@Icons.Material.Filled.NearMe" Size="Size.Small" />
+    </button>
+
+    <!-- Note / Comment Tool -->
+    <button class="folio-tool-btn @(ActiveTool == "note" ? "active" : "")"
+            @onclick='@(() => SelectTool("note"))'
+            title="Add Note (C)">
+        <MudIcon Icon="@Icons.Material.Filled.ChatBubbleOutline" Size="Size.Small" />
+    </button>
+
+    <!-- Highlight / Pen Tool -->
+    <button class="folio-tool-btn @(ActiveTool == "highlight" ? "active" : "")"
+            @onclick='@(() => SelectTool("highlight"))'
+            title="Highlight Text (H)">
+        <MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small" />
+    </button>
+
+    <!-- Area Snip Tool -->
+    <button class="folio-tool-btn @(ActiveTool == "snip" ? "active" : "")"
+            @onclick='@(() => SelectTool("snip"))'
+            title="Area Snip Tool (S)">
+        <MudIcon Icon="@Icons.Material.Filled.CropFree" Size="Size.Small" />
+    </button>
+
+    <!-- Type / Text Tool -->
+    <button class="folio-tool-btn @(ActiveTool == "text" ? "active" : "")"
+            @onclick='@(() => SelectTool("text"))'
+            title="Text Tool (T)">
+        <MudIcon Icon="@Icons.Material.Filled.TextFields" Size="Size.Small" />
+    </button>
+
+    <!-- Eraser Tool -->
+    <button class="folio-tool-btn @(ActiveTool == "eraser" ? "active" : "")"
+            @onclick='@(() => SelectTool("eraser"))'
+            title="Eraser Tool (E)">
+        <MudIcon Icon="@Icons.Material.Filled.AutoFixNormal" Size="Size.Small" />
+    </button>
+
+    <div style="height: 1px; width: 24px; background: #383838; margin: 2px auto;"></div>
+
+    <!-- More Options -->
+    <button class="folio-tool-btn"
+            @onclick="@(() => OnMoreOptions.InvokeAsync())"
+            title="More Tools">
+        <MudIcon Icon="@Icons.Material.Filled.MoreHoriz" Size="Size.Small" />
+    </button>
+</div>
+
+@code {
+    [Parameter] public string ActiveTool { get; set; } = "select";
+    [Parameter] public EventCallback<string> OnToolChanged { get; set; }
+    [Parameter] public EventCallback OnMoreOptions { get; set; }
+
+    private async Task SelectTool(string tool)
+    {
+        ActiveTool = tool;
+        await OnToolChanged.InvokeAsync(tool);
+    }
+}

@@ -11,3 +11,4 @@ public interface IReadingPositionRepository
     Task AddAsync(ReadingPosition position, CancellationToken cancellationToken = default);
     void Update(ReadingPosition position);
 }
+

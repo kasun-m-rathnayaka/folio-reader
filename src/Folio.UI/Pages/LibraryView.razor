@@ -1,6 +1,7 @@
 @inject IBookRepository BookRepository
 @inject IUnitOfWork UnitOfWork
 @inject IBookImportService BookImportService
+@inject IFilePickerService FilePickerService
 @inject ISnackbar Snackbar
 
 <div class="pa-6" style="height: 100%; overflow-y: auto; background-color: var(--md-sys-color-background);">
@@ -59,14 +60,18 @@
     <!-- Empty State -->
     @if (FilteredBooks.Count == 0)
     {
-        <div class="d-flex flex-column align-center justify-center py-12">
-            <MudIcon Icon="@Icons.Material.Filled.MenuBook" Size="Size.Large" Color="Color.Secondary" Style="font-size: 64px; opacity: 0.5;" />
-            <MudText Typo="Typo.h6" Class="mt-4 font-weight-medium" Color="Color.Secondary">
-                Your bookshelf is peaceful and empty.
+        <div class="d-flex flex-column align-center justify-center py-16">
+            <MudIcon Icon="@Icons.Material.Filled.AutoStories" Size="Size.Large" Style="font-size: 64px; color: #4A4A4A;" />
+            <MudText Typo="Typo.h6" Class="mt-4 font-weight-medium" Style="color: #FFFFFF;">
+                Your library is empty
             </MudText>
-            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">
-                Import PDF books to begin your reading session.
+            <MudText Typo="Typo.body2" Class="mt-1 mb-4" Style="color: #8E8E8E;">
+                Import PDF documents to start reading and annotating.
             </MudText>
+            <button class="folio-primary-btn" @onclick="@HandleImportFromEmpty">
+                <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" />
+                <span>Import PDF</span>
+            </button>
         </div>
     }
     else if (_isGridView)
@@ -214,6 +219,22 @@
         if (OnOpenBook.HasDelegate)
         {
             await OnOpenBook.InvokeAsync(book);
+        }
+    }
+
+    private async Task HandleImportFromEmpty()
+    {
+        var files = await FilePickerService.PickPdfFilesAsync();
+        if (files.Count > 0)
+        {
+            Snackbar.Add($"Importing {files.Count} book(s)...", Severity.Info);
+            var results = await BookImportService.ImportFilesAsync(files);
+            int newCount = results.Count(r => r.IsNew);
+            if (newCount > 0)
+            {
+                Snackbar.Add($"Successfully imported {newCount} new book(s)!", Severity.Success);
+            }
+            await RefreshAsync();
         }
     }
 

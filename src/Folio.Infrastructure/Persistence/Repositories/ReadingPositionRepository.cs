@@ -33,3 +33,4 @@ public class ReadingPositionRepository : IReadingPositionRepository
         _context.ReadingPositions.Update(position);
     }
 }
+

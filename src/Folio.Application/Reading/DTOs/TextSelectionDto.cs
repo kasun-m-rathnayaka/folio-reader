@@ -13,3 +13,4 @@ public class TextSelectionDto
 
     public List<NormalizedRect> Rects { get; set; } = new();
 }
+

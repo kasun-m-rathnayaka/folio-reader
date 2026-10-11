@@ -1,13 +1,13 @@
 <div class="mb-6">
     <div class="d-flex align-center justify-space-between mb-3">
-        <MudText Typo="Typo.h6" Class="font-weight-bold" Style="font-family: 'Literata', Georgia, serif;">
-            Continue reading
+        <MudText Typo="Typo.h6" Class="font-weight-bold">
+            Continue Reading
         </MudText>
     </div>
 
     @if (Books == null || Books.Count == 0)
     {
-        <MudPaper Elevation="0" Class="pa-4" Style="background-color: var(--md-sys-color-surface-container-low); border-radius: 12px;">
+        <MudPaper Elevation="0" Class="pa-4" Style="background-color: var(--md-sys-color-surface-container-low); border-radius: 12px; border: 1px solid var(--md-sys-color-outline);">
             <MudText Typo="Typo.body2" Color="Color.Secondary">
                 Pick up a book from your library to start reading here.
             </MudText>
@@ -22,8 +22,8 @@
                 int totalPages = Math.Max(1, book.PageCount);
                 int progress = (int)Math.Clamp(Math.Round((double)currPage / totalPages * 100), 0, 100);
 
-                <MudCard Elevation="1" Class="d-flex flex-column"
-                         Style="min-width: 280px; max-width: 320px; border-radius: 16px; border: 1px solid var(--md-sys-color-outline-variant); cursor: pointer;"
+                <MudCard Elevation="1" Class="d-flex flex-column folio-book-card"
+                         Style="min-width: 280px; max-width: 320px; border-radius: 12px; cursor: pointer;"
                          @onclick="@(() => OnOpenBook.InvokeAsync(book))">
                     <div style="height: 140px; background-color: var(--md-sys-color-surface-container-high); position: relative; overflow: hidden;">
                         @if (!string.IsNullOrEmpty(book.CoverPath) && System.IO.File.Exists(book.CoverPath))

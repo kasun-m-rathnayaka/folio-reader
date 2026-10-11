@@ -26,7 +26,7 @@
             <MudMenu Icon="@Icons.Material.Filled.MoreVert"
                      Size="Size.Small"
                      Dense="true"
-                     Style="background: rgba(255, 255, 255, 0.85); border-radius: 50%;">
+                     Style="background: rgba(30, 30, 30, 0.75); backdrop-filter: blur(4px); border-radius: 50%; color: #FFFFFF;">
                 <MudMenuItem Icon="@Icons.Material.Filled.AutoStories" OnClick="@(() => OnOpen.InvokeAsync(Book))">Read</MudMenuItem>
                 <MudMenuItem Icon="@Icons.Material.Filled.BookmarkBorder" OnClick="@(() => OnStatusChanged.InvokeAsync((Book, ReadingStatus.WantToRead)))">Want to Read</MudMenuItem>
                 <MudMenuItem Icon="@Icons.Material.Filled.PlayArrow" OnClick="@(() => OnStatusChanged.InvokeAsync((Book, ReadingStatus.Reading)))">Reading</MudMenuItem>

@@ -1,5 +1,6 @@
 /* ==========================================================================
-   Folio Reader Stylesheet (Milestone M2)
+   Folio Reader Stylesheet
+   Modern Dark Productivity Aesthetic (Adobe Acrobat / Creative Suite Inspired)
    ========================================================================== */
 
 .folio-reader-container {
@@ -10,30 +11,34 @@
     height: 100%;
     overflow-y: auto;
     overflow-x: auto;
-    padding: 24px 0;
+    padding: 28px 0;
     box-sizing: border-box;
     scroll-behavior: smooth;
-    background-color: var(--md-sys-color-surface-container-low, #F6ECE6);
+    background-color: #141414;
 }
 
 .folio-reader-loading,
 .folio-reader-error {
     margin: auto;
-    font-family: inherit;
-    font-size: 16px;
+    font-size: 14px;
+    font-weight: 500;
     padding: 24px;
-    color: var(--md-sys-color-on-surface-variant, #52443C);
+    color: #B3B3B3;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .folio-reader-error {
-    color: var(--md-sys-color-error, #BA1A1A);
+    color: #E53935;
 }
 
+/* Document Page Wrapper */
 .folio-page-wrapper {
     position: relative;
-    margin: 16px auto;
+    margin: 18px auto;
     background-color: #FFFFFF;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.55), 0 1px 4px rgba(0, 0, 0, 0.35);
     border-radius: 2px;
     transition: width 0.1s ease, height 0.1s ease;
 }
@@ -50,6 +55,7 @@
     display: block;
 }
 
+/* Text Selection Layer */
 .folio-text-layer {
     position: absolute;
     top: 0;
@@ -75,7 +81,7 @@
 }
 
 .folio-text-layer ::selection {
-    background: rgba(138, 90, 59, 0.35);
+    background: rgba(20, 115, 230, 0.38);
 }
 
 .folio-overlay-layer {
@@ -88,6 +94,7 @@
     pointer-events: none;
 }
 
+/* Highlight & Box Selection Overlays (Matches screenshot blue box with white dots) */
 .folio-highlight-overlay {
     position: absolute;
     border-radius: 2px;
@@ -95,37 +102,64 @@
     opacity: 0.45;
 }
 
-/* Reader Toolbar */
+.folio-bounding-box-active {
+    position: absolute;
+    border: 1.5px solid #1473E6;
+    pointer-events: none;
+    box-sizing: border-box;
+}
+
+.folio-handle {
+    width: 8px;
+    height: 8px;
+    background-color: #FFFFFF;
+    border: 2px solid #1473E6;
+    border-radius: 50%;
+    position: absolute;
+    transform: translate(-50%, -50%);
+    box-sizing: border-box;
+}
+
+.folio-handle-nw { top: 0; left: 0; }
+.folio-handle-n  { top: 0; left: 50%; }
+.folio-handle-ne { top: 0; left: 100%; }
+.folio-handle-e  { top: 50%; left: 100%; }
+.folio-handle-se { top: 100%; left: 100%; }
+.folio-handle-s  { top: 100%; left: 50%; }
+.folio-handle-sw { top: 100%; left: 0; }
+.folio-handle-w  { top: 50%; left: 0; }
+
+/* Top Reader Toolbar */
 .folio-reader-toolbar {
-    height: 48px;
+    height: 52px;
     display: flex;
     align-items: center;
     padding: 0 16px;
-    background-color: var(--md-sys-color-surface, #FFF8F5);
-    border-bottom: 1px solid var(--md-sys-color-outline-variant, #D7C2B8);
+    background-color: #1A1A1A;
+    border-bottom: 1px solid #333333;
     gap: 8px;
-    z-index: 10;
+    z-index: 20;
 }
 
 .folio-reader-title {
     font-weight: 600;
     font-size: 14px;
-    color: var(--md-sys-color-on-surface, #221A15);
+    color: #FFFFFF;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 320px;
+    max-width: 280px;
 }
 
-/* Find in Book bar */
+/* Find in Book Floating Bar */
 .folio-find-bar {
     position: absolute;
-    top: 56px;
+    top: 64px;
     right: 24px;
-    background: var(--md-sys-color-surface-container, #F0E4DE);
-    border: 1px solid var(--md-sys-color-outline-variant, #D7C2B8);
-    border-radius: 12px;
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+    background: #252525;
+    border: 1px solid #383838;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
     display: flex;
     align-items: center;
     padding: 6px 12px;
@@ -135,32 +169,34 @@
 
 /* Table of Contents Drawer */
 .folio-toc-drawer {
-    width: 300px;
+    width: 320px;
     height: 100%;
-    background-color: var(--md-sys-color-surface, #FFF8F5);
-    border-right: 1px solid var(--md-sys-color-outline-variant, #D7C2B8);
+    background-color: #1A1A1A;
+    border-right: 1px solid #333333;
     overflow-y: auto;
-    padding: 16px;
+    padding: 18px 16px;
     box-sizing: border-box;
 }
 
 .folio-toc-item {
-    padding: 8px 12px;
-    border-radius: 8px;
+    padding: 7px 10px;
+    border-radius: 6px;
     cursor: pointer;
     font-size: 13px;
-    color: var(--md-sys-color-on-surface, #221A15);
-    transition: background-color 0.15s ease;
+    color: #B3B3B3;
+    transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .folio-toc-item:hover {
-    background-color: var(--md-sys-color-surface-container-high, #ECE0D9);
+    background-color: #252525;
+    color: #FFFFFF;
 }
 
 .folio-toc-item.active {
-    background-color: var(--md-sys-color-primary-container, #FFDCC5);
-    color: var(--md-sys-color-on-primary-container, #361700);
+    background-color: #0C396B;
+    color: #FFFFFF;
     font-weight: 600;
+    border-left: 3px solid #1473E6;
 }
 
 /* Zen Mode Fullscreen */

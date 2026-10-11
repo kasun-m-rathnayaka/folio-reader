@@ -15,7 +15,7 @@
     }
     else
     {
-        <!-- Left Navigation Rail (80px) -->
+        <!-- Left Navigation Rail (72px) -->
         <nav class="folio-nav-rail">
             <div class="folio-nav-item @(_activeNav == "Library" ? "active" : "")"
                  @onclick='@(() => SetNav("Library"))'
@@ -55,16 +55,46 @@
 
         <!-- Main Content Area -->
         <div class="d-flex flex-column" style="flex: 1; height: 100%; overflow: hidden;">
-            <!-- Top App Bar -->
+            <!-- Top App Bar (Acrobat-inspired Dark Chrome) -->
             <header class="folio-top-app-bar">
                 <div class="folio-logo">
-                    <MudIcon Icon="@Icons.Material.Filled.AutoStories" Size="Size.Large" Color="Color.Primary" />
+                    <MudIcon Icon="@Icons.Material.Filled.AutoStories" Size="Size.Medium" Color="Color.Primary" />
                     <span>Folio</span>
                 </div>
 
+                <div class="d-none d-md-flex align-center gap-1 ml-4">
+                    <button class="folio-action-pill">
+                        <MudIcon Icon="@Icons.Material.Filled.AutoAwesome" Size="Size.Small" Color="Color.Primary" />
+                        <span>Add to Workspace</span>
+                    </button>
+
+                    <div style="width: 1px; height: 20px; background-color: #383838;" class="mx-2"></div>
+
+                    <button class="folio-action-pill @(_activeNav == "Library" ? "active" : "")" @onclick='@(() => SetNav("Library"))'>
+                        Library
+                    </button>
+                    <button class="folio-action-pill @(_activeNav == "Notebook" ? "active" : "")" @onclick='@(() => SetNav("Notebook"))'>
+                        Notes
+                    </button>
+                    <button class="folio-action-pill @(_activeNav == "Study" ? "active" : "")" @onclick='@(() => SetNav("Study"))'>
+                        Study
+                    </button>
+
+                    <div style="width: 1px; height: 20px; background-color: #383838;" class="mx-2"></div>
+
+                    <MudIconButton Icon="@Icons.Material.Filled.Undo"
+                                   Size="Size.Small"
+                                   Style="color: #A0A0A0;"
+                                   title="Undo (Ctrl+Z)" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Redo"
+                                   Size="Size.Small"
+                                   Style="color: #A0A0A0;"
+                                   title="Redo (Ctrl+Y)" />
+                </div>
+
                 <!-- Global Search Bar -->
-                <div class="folio-search-bar ml-4">
-                    <MudIcon Icon="@Icons.Material.Filled.Search" Size="Size.Small" />
+                <div class="folio-search-bar ml-auto">
+                    <MudIcon Icon="@Icons.Material.Filled.Search" Size="Size.Small" Style="color: #8E8E8E;" />
                     <input class="folio-search-input"
                            type="text"
                            placeholder="Search books, notes, authors... (Ctrl+K)"
@@ -72,16 +102,13 @@
                            @bind:event="oninput" />
                 </div>
 
-                <div class="ml-auto d-flex align-center gap-3">
+                <div class="d-flex align-center gap-2">
                     <Folio.UI.Components.ActivityMonitorPopover />
 
-                    <MudButton Variant="Variant.Filled"
-                               Color="Color.Primary"
-                               StartIcon="@Icons.Material.Filled.Add"
-                               Style="border-radius: 20px; text-transform: none; font-weight: 500;"
-                               OnClick="@OpenImportDialog">
-                        Add books
-                    </MudButton>
+                    <button class="folio-primary-btn" @onclick="@OpenImportDialog">
+                        <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" />
+                        <span>Add books</span>
+                    </button>
 
                     <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
                                    Color="Color.Default"
@@ -91,7 +118,7 @@
             </header>
 
             <!-- View Body -->
-            <main style="flex: 1; height: calc(100vh - 64px); overflow: hidden;">
+            <main style="flex: 1; height: calc(100vh - 56px); overflow: hidden;">
                 @if (_activeNav == "Library")
                 {
                     <Folio.UI.Pages.LibraryView @ref="_libraryView" SearchQuery="@_searchQuery" OnOpenBook="@HandleOpenBook" />
@@ -113,7 +140,7 @@
 @code {
     private string _activeNav = "Library";
     private string _searchQuery = "";
-    private bool _isDarkMode = false;
+    private bool _isDarkMode = true; // Default to sleek dark mode
     private Folio.UI.Pages.LibraryView? _libraryView;
     private Folio.Domain.Entities.Book? _openedBook;
 
@@ -137,33 +164,33 @@
     {
         PaletteLight = new PaletteLight
         {
-            Primary = "#8A5A3B",
-            PrimaryDarken = "#6E3E21",
-            PrimaryLighten = "#FFDCC5",
-            Secondary = "#755846",
-            Background = "#FFF8F5",
-            Surface = "#FFF8F5",
-            AppbarBackground = "#FFF8F5",
-            DrawerBackground = "#F6ECE6",
-            TextPrimary = "#221A15",
-            TextSecondary = "#52443C",
-            ActionDefault = "#52443C",
-            LinesDefault = "#D7C2B8"
+            Primary = "#1473E6",
+            PrimaryDarken = "#0D66D0",
+            PrimaryLighten = "#4098FF",
+            Secondary = "#5C6BC0",
+            Background = "#F4F4F4",
+            Surface = "#FFFFFF",
+            AppbarBackground = "#FFFFFF",
+            DrawerBackground = "#FAFAFA",
+            TextPrimary = "#181818",
+            TextSecondary = "#616161",
+            ActionDefault = "#616161",
+            LinesDefault = "#E0E0E0"
         },
         PaletteDark = new PaletteDark
         {
-            Primary = "#FFB68B",
-            PrimaryDarken = "#8A5A3B",
-            PrimaryLighten = "#FFDCC5",
-            Secondary = "#E5BEA6",
-            Background = "#19120E",
-            Surface = "#19120E",
-            AppbarBackground = "#19120E",
-            DrawerBackground = "#221A15",
-            TextPrimary = "#EFE0D9",
-            TextSecondary = "#D7C2B8",
-            ActionDefault = "#D7C2B8",
-            LinesDefault = "#52443C"
+            Primary = "#1473E6",
+            PrimaryDarken = "#0D66D0",
+            PrimaryLighten = "#4098FF",
+            Secondary = "#8C9EFF",
+            Background = "#141414",
+            Surface = "#1A1A1A",
+            AppbarBackground = "#1A1A1A",
+            DrawerBackground = "#181818",
+            TextPrimary = "#FFFFFF",
+            TextSecondary = "#B3B3B3",
+            ActionDefault = "#CCCCCC",
+            LinesDefault = "#333333"
         }
     };
 

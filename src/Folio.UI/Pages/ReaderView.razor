@@ -54,17 +54,27 @@
 
     <!-- Main Reader Workspace -->
     <div class="d-flex" style="flex: 1; height: calc(100% - 48px); width: 100%; overflow: hidden; position: relative;">
-        <!-- Collapsible Table of Contents Sidebar -->
+        <!-- Collapsible Inspector / Edit & Tools Panel (Matches screenshot) -->
         @if (_isOutlineOpen)
         {
-            <OutlineDrawer Outline="@_outline"
-                           CurrentPageIndex="@_currentPageIndex"
-                           OnSelectPage="@HandleSelectOutlinePage"
-                           OnClose="@ToggleOutline" />
+            <InspectorPanel Outline="@_outline"
+                            CurrentPageIndex="@_currentPageIndex"
+                            LayoutMode="@_layoutMode"
+                            OnSelectPage="@HandleSelectOutlinePage"
+                            OnRotate="@RotateDegrees"
+                            OnFitWidth="@HandleFitWidth"
+                            OnFitPage="@HandleFitPage"
+                            OnToggleLayout="@ToggleLayoutMode"
+                            OnClose="@ToggleOutline" />
         }
 
         <!-- PDF.js Canvas & TextLayer Host Container -->
         <div id="folio-pdf-container" style="flex: 1; height: 100%; width: 100%; position: relative;">
+            <!-- Floating Vertical Tool Rail (Matches screenshot pill) -->
+            <FloatingToolRail ActiveTool="@_activeTool"
+                              OnToolChanged="@HandleToolChanged"
+                              OnMoreOptions="@OpenCommandPaletteAsync" />
+
             <div class="folio-reader-loading">
                 Initializing reader...
             </div>
@@ -92,6 +102,7 @@
     private int _currentSearchMatch = 0;
     private int _totalSearchMatches = 0;
     private List<OutlineNodeDto> _outline = new();
+    private string _activeTool = "select";
 
     // Telemetry and session active reading tracker (FR-MEM-01..04)
     private DateTimeOffset _lastInteractionTime = DateTimeOffset.UtcNow;
@@ -338,6 +349,18 @@
         await ReaderBridge.SetRotationAsync(90);
     }
 
+    private void HandleToolChanged(string tool)
+    {
+        RecordActivity();
+        _activeTool = tool;
+    }
+
+    private async Task RotateDegrees(int delta)
+    {
+        RecordActivity();
+        await ReaderBridge.SetRotationAsync(delta);
+    }
+
     private void ToggleOutline()
     {
         RecordActivity();
@@ -503,3 +526,4 @@
         public int PageIndex { get; set; }
     }
 }
+

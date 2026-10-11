@@ -1,120 +1,97 @@
+/* =========================================================================
+   Folio Design Tokens & Stylesheet
+   Modern Professional Dark Theme (Acrobat / Creative Suite Inspired)
+   Primary Accent: Electric Cobalt Blue (#1473E6)
+   ========================================================================= */
+
 :root {
-  /* =========================================================================
-     Folio Material 3 Design Tokens (Light Scheme)
-     Key Seed: Warm Leather Brown (#8A5A3B)
-     ========================================================================= */
-
-  /* Primary */
-  --md-sys-color-primary: #8A5A3B;
+  /* Primary Cobalt Accent */
+  --md-sys-color-primary: #1473E6;
   --md-sys-color-on-primary: #FFFFFF;
-  --md-sys-color-primary-container: #FFDCC5;
-  --md-sys-color-on-primary-container: #341100;
+  --md-sys-color-primary-container: #0C396B;
+  --md-sys-color-on-primary-container: #E0EFFF;
 
-  /* Secondary */
-  --md-sys-color-secondary: #755846;
-  --md-sys-color-on-secondary: #FFFFFF;
-  --md-sys-color-secondary-container: #FFDCC5;
-  --md-sys-color-on-secondary-container: #2A1709;
+  /* Secondary (Periwinkle / Slate) */
+  --md-sys-color-secondary: #8C9EFF;
+  --md-sys-color-on-secondary: #141414;
+  --md-sys-color-secondary-container: #2A3356;
+  --md-sys-color-on-secondary-container: #DCE3FF;
 
-  /* Tertiary */
-  --md-sys-color-tertiary: #616033;
-  --md-sys-color-on-tertiary: #FFFFFF;
-  --md-sys-color-tertiary-container: #E7E5AC;
-  --md-sys-color-on-tertiary-container: #1C1D00;
-
-  /* Error */
-  --md-sys-color-error: #BA1A1A;
+  /* Status Colors */
+  --md-sys-color-success: #4CAF50;
+  --md-sys-color-warning: #FFB300;
+  --md-sys-color-error: #E53935;
   --md-sys-color-on-error: #FFFFFF;
-  --md-sys-color-error-container: #FFDAD6;
-  --md-sys-color-on-error-container: #410002;
 
-  /* Surfaces & Background */
-  --md-sys-color-background: #FFF8F5;
-  --md-sys-color-on-background: #221A15;
-  --md-sys-color-surface: #FFF8F5;
-  --md-sys-color-on-surface: #221A15;
-  --md-sys-color-surface-variant: #F4DED3;
-  --md-sys-color-on-surface-variant: #52443C;
-  --md-sys-color-surface-container-lowest: #FFFFFF;
-  --md-sys-color-surface-container-low: #FFF1EB;
-  --md-sys-color-surface-container: #FBEBE4;
-  --md-sys-color-surface-container-high: #F5E5DF;
-  --md-sys-color-surface-container-highest: #F0E0DA;
+  /* Surfaces & Backgrounds (Dark Mode Default) */
+  --md-sys-color-background: #141414;
+  --md-sys-color-on-background: #FFFFFF;
+  --md-sys-color-surface: #1A1A1A;
+  --md-sys-color-on-surface: #FFFFFF;
+  --md-sys-color-surface-variant: #252525;
+  --md-sys-color-on-surface-variant: #B3B3B3;
+  --md-sys-color-surface-container-lowest: #0F0F0F;
+  --md-sys-color-surface-container-low: #181818;
+  --md-sys-color-surface-container: #1E1E1E;
+  --md-sys-color-surface-container-high: #252525;
+  --md-sys-color-surface-container-highest: #2E2E2E;
 
-  /* Outlines */
-  --md-sys-color-outline: #85736B;
-  --md-sys-color-outline-variant: #D7C2B8;
+  /* Outlines & Borders */
+  --md-sys-color-outline: #383838;
+  --md-sys-color-outline-variant: #2B2B2B;
+
+  /* Typography Colors */
+  --folio-text-primary: #FFFFFF;
+  --folio-text-secondary: #B3B3B3;
+  --folio-text-muted: #7E7E7E;
 
   /* Shape tokens */
-  --md-sys-shape-corner-extra-small: 4px;
-  --md-sys-shape-corner-small: 8px;
-  --md-sys-shape-corner-medium: 12px;
-  --md-sys-shape-corner-large: 16px;
-  --md-sys-shape-corner-extra-large: 28px;
+  --md-sys-shape-corner-xs: 4px;
+  --md-sys-shape-corner-sm: 6px;
+  --md-sys-shape-corner-md: 10px;
+  --md-sys-shape-corner-lg: 14px;
   --md-sys-shape-corner-full: 9999px;
 
   /* Elevation Shadows */
-  --md-sys-elevation-level1: 0px 1px 3px 1px rgba(0, 0, 0, 0.15), 0px 1px 2px 0px rgba(0, 0, 0, 0.30);
-  --md-sys-elevation-level2: 0px 2px 6px 2px rgba(0, 0, 0, 0.15), 0px 1px 2px 0px rgba(0, 0, 0, 0.30);
-  --md-sys-elevation-level3: 0px 4px 8px 3px rgba(0, 0, 0, 0.15), 0px 1px 3px 0px rgba(0, 0, 0, 0.30);
-  --md-sys-elevation-level4: 0px 6px 10px 4px rgba(0, 0, 0, 0.15), 0px 2px 3px 0px rgba(0, 0, 0, 0.30);
-
-  /* Typography */
-  --md-sys-typescale-display-large: 57px;
-  --md-sys-typescale-headline-medium: 28px;
-  --md-sys-typescale-title-large: 22px;
-  --md-sys-typescale-title-medium: 16px;
-  --md-sys-typescale-body-large: 16px;
-  --md-sys-typescale-body-medium: 14px;
-  --md-sys-typescale-label-medium: 12px;
+  --md-sys-elevation-level1: 0px 2px 8px rgba(0, 0, 0, 0.4);
+  --md-sys-elevation-level2: 0px 4px 16px rgba(0, 0, 0, 0.55);
+  --md-sys-elevation-level3: 0px 8px 24px rgba(0, 0, 0, 0.7);
 
   /* Transitions */
-  --md-sys-motion-easing-emphasized: cubic-bezier(0.2, 0, 0, 1);
-  --md-sys-motion-duration-short: 150ms;
-  --md-sys-motion-duration-medium: 250ms;
+  --md-sys-motion-duration: 150ms;
+  --md-sys-motion-easing: cubic-bezier(0.2, 0, 0, 1);
 }
 
-[data-theme="dark"] {
-  /* =========================================================================
-     Folio Material 3 Design Tokens (Dark Scheme)
-     ========================================================================= */
-  --md-sys-color-primary: #FFB68B;
-  --md-sys-color-on-primary: #522300;
-  --md-sys-color-primary-container: #6E3E21;
-  --md-sys-color-on-primary-container: #FFDCC5;
+[data-theme="light"] {
+  --md-sys-color-primary: #1473E6;
+  --md-sys-color-on-primary: #FFFFFF;
+  --md-sys-color-primary-container: #E0EFFF;
+  --md-sys-color-on-primary-container: #00366D;
 
-  --md-sys-color-secondary: #E5BEA6;
-  --md-sys-color-on-secondary: #422B1C;
-  --md-sys-color-secondary-container: #5B4130;
-  --md-sys-color-on-secondary-container: #FFDCC5;
+  --md-sys-color-secondary: #5C6BC0;
+  --md-sys-color-on-secondary: #FFFFFF;
 
-  --md-sys-color-tertiary: #CBCA92;
-  --md-sys-color-on-tertiary: #323209;
-  --md-sys-color-tertiary-container: #49481E;
-  --md-sys-color-on-tertiary-container: #E7E5AC;
+  --md-sys-color-background: #F4F4F4;
+  --md-sys-color-on-background: #181818;
+  --md-sys-color-surface: #FFFFFF;
+  --md-sys-color-on-surface: #181818;
+  --md-sys-color-surface-variant: #EEEEEE;
+  --md-sys-color-on-surface-variant: #616161;
+  --md-sys-color-surface-container-lowest: #FFFFFF;
+  --md-sys-color-surface-container-low: #FAFAFA;
+  --md-sys-color-surface-container: #F0F0F0;
+  --md-sys-color-surface-container-high: #E6E6E6;
+  --md-sys-color-surface-container-highest: #DDDDDD;
 
-  --md-sys-color-error: #FFB4AB;
-  --md-sys-color-on-error: #690005;
-  --md-sys-color-error-container: #93000A;
-  --md-sys-color-on-error-container: #FFDAD6;
+  --md-sys-color-outline: #CCCCCC;
+  --md-sys-color-outline-variant: #E0E0E0;
 
-  --md-sys-color-background: #19120E;
-  --md-sys-color-on-background: #EFE0D9;
-  --md-sys-color-surface: #19120E;
-  --md-sys-color-on-surface: #EFE0D9;
-  --md-sys-color-surface-variant: #52443C;
-  --md-sys-color-on-surface-variant: #D7C2B8;
-  --md-sys-color-surface-container-lowest: #140D09;
-  --md-sys-color-surface-container-low: #221A15;
-  --md-sys-color-surface-container: #261E19;
-  --md-sys-color-surface-container-high: #312823;
-  --md-sys-color-surface-container-highest: #3C332D;
-
-  --md-sys-color-outline: #9F8D84;
-  --md-sys-color-outline-variant: #52443C;
+  --folio-text-primary: #181818;
+  --folio-text-secondary: #616161;
+  --folio-text-muted: #8E8E8E;
 }
 
-/* Base App Styling */
+/* Base Body Styling */
 body {
   margin: 0;
   padding: 0;
@@ -125,17 +102,20 @@ body {
   overflow: hidden;
 }
 
-/* Nav Rail Styling */
+/* =========================================================================
+   Layout Shell Components
+   ========================================================================= */
+
+/* Left Navigation Rail (80px) */
 .folio-nav-rail {
-  width: 80px;
+  width: 72px;
   background-color: var(--md-sys-color-surface-container-low);
-  border-right: 1px solid var(--md-sys-color-outline-variant);
+  border-right: 1px solid var(--md-sys-color-outline);
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding-top: 16px;
-  padding-bottom: 16px;
-  gap: 16px;
+  padding: 12px 0;
+  gap: 12px;
   z-index: 100;
 }
 
@@ -144,68 +124,94 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 64px;
-  height: 56px;
-  border-radius: var(--md-sys-shape-corner-medium);
+  width: 56px;
+  height: 52px;
+  border-radius: var(--md-sys-shape-corner-md);
   cursor: pointer;
-  color: var(--md-sys-color-on-surface-variant);
-  transition: all var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-emphasized);
+  color: var(--folio-text-muted);
+  transition: all var(--md-sys-motion-duration) var(--md-sys-motion-easing);
   font-size: 11px;
   font-weight: 500;
   gap: 4px;
 }
 
 .folio-nav-item:hover {
-  background-color: var(--md-sys-color-surface-container-high);
-  color: var(--md-sys-color-on-surface);
+  background-color: var(--md-sys-color-surface-container-highest);
+  color: var(--folio-text-primary);
 }
 
 .folio-nav-item.active {
-  background-color: var(--md-sys-color-primary-container);
-  color: var(--md-sys-color-on-primary-container);
+  background-color: var(--md-sys-color-primary);
+  color: #FFFFFF;
   font-weight: 600;
 }
 
 /* Top App Bar */
 .folio-top-app-bar {
-  height: 64px;
+  height: 56px;
   background-color: var(--md-sys-color-surface);
-  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  border-bottom: 1px solid var(--md-sys-color-outline);
   display: flex;
   align-items: center;
-  padding: 0 24px;
+  padding: 0 20px;
   gap: 16px;
 }
 
 .folio-logo {
-  font-family: 'Literata', Georgia, serif;
   font-weight: 700;
-  font-size: 22px;
-  color: var(--md-sys-color-primary);
+  font-size: 18px;
+  color: #FFFFFF;
   display: flex;
   align-items: center;
   gap: 8px;
+  letter-spacing: -0.3px;
+}
+
+/* Quick Action / Space Button */
+.folio-action-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: transparent;
+  color: var(--folio-text-secondary);
+  padding: 6px 12px;
+  border-radius: var(--md-sys-shape-corner-sm);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all var(--md-sys-motion-duration) ease;
+}
+
+.folio-action-pill:hover {
+  background-color: var(--md-sys-color-surface-container-highest);
+  color: #FFFFFF;
+}
+
+.folio-action-pill.active {
+  background-color: var(--md-sys-color-surface-container-high);
+  color: #FFFFFF;
 }
 
 /* Search Bar */
 .folio-search-bar {
   flex: 1;
-  max-width: 520px;
-  background-color: var(--md-sys-color-surface-container);
-  border-radius: var(--md-sys-shape-corner-full);
+  max-width: 460px;
+  background-color: var(--md-sys-color-surface-container-high);
+  border-radius: var(--md-sys-shape-corner-sm);
   display: flex;
   align-items: center;
-  padding: 8px 16px;
-  gap: 12px;
-  color: var(--md-sys-color-on-surface-variant);
-  border: 1px solid transparent;
-  transition: all var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-emphasized);
+  padding: 6px 12px;
+  gap: 10px;
+  color: var(--folio-text-muted);
+  border: 1px solid var(--md-sys-color-outline);
+  transition: all var(--md-sys-motion-duration) ease;
 }
 
 .folio-search-bar:focus-within {
   background-color: var(--md-sys-color-surface-container-lowest);
   border-color: var(--md-sys-color-primary);
-  box-shadow: var(--md-sys-elevation-level1);
+  box-shadow: 0 0 0 1px var(--md-sys-color-primary);
 }
 
 .folio-search-input {
@@ -213,19 +219,159 @@ body {
   background: transparent;
   outline: none;
   width: 100%;
-  font-size: 14px;
-  color: var(--md-sys-color-on-surface);
+  font-size: 13px;
+  color: var(--folio-text-primary);
 }
 
-/* Book Card */
+.folio-search-input::placeholder {
+  color: var(--folio-text-muted);
+}
+
+/* Section Header (Matches uppercase 'FORMAT TEXT', 'ADJUST OBJECTS' from screenshot) */
+.folio-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--folio-text-muted);
+  margin-bottom: 12px;
+}
+
+/* =========================================================================
+   Floating Vertical Tool Rail (Matches screenshot pill)
+   ========================================================================= */
+.folio-floating-tool-rail {
+  position: absolute;
+  left: 20px;
+  top: 72px;
+  background-color: #252525;
+  border: 1px solid #383838;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  gap: 6px;
+  box-shadow: var(--md-sys-elevation-level2);
+  z-index: 50;
+}
+
+.folio-tool-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  color: #B3B3B3;
+  cursor: pointer;
+  transition: all var(--md-sys-motion-duration) ease;
+}
+
+.folio-tool-btn:hover {
+  background-color: #333333;
+  color: #FFFFFF;
+}
+
+.folio-tool-btn.active {
+  background-color: #1473E6;
+  color: #FFFFFF;
+}
+
+/* =========================================================================
+   Inspector Sidebar Panel (Matches screenshot 'Edit' panel)
+   ========================================================================= */
+.folio-inspector-panel {
+  width: 320px;
+  height: 100%;
+  background-color: #1A1A1A;
+  border-right: 1px solid #333333;
+  display: flex;
+  flex-direction: column;
+  padding: 18px 20px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  z-index: 40;
+}
+
+.folio-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.folio-panel-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #FFFFFF;
+}
+
+.folio-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Color Swatch & Style Pickers */
+.folio-color-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  display: inline-block;
+  cursor: pointer;
+}
+
+.folio-icon-button-grid {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.folio-subtle-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background-color: #252525;
+  border: 1px solid #383838;
+  color: #B3B3B3;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.15s ease;
+}
+
+.folio-subtle-btn:hover {
+  background-color: #333333;
+  color: #FFFFFF;
+  border-color: #4C4C4C;
+}
+
+.folio-subtle-btn.active {
+  background-color: #1473E6;
+  border-color: #1473E6;
+  color: #FFFFFF;
+}
+
+/* =========================================================================
+   Book Cards & Library Grids
+   ========================================================================= */
 .folio-book-card {
-  background-color: var(--md-sys-color-surface-container-low);
-  border-radius: var(--md-sys-shape-corner-medium);
-  border: 1px solid var(--md-sys-color-outline-variant);
+  background-color: #1E1E1E;
+  border-radius: var(--md-sys-shape-corner-md);
+  border: 1px solid #333333;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  transition: transform var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-emphasized), box-shadow var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-emphasized);
+  transition: transform var(--md-sys-motion-duration) var(--md-sys-motion-easing), 
+              box-shadow var(--md-sys-motion-duration) var(--md-sys-motion-easing),
+              border-color var(--md-sys-motion-duration) var(--md-sys-motion-easing);
   cursor: pointer;
   position: relative;
 }
@@ -233,21 +379,22 @@ body {
 .folio-book-card:hover {
   transform: translateY(-2px);
   box-shadow: var(--md-sys-elevation-level2);
-  border-color: var(--md-sys-color-outline);
+  border-color: #1473E6;
 }
 
 .folio-book-cover {
   width: 100%;
   height: 220px;
   object-fit: cover;
-  background-color: var(--md-sys-color-surface-container-high);
+  background-color: #252525;
 }
 
 .folio-book-spine-placeholder {
   width: 100%;
   height: 220px;
-  background: linear-gradient(135deg, #8A5A3B 0%, #5C3A24 100%);
-  color: #FFF8F5;
+  background: linear-gradient(135deg, #1A1A1A 0%, #252525 100%);
+  border-bottom: 2px solid #1473E6;
+  color: #FFFFFF;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -257,15 +404,21 @@ body {
   box-sizing: border-box;
 }
 
-/* Activity Badge */
-.folio-activity-chip {
-  display: flex;
+.folio-primary-btn {
+  background-color: #1473E6;
+  color: #FFFFFF;
+  border: none;
+  border-radius: var(--md-sys-shape-corner-sm);
+  padding: 8px 16px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  background-color: var(--md-sys-color-surface-container-high);
-  border-radius: var(--md-sys-shape-corner-full);
-  padding: 4px 12px;
-  font-size: 12px;
-  font-weight: 500;
+  transition: background-color 0.15s ease;
 }
 
+.folio-primary-btn:hover {
+  background-color: #0D66D0;
+}

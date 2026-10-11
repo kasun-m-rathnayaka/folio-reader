@@ -19,3 +19,4 @@ public interface IReadingPositionService
         long activeReadingSeconds,
         CancellationToken cancellationToken = default);
 }
+

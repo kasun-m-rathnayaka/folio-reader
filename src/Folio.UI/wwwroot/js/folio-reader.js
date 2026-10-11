@@ -426,10 +426,16 @@ class FolioReaderEngine {
 
     handleTextSelection() {
         const selection = window.getSelection();
-        if (!selection || selection.isCollapsed || selection.rangeCount === 0) return;
+        if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+            this.clearSelectionBox();
+            return;
+        }
 
         const text = selection.toString().trim();
-        if (!text) return;
+        if (!text) {
+            this.clearSelectionBox();
+            return;
+        }
 
         const range = selection.getRangeAt(0);
         // Find which page container holds this selection
@@ -443,6 +449,9 @@ class FolioReaderEngine {
             const page = this.pages[pageIndex];
             const pageRect = node.getBoundingClientRect();
             const clientRects = range.getClientRects();
+
+            // Render bounding box with white circular handles matching screenshot
+            this.renderSelectionBoundingBox(page, range.getBoundingClientRect(), pageRect);
 
             const normalizedRects = [];
             for (let i = 0; i < clientRects.length; i++) {
@@ -465,6 +474,33 @@ class FolioReaderEngine {
                 });
             }
         }
+    }
+
+    renderSelectionBoundingBox(page, selRect, pageRect) {
+        if (!page || !page.overlayLayer) return;
+        this.clearSelectionBox();
+
+        const box = document.createElement('div');
+        box.id = 'folio-active-selection-box';
+        box.className = 'folio-bounding-box-active';
+        box.style.left = `${Math.max(0, selRect.left - pageRect.left - 4)}px`;
+        box.style.top = `${Math.max(0, selRect.top - pageRect.top - 4)}px`;
+        box.style.width = `${selRect.width + 8}px`;
+        box.style.height = `${selRect.height + 8}px`;
+
+        // 8 handles (Corners & Edges) matching screenshot
+        ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].forEach(pos => {
+            const handle = document.createElement('div');
+            handle.className = `folio-handle folio-handle-${pos}`;
+            box.appendChild(handle);
+        });
+
+        page.overlayLayer.appendChild(box);
+    }
+
+    clearSelectionBox() {
+        const el = document.getElementById('folio-active-selection-box');
+        if (el) el.remove();
     }
 
     drawOverlays(pageIndex, rects, colorHex = '#FFE082') {
@@ -583,3 +619,4 @@ class FolioReaderEngine {
 
 // Global instance attached to window for Blazor JS interop
 window.folioReader = new FolioReaderEngine();
+
