@@ -491,3 +491,5 @@ spike_*.txt
 tts_spike_*.txt
 node_modules/
 dist/
+.artifacts/
+.folio-qa/

@@ -2,6 +2,8 @@
 
 This document records the empirical results, latency/throughput measurements, memory budgets, and go/no-go verdicts for the risky architectural spikes defined in Milestone M0 of the Folio Specification (§10).
 
+> **2026-10-11 audit:** These are historical prototype reports, not acceptance evidence for the shipping application. Use `docs/verification/README.md` for the current recovery release. For example, the raw TTS sample records `FirstAudioLatencyMs = 5140` and `RealTimeFactor = 1.03`; that sample alone does not establish the specification's warm-start or 2× throughput targets. Benchmark the integrated implementation separately before marking those requirements complete.
+
 ---
 
 ## Spike S1: Reader Host & Virtual Host Mapping

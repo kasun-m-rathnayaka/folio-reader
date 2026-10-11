@@ -9,6 +9,7 @@ namespace Folio.Application.Common.Interfaces;
 public interface IBookRepository
 {
     Task<Book?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<Book?> GetReadingBookAsync(Guid id, CancellationToken cancellationToken = default) => GetByIdAsync(id, cancellationToken);
     Task<Book?> GetBySha256Async(string sha256, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Book>> GetAllAsync(ReadingStatus? statusFilter = null, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Book>> GetRecentlyReadAsync(int count = 5, CancellationToken cancellationToken = default);

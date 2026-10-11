@@ -3,22 +3,19 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://folio.books https://folio.covers; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https://folio.covers data: blob:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' https://folio.books https://folio.covers; object-src 'none'; frame-src 'none'; base-uri 'self';" />
     <title>Folio</title>
     <base href="/" />
     <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />
+    <link href="_content/Folio.UI/lib/pdfjs/pdf_viewer.css" rel="stylesheet" />
     <link href="_content/Folio.UI/css/m3-tokens.css" rel="stylesheet" />
-    <link href="lib/pdfjs/pdf_viewer.css" rel="stylesheet" />
-    <link href="css/folio-reader.css" rel="stylesheet" />
+    <link href="_content/Folio.UI/css/folio-reader.css" rel="stylesheet" />
 </head>
 <body>
-    <div id="app">
-        <div style="display: flex; justify-content: center; align-items: center; height: 100vh; font-family: serif; font-size: 20px; color: #8A5A3B;">
-            Opening Folio...
-        </div>
-    </div>
+    <div id="app"><div class="folio-empty-state">Opening your library…</div></div>
     <script src="_framework/blazor.webview.js"></script>
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
-    <script type="module" src="js/folio-reader.js"></script>
+    <script src="_content/Folio.UI/js/folio-shell.js"></script>
+    <script type="module" src="_content/Folio.UI/js/folio-reader.js"></script>
 </body>
 </html>
-

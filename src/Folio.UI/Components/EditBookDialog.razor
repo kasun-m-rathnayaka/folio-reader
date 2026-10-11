@@ -1,0 +1,27 @@
+@inject ILibraryService Library
+<MudDialog>
+    <DialogContent>
+        <MudTextField @bind-Value="_title" Label="Title" MaxLength="500" AutoFocus="true" />
+        <MudTextField @bind-Value="_author" Label="Author" MaxLength="250" />
+        <h3 class="mt-4 mb-2">Shelves</h3>
+        @if (_shelves.Count == 0) { <p class="folio-muted">Create a shelf from the sidebar to organize this book.</p> }
+        @foreach (var shelf in _shelves) { <MudCheckBox T="bool" Value="@_selected.Contains(shelf.Id)" ValueChanged="v => SetSelected(shelf.Id, v)" Label="@shelf.Name" /> }
+        @if (_error != null) { <p class="folio-error-text">@_error</p> }
+    </DialogContent>
+    <DialogActions><MudButton OnClick="() => Dialog.Cancel()">Cancel</MudButton><MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save" Disabled="@_saving">Save changes</MudButton></DialogActions>
+</MudDialog>
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public Book Book { get; set; } = default!;
+    private string _title = ""; private string? _author, _error; private bool _saving;
+    private IReadOnlyList<Shelf> _shelves = []; private readonly HashSet<Guid> _selected = [];
+    protected override async Task OnInitializedAsync() { _title = Book.Title; _author = Book.Author; _shelves = await Library.GetShelvesAsync(); var book = await Library.GetBookAsync(Book.Id); foreach (var shelf in book?.BookShelves ?? []) _selected.Add(shelf.ShelfId); }
+    private void SetSelected(Guid id, bool included) { if (included) _selected.Add(id); else _selected.Remove(id); }
+    private async Task Save()
+    {
+        _saving = true;
+        try { await Library.SaveMetadataAsync(Book.Id, _title, _author); foreach (var shelf in _shelves) await Library.SetShelfAsync(Book.Id, shelf.Id, _selected.Contains(shelf.Id)); Dialog.Close(DialogResult.Ok(true)); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _saving = false; }
+    }
+}

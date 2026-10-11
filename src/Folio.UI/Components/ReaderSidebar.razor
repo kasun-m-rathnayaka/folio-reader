@@ -1,0 +1,45 @@
+@using Folio.Application.Annotations.DTOs
+@using Folio.Application.Reading.DTOs
+@using Microsoft.AspNetCore.Components.Web.Virtualization
+<aside class="folio-reader-sidebar">
+    <div class="folio-section-heading"><h2>Navigate your book</h2><button class="folio-icon-button" aria-label="Close navigation panel" @onclick="OnClose"><MudIcon Icon="@Icons.Material.Filled.Close" Size="Size.Small" /></button></div>
+    <div class="folio-reader-tabs">
+        <button class="@(_tab == "contents" ? "active" : "")" @onclick='() => _tab = "contents"'>Contents</button>
+        <button class="@(_tab == "pages" ? "active" : "")" @onclick='() => _tab = "pages"'>Pages</button>
+        <button class="@(_tab == "bookmarks" ? "active" : "")" @onclick='() => _tab = "bookmarks"'>Bookmarks</button>
+    </div>
+    <div class="folio-reader-sidebar-body">
+        @if (_tab == "contents")
+        {
+            @if (Outline.Count == 0) { <p class="folio-muted pa-3">This PDF has no table of contents. Use Pages or add a bookmark to find your place.</p> }
+            @foreach (var node in Outline) { <OutlineItem Node="node" CurrentPageIndex="CurrentPage" OnSelectPage="OnSelectPage" /> }
+        }
+        else if (_tab == "pages")
+        {
+            <Virtualize TItem="int" Items="@_pageNumbers" ItemSize="184" OverscanCount="1"><ItemContent Context="page"><PageThumbnail PageIndex="page" IsCurrent="@(page == CurrentPage)" OnSelect="OnSelectPage" /></ItemContent></Virtualize>
+        }
+        else
+        {
+            <label class="folio-muted">Bookmark this page</label><div class="folio-bookmark-form"><input class="folio-input-field" aria-label="Bookmark label" placeholder="Add a label…" @bind="_label" maxlength="200" /><button class="folio-icon-button" aria-label="Add named bookmark" @onclick="Add"><MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" /></button></div>
+            @if (Bookmarks.Count == 0) { <p class="folio-muted">Use the bookmark button or save a label above.</p> }
+            @foreach (var bookmark in Bookmarks.OrderBy(b => b.PageIndex))
+            {
+                <div class="folio-bookmark-row"><button class="folio-bookmark-jump" @onclick="() => OnSelectPage.InvokeAsync(bookmark.PageIndex)"><strong>@(bookmark.Label ?? "Bookmarked page")</strong><span>Page @(bookmark.PageIndex + 1)</span></button><button class="folio-icon-button" aria-label="Remove bookmark" @onclick="() => OnDeleteBookmark.InvokeAsync(bookmark.Id)"><MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" /></button></div>
+            }
+        }
+    </div>
+</aside>
+@code {
+    [Parameter] public IReadOnlyList<OutlineNodeDto> Outline { get; set; } = [];
+    [Parameter] public IReadOnlyList<BookmarkDto> Bookmarks { get; set; } = [];
+    [Parameter] public int CurrentPage { get; set; }
+    [Parameter] public int TotalPages { get; set; }
+    [Parameter] public EventCallback<int> OnSelectPage { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<string> OnAddBookmark { get; set; }
+    [Parameter] public EventCallback<Guid> OnDeleteBookmark { get; set; }
+    private string _tab = "contents", _label = "";
+    private ICollection<int> _pageNumbers = [];
+    protected override void OnParametersSet() { if (_pageNumbers.Count != TotalPages) _pageNumbers = Enumerable.Range(0, Math.Max(0, TotalPages)).ToList(); }
+    private async Task Add() { if (string.IsNullOrWhiteSpace(_label)) return; await OnAddBookmark.InvokeAsync(_label.Trim()); _label = ""; }
+}

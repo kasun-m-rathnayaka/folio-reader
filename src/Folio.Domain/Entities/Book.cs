@@ -36,6 +36,11 @@ public class Book : BaseEntity
 
     public DateTimeOffset? LastReadAt { get; set; }
 
+    public DateTimeOffset? TrashedAt { get; set; }
+
+    public int FurthestPageIndex { get; set; }
+    public bool StatusIsManual { get; set; }
+
     // Navigation properties
     public ReadingPosition? ReadingPosition { get; set; }
 

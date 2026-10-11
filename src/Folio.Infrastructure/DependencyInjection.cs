@@ -23,7 +23,9 @@ public static class DependencyInjection
         fileStore.EnsureDirectories();
 
         services.AddSingleton<IFileStore>(fileStore);
+        services.AddSingleton<IAppPreferencesService, AppPreferencesService>();
         services.AddSingleton<SqliteConnectionInterceptor>();
+        services.AddSingleton<LibraryMaintenanceGate>();
 
         string dbPath = Path.Combine(fileStore.DatabaseDirectory, "folio.db");
         var connectionStringBuilder = new SqliteConnectionStringBuilder
@@ -34,12 +36,13 @@ public static class DependencyInjection
             DefaultTimeout = 5
         };
 
-        services.AddDbContext<FolioDbContext>((sp, options) =>
+        services.AddDbContextFactory<FolioDbContext>((sp, options) =>
         {
             var interceptor = sp.GetRequiredService<SqliteConnectionInterceptor>();
             options.UseSqlite(connectionStringBuilder.ConnectionString)
                    .AddInterceptors(interceptor);
         });
+        services.AddSingleton<Folio.Application.Books.ILibraryService, LibraryService>();
 
         services.AddScoped<IBookRepository, BookRepository>();
         services.AddScoped<IReadingPositionRepository, ReadingPositionRepository>();
@@ -60,6 +63,7 @@ public static class DependencyInjection
         services.AddSingleton<Folio.Infrastructure.Jobs.BackgroundJobQueue>();
         services.AddSingleton<IBackgroundJobQueue>(sp => sp.GetRequiredService<Folio.Infrastructure.Jobs.BackgroundJobQueue>());
         services.AddHostedService<Folio.Infrastructure.Jobs.BackgroundJobWorker>();
+        services.AddHostedService<Folio.Infrastructure.Backup.WeeklyBackupWorker>();
 
         return services;
     }

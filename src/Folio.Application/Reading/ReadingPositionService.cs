@@ -46,7 +46,7 @@ public class ReadingPositionService : IReadingPositionService
                 BookId = bookId,
                 PageIndex = Math.Max(0, pageIndex),
                 OffsetPercent = Math.Clamp(offsetPercent, 0.0, 1.0),
-                Zoom = zoom > 0 ? zoom : 1.0,
+                Zoom = ValidZoom(zoom),
                 ViewMode = viewMode,
                 ActiveReadingSeconds = activeReadingSeconds
             };
@@ -56,24 +56,30 @@ public class ReadingPositionService : IReadingPositionService
         {
             position.PageIndex = Math.Max(0, pageIndex);
             position.OffsetPercent = Math.Clamp(offsetPercent, 0.0, 1.0);
-            position.Zoom = zoom > 0 ? zoom : 1.0;
+            position.Zoom = ValidZoom(zoom);
             position.ViewMode = viewMode;
             position.ActiveReadingSeconds += activeReadingSeconds;
             _positionRepository.Update(position);
         }
 
-        var book = await _bookRepository.GetByIdAsync(bookId, cancellationToken);
+        var book = await _bookRepository.GetReadingBookAsync(bookId, cancellationToken);
         if (book != null)
         {
             book.LastReadAt = DateTimeOffset.UtcNow;
-            if (book.Status == ReadingStatus.WantToRead)
+            book.FurthestPageIndex = Math.Max(book.FurthestPageIndex, Math.Clamp(pageIndex, 0, Math.Max(0, book.PageCount - 1)));
+            if (!book.StatusIsManual && book.Status == ReadingStatus.WantToRead)
             {
                 book.Status = ReadingStatus.Reading;
             }
+            if (!book.StatusIsManual && book.PageCount > 0 &&
+                (double)(book.FurthestPageIndex + 1) / book.PageCount >= .98)
+                book.Status = ReadingStatus.Finished;
             _bookRepository.Update(book);
         }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
+
+    private static double ValidZoom(double zoom) => zoom is -1 or -2 ? zoom : double.IsFinite(zoom) && zoom > 0 ? Math.Clamp(zoom, 0.25, 4) : 1;
 }
 

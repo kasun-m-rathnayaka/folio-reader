@@ -12,10 +12,10 @@
 
     @if (Annotations.Count == 0)
     {
-        <div class="pa-4 text-center" style="color: #666666; font-size: 12px; margin-top: 40px;">
-            <MudIcon Icon="@Icons.Material.Filled.RateReview" Size="Size.Large" Style="color: #444444; margin-bottom: 8px;" />
+        <div class="pa-4 text-center" style="color: var(--folio-text-secondary); font-size: 12px; margin-top: 40px;">
+            <MudIcon Icon="@Icons.Material.Filled.RateReview" Size="Size.Large" Style="color: var(--folio-text-muted); margin-bottom: 8px;" />
             <p>No margin notes on this page.</p>
-            <p style="font-size: 11px; color: #555555;">Select text to highlight or add note.</p>
+            <p style="font-size: 11px; color: var(--folio-text-muted);">Select text to highlight or add note.</p>
         </div>
     }
     else

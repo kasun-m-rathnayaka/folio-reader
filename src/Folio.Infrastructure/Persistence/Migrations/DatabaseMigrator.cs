@@ -12,6 +12,7 @@ public record MigrationStep(int Version, string Name, Func<DbConnection, DbTrans
 /// </summary>
 public class DatabaseMigrator : IDatabaseMigrator
 {
+    public const int LatestVersion = 4;
     private readonly FolioDbContext _context;
     private readonly IFileStore _fileStore;
     private readonly IReadOnlyList<MigrationStep> _migrations;
@@ -50,7 +51,7 @@ public class DatabaseMigrator : IDatabaseMigrator
         _fileStore.EnsureDirectories();
 
         int currentVersion = await GetCurrentVersionAsync(cancellationToken);
-        string timestamp = DateTimeOffset.UtcNow.ToString("yyyyMMdd_HHmmss");
+        string timestamp = DateTimeOffset.UtcNow.ToString("yyyyMMdd_HHmmss_fffffff");
         string backupFileName = $"pre_migration_v{currentVersion}_{timestamp}.db";
         string backupFilePath = Path.Combine(_fileStore.BackupsDirectory, backupFileName);
 
@@ -62,27 +63,17 @@ public class DatabaseMigrator : IDatabaseMigrator
             return null;
         }
 
-        try
-        {
-            await using var command = connection.CreateCommand();
-            // SQLite VACUUM INTO produces an atomic point-in-time copy under WAL mode
-            command.CommandText = $"VACUUM INTO '{backupFilePath.Replace("'", "''")}';";
-            await command.ExecuteNonQueryAsync(cancellationToken);
-            return backupFilePath;
-        }
-        catch
-        {
-            // Fallback: standard file copy if VACUUM INTO is unsupported
-            try
-            {
-                File.Copy(connection.DataSource, backupFilePath, overwrite: true);
-                return backupFilePath;
-            }
-            catch
-            {
-                return null;
-            }
-        }
+        await using var command = connection.CreateCommand();
+        // VACUUM INTO includes committed WAL data. A live file copy does not.
+        command.CommandText = $"VACUUM INTO '{backupFilePath.Replace("'", "''")}';";
+        await command.ExecuteNonQueryAsync(cancellationToken);
+        await using var snapshot = new SqliteConnection($"Data Source={backupFilePath};Mode=ReadOnly;Pooling=False");
+        await snapshot.OpenAsync(cancellationToken);
+        await using var check = snapshot.CreateCommand();
+        check.CommandText = "PRAGMA quick_check;";
+        if (!string.Equals(Convert.ToString(await check.ExecuteScalarAsync(cancellationToken)), "ok", StringComparison.Ordinal))
+            throw new InvalidOperationException("The pre-upgrade backup failed its integrity check. The library was not upgraded.");
+        return backupFilePath;
     }
 
     public async Task<int> MigrateAsync(CancellationToken cancellationToken = default)
@@ -95,6 +86,15 @@ public class DatabaseMigrator : IDatabaseMigrator
 
         await EnsureSchemaVersionTableAsync(connection, cancellationToken);
         int currentVersion = await GetCurrentVersionAsync(cancellationToken);
+        if (currentVersion > LatestVersion)
+            throw new InvalidOperationException("This library was created by a newer version of Folio. Open it with that version.");
+
+        await using (var check = connection.CreateCommand())
+        {
+            check.CommandText = "PRAGMA quick_check;";
+            if (!string.Equals(Convert.ToString(await check.ExecuteScalarAsync(cancellationToken)), "ok", StringComparison.Ordinal))
+                throw new InvalidOperationException("Library integrity check failed. Restore a verified backup before continuing.");
+        }
 
         var pendingMigrations = _migrations
             .Where(m => m.Version > currentVersion)
@@ -144,22 +144,8 @@ public class DatabaseMigrator : IDatabaseMigrator
             {
                 await transaction.RollbackAsync(cancellationToken);
 
-                // If backup was created, restore from it if disk file exists and transaction rollback was not enough
-                if (!string.IsNullOrEmpty(backupPath) && File.Exists(backupPath) && File.Exists(connection.DataSource))
-                {
-                    try
-                    {
-                        connection.Close();
-                        File.Copy(backupPath, connection.DataSource, overwrite: true);
-                    }
-                    catch
-                    {
-                        // Best effort restore
-                    }
-                }
-
                 throw new InvalidOperationException(
-                    $"Migration {migration.Version} ({migration.Name}) failed and was rolled back: {ex.Message}", ex);
+                    $"Migration {migration.Version} ({migration.Name}) failed and was rolled back. Backup: {backupPath ?? "in-memory library"}.", ex);
             }
         }
 
@@ -307,6 +293,98 @@ public class DatabaseMigrator : IDatabaseMigrator
 
                     CREATE INDEX IF NOT EXISTS IX_Jobs_Status_Priority ON Jobs (Status, Priority);
                 ";
+                await cmd.ExecuteNonQueryAsync();
+            }),
+            new MigrationStep(2, "002_AnnotationAnchorsAndStudy", async (connection, transaction) =>
+            {
+                await using var cmd = connection.CreateCommand();
+                cmd.Transaction = transaction;
+                cmd.CommandText = """
+                    ALTER TABLE Bookmarks ADD COLUMN CharacterOffset INTEGER;
+                    ALTER TABLE Annotations ADD COLUMN AnchorPrefix TEXT;
+                    ALTER TABLE Annotations ADD COLUMN AnchorSuffix TEXT;
+                    ALTER TABLE Annotations ADD COLUMN CharacterOffset INTEGER;
+                    ALTER TABLE Annotations ADD COLUMN ExtractorVersion INTEGER NOT NULL DEFAULT 1;
+                    ALTER TABLE Annotations ADD COLUMN IsDetached INTEGER NOT NULL DEFAULT 0;
+                    ALTER TABLE Annotations ADD COLUMN Tags TEXT;
+                    CREATE INDEX IX_Annotations_Type ON Annotations (Type);
+                    CREATE TABLE ChapterSummaries (
+                        Id TEXT PRIMARY KEY NOT NULL, BookId TEXT NOT NULL, ChapterTitle TEXT NOT NULL,
+                        StartPageIndex INTEGER NOT NULL, EndPageIndex INTEGER NOT NULL,
+                        SummaryMarkdown TEXT NOT NULL, CreatedAt INTEGER NOT NULL
+                    );
+                    CREATE INDEX IX_ChapterSummaries_BookId_ChapterTitle ON ChapterSummaries (BookId, ChapterTitle);
+                    CREATE TABLE Flashcards (
+                        Id TEXT PRIMARY KEY NOT NULL, BookId TEXT NOT NULL, AnnotationId TEXT,
+                        Front TEXT NOT NULL, Back TEXT NOT NULL, RepetitionNumber INTEGER NOT NULL,
+                        EasinessFactor REAL NOT NULL, IntervalDays INTEGER NOT NULL,
+                        NextReviewDate INTEGER NOT NULL, LastReviewedAt INTEGER, CreatedAt INTEGER NOT NULL
+                    );
+                    CREATE INDEX IX_Flashcards_BookId_NextReviewDate ON Flashcards (BookId, NextReviewDate);
+                    CREATE TABLE VocabularyItems (
+                        Id TEXT PRIMARY KEY NOT NULL, BookId TEXT NOT NULL, PageIndex INTEGER NOT NULL,
+                        Word TEXT NOT NULL, Definition TEXT NOT NULL, ContextSnippet TEXT NOT NULL,
+                        CreatedAt INTEGER NOT NULL
+                    );
+                    CREATE INDEX IX_VocabularyItems_BookId_Word ON VocabularyItems (BookId, Word);
+                    """;
+                await cmd.ExecuteNonQueryAsync();
+                // Early versions wrote both ISO dates and EF's packed integer dates.
+                // Normalize ISO values without changing already packed dates.
+                var converter = new Microsoft.EntityFrameworkCore.Storage.ValueConversion.DateTimeOffsetToBinaryConverter();
+                var encode = converter.ConvertToProviderExpression.Compile();
+                foreach (var (table, columns) in new[] {
+                    ("Books", new[] { "LastReadAt", "CreatedAt", "UpdatedAt" }),
+                    ("ReadingPositions", new[] { "CreatedAt", "UpdatedAt" }),
+                    ("Annotations", new[] { "CreatedAt", "UpdatedAt" }),
+                    ("Bookmarks", new[] { "CreatedAt", "UpdatedAt" }),
+                    ("Shelves", new[] { "CreatedAt", "UpdatedAt" }),
+                    ("Tags", new[] { "CreatedAt", "UpdatedAt" }),
+                    ("BookShelves", new[] { "AddedAt" }),
+                    ("BookTags", new[] { "AddedAt" }),
+                    ("Jobs", new[] { "StartedAt", "CompletedAt", "CreatedAt", "UpdatedAt" }) })
+                {
+                    foreach (var column in columns)
+                    {
+                        cmd.CommandText = $"SELECT rowid, {column} FROM {table} WHERE {column} LIKE '%-%';";
+                        var dates = new List<(long Row, long Value)>();
+                        await using (var reader = await cmd.ExecuteReaderAsync())
+                        {
+                            while (await reader.ReadAsync())
+                                dates.Add((reader.GetInt64(0), encode(DateTimeOffset.Parse(reader.GetString(1), System.Globalization.CultureInfo.InvariantCulture))));
+                        }
+                        foreach (var (row, value) in dates)
+                        {
+                            cmd.CommandText = $"UPDATE {table} SET {column} = @value WHERE rowid = @row;";
+                            cmd.Parameters.Clear();
+                            var p1 = cmd.CreateParameter(); p1.ParameterName = "@value"; p1.Value = value; cmd.Parameters.Add(p1);
+                            var p2 = cmd.CreateParameter(); p2.ParameterName = "@row"; p2.Value = row; cmd.Parameters.Add(p2);
+                            await cmd.ExecuteNonQueryAsync();
+                        }
+                        cmd.Parameters.Clear();
+                    }
+                }
+            }),
+            new MigrationStep(3, "003_TrashAndReadingProgress", async (connection, transaction) =>
+            {
+                await using var cmd = connection.CreateCommand();
+                cmd.Transaction = transaction;
+                cmd.CommandText = """
+                    ALTER TABLE Books ADD COLUMN TrashedAt INTEGER;
+                    ALTER TABLE Books ADD COLUMN FurthestPageIndex INTEGER NOT NULL DEFAULT 0;
+                    UPDATE Books SET FurthestPageIndex = COALESCE((SELECT PageIndex FROM ReadingPositions WHERE BookId = Books.Id), 0);
+                    CREATE INDEX IX_Books_TrashedAt ON Books (TrashedAt);
+                    """;
+                await cmd.ExecuteNonQueryAsync();
+            }),
+            new MigrationStep(4, "004_ExplicitReadingStatus", async (connection, transaction) =>
+            {
+                await using var cmd = connection.CreateCommand();
+                cmd.Transaction = transaction;
+                cmd.CommandText = """
+                    ALTER TABLE Books ADD COLUMN StatusIsManual INTEGER NOT NULL DEFAULT 0;
+                    UPDATE Books SET StatusIsManual = 1;
+                    """;
                 await cmd.ExecuteNonQueryAsync();
             })
         };

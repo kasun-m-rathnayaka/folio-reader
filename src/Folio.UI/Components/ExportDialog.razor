@@ -3,10 +3,11 @@
 @inject IAnnotationExportService ExportService
 @inject ISnackbar Snackbar
 @inject IJSRuntime JS
+@inject IFilePickerService FilePicker
 
 <MudDialog>
     <TitleContent>
-        <div class="d-flex align-center gap-2" style="color: #FFFFFF;">
+        <div class="d-flex align-center gap-2" style="color: var(--folio-text-primary);">
             <MudIcon Icon="@Icons.Material.Filled.FileUpload" Style="color: #1473E6;" />
             <span style="font-weight: 600; font-size: 16px;">Export Annotations &amp; Notes</span>
         </div>
@@ -27,13 +28,14 @@
             </button>
         </div>
 
-        <div style="font-size: 11px; color: #8C8C8C; margin-bottom: 6px;">EXPORT PREVIEW</div>
+        <div style="font-size: 11px; color: var(--folio-text-muted); margin-bottom: 6px;">EXPORT PREVIEW</div>
         <textarea class="folio-input-field"
-                  style="width: 100%; height: 280px; font-family: monospace; font-size: 12px; resize: none; background: #121212; color: #CCCCCC;"
+                  style="width: 100%; height: 280px; font-family: monospace; font-size: 12px; resize: none; background: var(--md-sys-color-surface-container-low); color: var(--folio-text-primary);"
                   readonly>@_previewContent</textarea>
     </DialogContent>
     <DialogActions>
         <button class="folio-subtle-btn" @onclick="Close">Close</button>
+        <button class="folio-primary-btn" @onclick="SaveFile">Save file</button>
         <button class="folio-primary-btn" @onclick="CopyToClipboard">
             <MudIcon Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" Class="mr-1" />
             Copy to Clipboard
@@ -77,6 +79,15 @@
         await JS.InvokeVoidAsync("navigator.clipboard.writeText", _previewContent);
         Snackbar.Add("Export content copied to clipboard!", Severity.Success);
         MudDialog.Close(DialogResult.Ok(true));
+    }
+
+    private async Task SaveFile()
+    {
+        var extension = _exportFormat == "markdown" ? "md" : _exportFormat;
+        var path = await FilePicker.PickSavePathAsync($"Folio-notes.{extension}", $"Notes (*.{extension})|*.{extension}");
+        if (path == null) return;
+        try { await File.WriteAllTextAsync(path, _previewContent); Snackbar.Add("Notes exported.", Severity.Success); }
+        catch (IOException) { Snackbar.Add("The export could not be written. Choose another location.", Severity.Error); }
     }
 
     private void Close() => MudDialog.Cancel();

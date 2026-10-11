@@ -2,6 +2,17 @@
 
 This log records architectural, structural, and implementation decisions for the **Folio** desktop PDF reader and library application.
 
+## ADR-009: Recovery release boundaries and verification (2026-10-11)
+
+- Retain WPF + Blazor Hybrid, SQLite, and PDF.js. Prioritize a reliable personal reader and a calmer BookOrbit-inspired UI before OCR, narration, and AI.
+- Keep one authoritative reader asset tree in `Folio.UI/wwwroot`. Remove duplicated desktop assets and the disconnected TypeScript scaffold. Keep the active JavaScript implementation, pin the vendored PDF.js version, and test its browser behavior directly. A later TypeScript migration must replace this implementation rather than introducing a second one.
+- Use operation-scoped contexts for library queries and reader persistence. Run forward migrations before hosted workers. Preserve legacy explicit statuses during upgrade; new automatically managed books finish at 98% furthest progress, while manual status choices take precedence.
+- Use verified SQLite snapshots and a staged restore under a writer gate. Invalidate pre-restore contexts so delayed work cannot overwrite restored data. PDFs remain outside default backups; users can include them explicitly.
+- Separate JavaScript-owned PDF DOM from Blazor-owned controls. Treat callback payloads and geometry as a tested interface. Post the final native window close to the dispatcher after flushing the reader and stopping workers.
+- Keep historical spike claims distinct from current release evidence. Current checks and remaining gates are recorded in `docs/verification/README.md`.
+
+---
+
 ---
 
 ## ADR-001: Reference Target and Execution Environment

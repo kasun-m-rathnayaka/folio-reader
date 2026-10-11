@@ -58,10 +58,13 @@ public class BackgroundJobWorker : BackgroundService
 
                 if (job == null)
                 {
-                    // Wait for next channel signal or poll interval
-                    await Task.WhenAny(
-                        _jobQueue.SignalReader.WaitToReadAsync(stoppingToken).AsTask(),
-                        Task.Delay(TimeSpan.FromSeconds(onBattery ? 8 : 3), stoppingToken));
+                    // Signals are wakeups, not the durable queue. Consume stale signals
+                    // and cancel timed-out waits so they cannot accumulate or spin.
+                    while (_jobQueue.SignalReader.TryRead(out _)) { }
+                    using var wakeup = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+                    wakeup.CancelAfter(TimeSpan.FromSeconds(onBattery ? 8 : 3));
+                    try { await _jobQueue.SignalReader.WaitToReadAsync(wakeup.Token); }
+                    catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested) { }
                     continue;
                 }
 
@@ -130,13 +133,13 @@ public class BackgroundJobWorker : BackgroundService
     {
         if (!job.BookId.HasValue)
         {
-            return;
+            throw new InvalidOperationException("This job does not reference a book.");
         }
 
         var book = await bookRepo.GetByIdAsync(job.BookId.Value, cancellationToken);
         if (book == null || !File.Exists(book.FilePath))
         {
-            return;
+            throw new FileNotFoundException("The managed PDF is missing. Locate the original PDF in the library.");
         }
 
         switch (job.Type)
@@ -163,22 +166,20 @@ public class BackgroundJobWorker : BackgroundService
                 break;
 
             case JobType.ExtractText:
-                var progress = new Progress<double>(async p =>
-                {
-                    job.Progress = p;
-                    jobRepo.Update(job);
-                    await uow.SaveChangesAsync(cancellationToken);
-                    _jobQueue.NotifyJobUpdated(job);
-                });
-
-                await _textExtractor.ExtractAllPagesAsync(book.FilePath, progress, cancellationToken);
+                // Avoid async-void progress callbacks racing on the same DbContext.
+                var pages = await _textExtractor.ExtractAllPagesAsync(book.FilePath, cancellationToken: cancellationToken);
+                var textDirectory = Path.Combine(_fileStore.CacheDirectory, "text");
+                Directory.CreateDirectory(textDirectory);
+                var cachePath = Path.Combine(textDirectory, $"{book.Sha256}.v1.json");
+                var temporary = cachePath + ".tmp";
+                await using (var stream = File.Create(temporary))
+                    await System.Text.Json.JsonSerializer.SerializeAsync(stream, pages, cancellationToken: cancellationToken);
+                File.Move(temporary, cachePath, true);
                 break;
 
             case JobType.IndexFts:
             case JobType.OcrScan:
-                // Marked as completed in initial pipeline
-                job.Progress = 1.0;
-                break;
+                throw new NotSupportedException("OCR and full-text indexing are not available in this release.");
         }
     }
 }

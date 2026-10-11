@@ -7,5 +7,6 @@ public interface IFilePickerService
 {
     Task<IReadOnlyList<string>> PickPdfFilesAsync();
     Task<string?> PickZipFileAsync();
+    Task<string?> PickSavePathAsync(string suggestedName, string filter) => Task.FromResult<string?>(null);
 }
 

@@ -28,6 +28,9 @@ public class BookRepository : IBookRepository
             .FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
     }
 
+    public async Task<Book?> GetReadingBookAsync(Guid id, CancellationToken cancellationToken = default) =>
+        await _context.Books.FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
+
     public async Task<Book?> GetBySha256Async(string sha256, CancellationToken cancellationToken = default)
     {
         return await _context.Books
@@ -39,7 +42,7 @@ public class BookRepository : IBookRepository
         ReadingStatus? statusFilter = null,
         CancellationToken cancellationToken = default)
     {
-        var query = _context.Books.AsQueryable();
+        var query = _context.Books.Where(b => b.TrashedAt == null);
 
         if (statusFilter.HasValue)
         {
@@ -57,7 +60,7 @@ public class BookRepository : IBookRepository
         CancellationToken cancellationToken = default)
     {
         return await _context.Books
-            .Where(b => b.LastReadAt != null)
+            .Where(b => b.LastReadAt != null && b.TrashedAt == null)
             .OrderByDescending(b => b.LastReadAt)
             .Take(count)
             .Include(b => b.ReadingPosition)

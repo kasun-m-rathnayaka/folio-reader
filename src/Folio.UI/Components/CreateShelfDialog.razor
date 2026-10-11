@@ -1,0 +1,12 @@
+@inject ILibraryService Library
+<MudDialog>
+    <DialogContent><MudTextField @bind-Value="_name" Label="Shelf name" MaxLength="100" AutoFocus="true" />
+        @if (_error != null) { <p class="folio-error-text">@_error</p> }
+    </DialogContent>
+    <DialogActions><MudButton OnClick="() => Dialog.Cancel()">Cancel</MudButton><MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save">Create shelf</MudButton></DialogActions>
+</MudDialog>
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    private string _name = ""; private string? _error;
+    private async Task Save() { try { await Library.CreateShelfAsync(_name); Dialog.Close(DialogResult.Ok(true)); } catch (Exception ex) { _error = ex.Message; } }
+}

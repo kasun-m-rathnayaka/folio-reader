@@ -52,16 +52,13 @@
     {
         new("Go to page...", "goto", Icons.Material.Filled.Numbers, "Ctrl+G"),
         new("Find in book...", "find", Icons.Material.Filled.Search, "Ctrl+F"),
-        new("Fit Width", "fitwidth", Icons.Material.Filled.FitScreen, "W"),
-        new("Fit Page", "fitpage", Icons.Material.Filled.CropFree, "P"),
+        new("Fit Width", "fitwidth", Icons.Material.Filled.FitScreen, ""),
+        new("Fit Page", "fitpage", Icons.Material.Filled.CropFree, ""),
         new("Zoom In", "zoomin", Icons.Material.Filled.Add, "Ctrl++"),
         new("Zoom Out", "zoomout", Icons.Material.Filled.Remove, "Ctrl+-"),
-        new("Rotate 90° Clockwise", "rotate", Icons.Material.Filled.RotateRight, "R"),
-        new("Toggle Continuous / Single Page", "layout", Icons.Material.Filled.ViewStream, "L"),
-        new("Reflow Reading Mode", "reflow", Icons.Material.Filled.WrapText, "T"),
-        new("Study Tools & Flashcards", "study", Icons.Material.Filled.School, ""),
-        new("Read Aloud Narration", "audio", Icons.Material.Filled.Headphones, ""),
-        new("Library Backup & Restore", "backup", Icons.Material.Filled.Backup, ""),
+        new("Rotate 90° Clockwise", "rotate", Icons.Material.Filled.RotateRight, ""),
+        new("Toggle Continuous / Single Page", "layout", Icons.Material.Filled.ViewStream, ""),
+        new("Notebook", "notebook", Icons.Material.Filled.Notes, ""),
         new("Table of Contents", "toc", Icons.Material.Filled.MenuBook, ""),
         new("Toggle Zen Mode", "zen", Icons.Material.Filled.Fullscreen, "F11"),
         new("Back to Library", "back", Icons.Material.Filled.ArrowBack, "Esc")
@@ -85,4 +82,3 @@
 
     private record ReaderCommandItem(string Title, string Action, string Icon, string Shortcut);
 }
-

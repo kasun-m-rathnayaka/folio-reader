@@ -1,0 +1,21 @@
+@inject IAppPreferencesService Preferences
+@inject IFileStore Files
+@inject IDialogService Dialogs
+<section class="folio-settings-page"><div class="folio-eyebrow">MAKE YOURSELF AT HOME</div><h1>Settings</h1><p class="folio-muted">A comfortable reading space, saved on this device.</p>
+    <div class="folio-settings-group"><h2>Appearance</h2>
+        <MudSwitch T="bool" Value="@Preferences.Current.DarkMode" ValueChanged="ToggleDark" Color="Color.Primary" Label="Dark appearance" />
+        <MudSwitch T="bool" Value="@Preferences.Current.ReducedMotion" ValueChanged="ToggleMotion" Color="Color.Primary" Label="Reduce motion" />
+        <label class="folio-settings-scale">Interface text size <select aria-label="Interface text size" value="@Preferences.Current.FontScale" @onchange="SetScale"><option value="1">100%</option><option value="1.25">125%</option><option value="1.5">150%</option><option value="2">200%</option></select></label>
+    </div>
+    <div class="folio-settings-group"><h2>Library &amp; backup</h2><p class="folio-muted">PDFs are copied into your managed library. Reading never modifies the original file.</p><div class="folio-storage-path">@Files.RootDirectory</div><MudSwitch T="bool" Value="@Preferences.Current.WeeklyBackup" ValueChanged="ToggleBackup" Color="Color.Primary" Label="Weekly backup of notes, positions, and settings" /><button class="folio-primary-btn" @onclick="Backup"><MudIcon Icon="@Icons.Material.Outlined.Backup" Size="Size.Small" />Backup &amp; restore</button></div>
+    <div class="folio-settings-group"><h2>Reading shortcuts</h2><dl class="folio-shortcuts"><dt>Find in book</dt><dd>Ctrl F</dd><dt>Go to page</dt><dd>Ctrl G</dd><dt>Bookmark page</dt><dd>Ctrl D</dd><dt>Reader commands</dt><dd>Ctrl K</dd><dt>Focus mode</dt><dd>F11</dd><dt>Return / close panel</dt><dd>Esc</dd></dl></div>
+    <div class="folio-settings-group"><h2>About Folio</h2><p class="folio-muted">Personal PDF library &amp; reader · Windows · Local storage</p><p class="folio-muted">This release focuses on reading, bookmarks, notes, and library organization. OCR, narration, and AI study tools are planned next.</p></div>
+</section>
+@code {
+    [Parameter] public EventCallback OnPreferencesChanged { get; set; }
+    private async Task ToggleDark(bool value) { Preferences.Save(Preferences.Current with { DarkMode = value }); await OnPreferencesChanged.InvokeAsync(); }
+    private async Task ToggleMotion(bool value) { Preferences.Save(Preferences.Current with { ReducedMotion = value }); await OnPreferencesChanged.InvokeAsync(); }
+    private async Task ToggleBackup(bool value) { Preferences.Save(Preferences.Current with { WeeklyBackup = value }); await OnPreferencesChanged.InvokeAsync(); }
+    private async Task SetScale(ChangeEventArgs e) { if (double.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var scale)) { Preferences.Save(Preferences.Current with { FontScale = scale }); await OnPreferencesChanged.InvokeAsync(); } }
+    private async Task Backup() => await Dialogs.ShowAsync<BackupDialog>("Backup & restore");
+}

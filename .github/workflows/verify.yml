@@ -1,0 +1,34 @@
+name: Verify Folio
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Restore and build
+        run: |
+          dotnet restore Folio.sln
+          dotnet build Folio.sln --no-restore -c Release -m:1 -warnaserror
+      - name: Domain and integration tests
+        run: |
+          dotnet test tests/Folio.Domain.Tests --no-build --no-restore -c Release
+          dotnet test tests/Folio.Infrastructure.Tests --no-build --no-restore -c Release
+          dotnet test tests/Folio.Desktop.Tests --no-build --no-restore -c Release
+      - name: Reader engine tests
+        working-directory: src/Folio.UI
+        run: |
+          npm ci --ignore-scripts
+          npm run check
+          npm test
+          npm run test:reader
+      - name: Publish release package
+        run: dotnet publish src/Folio.Desktop -c Release --no-build --no-restore --self-contained false -o .artifacts/release

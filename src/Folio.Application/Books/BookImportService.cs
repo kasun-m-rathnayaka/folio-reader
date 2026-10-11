@@ -58,7 +58,7 @@ public class BookImportService : IBookImportService
 
         try
         {
-            var meta = await _pdfTextExtractor.ExtractMetadataAsync(managedPath, cancellationToken);
+            var meta = await Task.Run(() => _pdfTextExtractor.ExtractMetadataAsync(managedPath, cancellationToken), cancellationToken);
             if (!string.IsNullOrWhiteSpace(meta.Title))
             {
                 title = meta.Title;
@@ -66,9 +66,10 @@ public class BookImportService : IBookImportService
             author = meta.Author;
             pageCount = Math.Max(1, meta.PageCount);
         }
-        catch
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
         {
-            // Fall back to filename and minimal defaults if corrupt or non-standard metadata
+            throw new InvalidDataException("This PDF could not be opened. It may be damaged or password protected.", ex);
         }
 
         // 5. Generate cover thumbnail for page 1 within performance budget (FR-LIB-03)
@@ -92,6 +93,7 @@ public class BookImportService : IBookImportService
                     finalCoverPath = coverPath;
                 }
             }
+            catch (OperationCanceledException) { throw; }
             catch
             {
                 // Thumbnail failure does not abort book ingestion
@@ -142,6 +144,7 @@ public class BookImportService : IBookImportService
                 var result = await ImportFileAsync(paths[i], cancellationToken);
                 results.Add(result);
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
                 // Per-file error recording allows non-blocking multi-file import (FR-LIB-01)

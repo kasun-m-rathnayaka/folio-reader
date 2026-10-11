@@ -1,0 +1,19 @@
+@inject IJSRuntime JS
+<button class="folio-thumbnail @(IsCurrent ? "active" : "")" @onclick="() => OnSelect.InvokeAsync(PageIndex)" aria-label="@($"Go to page {PageIndex + 1}")">
+    @if (_image != null) { <img src="@_image" alt="" /> } else { <div class="folio-thumbnail-placeholder">@(_failed ? "Preview unavailable" : "Loading…")</div> }
+    <span>Page @(PageIndex + 1)</span>
+</button>
+@code {
+    [Parameter] public int PageIndex { get; set; }
+    [Parameter] public bool IsCurrent { get; set; }
+    [Parameter] public EventCallback<int> OnSelect { get; set; }
+    private string? _image; private int _previous = -1; private bool _failed;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_previous == PageIndex) return;
+        _previous = PageIndex; _image = null; _failed = false;
+        try { _image = await JS.InvokeAsync<string?>("folioReader.getThumbnail", PageIndex); }
+        catch (JSException) { _failed = true; }
+        StateHasChanged();
+    }
+}

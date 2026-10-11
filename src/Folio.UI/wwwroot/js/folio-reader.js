@@ -1,863 +1,367 @@
-import * as pdfjsLib from '../lib/pdfjs/pdf.min.mjs';
-import { PageGeometry } from '../lib/coordinate_space.mjs';
-
-// Configure PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = './lib/pdfjs/pdf.worker.min.mjs';
+import * as pdfjs from '../lib/pdfjs/pdf.min.mjs';
+import { rotateRect, clampRect, resolvePageIndex } from './reader-geometry.mjs';
+pdfjs.GlobalWorkerOptions.workerSrc = new URL('../lib/pdfjs/pdf.worker.min.mjs', import.meta.url).href;
 
 class FolioReaderEngine {
     constructor() {
-        this.container = null;
-        this.dotNetHelper = null;
-        this.pdfDoc = null;
-        this.totalPages = 0;
-        this.currentPageIndex = 0;
-        this.zoom = 1.0;
-        this.layoutMode = 'continuous'; // 'continuous' or 'single'
-        this.rotation = 0; // 0, 90, 180, 270
-        this.pages = []; // { pageNumber, pageProxy, geometry, rendered, rendering, canvas, textLayer, container, width, height }
-        this.renderQueue = new Set();
-        this.isDisposed = false;
-        this.searchMatches = [];
-        this.currentSearchMatchIndex = -1;
-        this.currentSearchQuery = '';
-        this.scrollDebounceTimer = null;
-        this.resizeObserver = null;
-        this.isSnipMode = false;
-        this.isSnipDragging = false;
-        this.snipStartX = 0;
-        this.snipStartY = 0;
-        this.snipActivePage = null;
-        this.snipDragEl = null;
+        this.pages = []; this.pdfDoc = null; this.zoom = 1; this.rotation = 0; this.currentPageIndex = 0;
+        this.layoutMode = 'continuous'; this.searchMatches = []; this.searchVersion = 0;
+        this.currentSearchMatchIndex = -1; this.currentSearchQuery = ''; this.disposed = true;
+        this.history = []; this.historyIndex = -1;
     }
-
-    init(containerElementId, dotNetHelper) {
-        this.container = document.getElementById(containerElementId);
-        this.dotNetHelper = dotNetHelper;
-
-        if (!this.container) {
-            console.error('[FolioReader] Container not found:', containerElementId);
-            return;
-        }
-
+    init(id, helper) {
+        this.container = document.getElementById(id);
+        if (!this.container) throw new Error('Reader viewport is unavailable.');
+        this.dotNetHelper = helper; this.disposed = false;
+        this.events = new AbortController();
+        const options = { signal: this.events.signal };
         this.container.classList.add('folio-reader-container');
-
-        // Scroll listener for continuous mode and virtualization
-        this.container.addEventListener('scroll', () => this.handleScroll(), { passive: true });
-
-        // Selection listener for text extraction
-        this.container.addEventListener('mouseup', () => this.handleTextSelection());
-
-        // Area snip drag listeners
-        this.container.addEventListener('mousedown', (e) => this.handleSnipMouseDown(e));
-        window.addEventListener('mousemove', (e) => this.handleSnipMouseMove(e));
-        window.addEventListener('mouseup', (e) => this.handleSnipMouseUp(e));
-
-        // Reading focus ruler tracking (FR-FEL-04)
-        this.container.addEventListener('mousemove', (e) => {
-            if (!this.isRulerEnabled) return;
-            const ruler = document.getElementById('folio-active-focus-ruler');
-            if (ruler) {
-                const rect = this.container.getBoundingClientRect();
-                const y = e.clientY - rect.top;
-                ruler.style.top = `${y - (ruler.offsetHeight / 2)}px`;
+        this.container.addEventListener('scroll', () => this.handleScroll(), { ...options, passive: true });
+        this.container.addEventListener('mouseup', () => requestAnimationFrame(() => this.handleTextSelection()), options);
+        document.addEventListener('selectionchange', () => {
+            clearTimeout(this.selectionTimer);
+            this.selectionTimer = setTimeout(() => this.handleTextSelection(), 60);
+        }, options);
+        window.addEventListener('keydown', e => this.handleKeyDown(e), options);
+        window.addEventListener('pointermove', e => {
+            const reader = document.querySelector('.folio-zen-active');
+            if (reader && e.clientY < 90) {
+                reader.classList.add('folio-chrome-revealed'); clearTimeout(this.chromeTimer);
+                this.chromeTimer = setTimeout(() => reader.classList.remove('folio-chrome-revealed'), 2000);
             }
-        });
-
-        // Keyboard navigation
-        window.addEventListener('keydown', (e) => this.handleKeyDown(e));
-
-        // Resize observer for fit-width adjustments
+        }, options);
         this.resizeObserver = new ResizeObserver(() => {
-            if (this.zoom === -1) {
-                this.setFitWidth();
-            } else if (this.zoom === -2) {
-                this.setFitPage();
-            }
+            if (this.zoom < 0 && this.pdfDoc) this.refreshLayout();
         });
         this.resizeObserver.observe(this.container);
-
-        console.log('[FolioReader] Initialized on container:', containerElementId);
     }
-
-    async loadDocument(url, initialPageIndex = 0, initialOffsetPercent = 0.0, initialZoom = 1.0, layoutMode = 'continuous') {
-        try {
-            console.log('[FolioReader] Loading document:', url);
-            this.container.innerHTML = '<div class="folio-reader-loading">Loading document...</div>';
-
-            this.pdfDoc = await pdfjsLib.getDocument({
-                url: url,
-                isEvalSupported: false,
-                disableAutoFetch: true
-            }).promise;
-
-            this.totalPages = this.pdfDoc.numPages;
-            this.layoutMode = layoutMode;
-            this.zoom = initialZoom > 0 ? initialZoom : 1.0;
-            this.currentPageIndex = Math.max(0, Math.min(initialPageIndex, this.totalPages - 1));
-
-            // Extract Outline (Table of Contents)
-            let outline = [];
-            try {
-                const rawOutline = await this.pdfDoc.getOutline();
-                outline = this.formatOutline(rawOutline);
-            } catch (outlineErr) {
-                console.warn('[FolioReader] Outline extraction fallback:', outlineErr);
-            }
-
-            // Notify Blazor that document is loaded
-            if (this.dotNetHelper) {
-                await this.dotNetHelper.invokeMethodAsync('OnDocumentLoaded', {
-                    totalPages: this.totalPages,
-                    outline: outline
-                });
-            }
-
-            // Build page placeholder containers
-            this.container.innerHTML = '';
-            this.pages = [];
-
-            for (let i = 1; i <= this.totalPages; i++) {
-                const pageProxy = await this.pdfDoc.getPage(i);
-                const view = pageProxy.view; // [x0, y0, x1, y1]
-                const rotate = pageProxy.rotate || 0;
-                const geometry = new PageGeometry(view, null, rotate);
-
-                const pageEl = document.createElement('div');
-                pageEl.id = `folio-page-${i}`;
-                pageEl.className = 'folio-page-wrapper';
-                pageEl.dataset.pageIndex = (i - 1).toString();
-
-                // Placeholder dimensions based on aspect ratio
-                const initialWidth = geometry.visibleWidth * this.getEffectiveZoom();
-                const initialHeight = geometry.visibleHeight * this.getEffectiveZoom();
-                pageEl.style.width = `${initialWidth}px`;
-                pageEl.style.height = `${initialHeight}px`;
-
-                // Layers
-                const canvasWrap = document.createElement('div');
-                canvasWrap.className = 'folio-canvas-layer';
-                pageEl.appendChild(canvasWrap);
-
-                const textLayer = document.createElement('div');
-                textLayer.className = 'folio-text-layer';
-                pageEl.appendChild(textLayer);
-
-                const overlayLayer = document.createElement('div');
-                overlayLayer.className = 'folio-overlay-layer';
-                pageEl.appendChild(overlayLayer);
-
-                // Dog-ear folded corner (FR-BKM-01)
-                const dogEar = document.createElement('div');
-                dogEar.className = 'folio-dog-ear';
-                dogEar.title = 'Dog-ear Page (Ctrl+D)';
-                dogEar.innerHTML = '<div class="folio-dog-ear-triangle"></div>';
-                const pageIdx = i - 1;
-                dogEar.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    if (this.dotNetHelper) {
-                        this.dotNetHelper.invokeMethodAsync('OnDogEarToggled', pageIdx);
-                    }
-                });
-                pageEl.appendChild(dogEar);
-
-                this.container.appendChild(pageEl);
-
-                this.pages.push({
-                    pageNumber: i,
-                    pageProxy: pageProxy,
-                    geometry: geometry,
-                    container: pageEl,
-                    canvasWrap: canvasWrap,
-                    textLayer: textLayer,
-                    overlayLayer: overlayLayer,
-                    dogEar: dogEar,
-                    rendered: false,
-                    rendering: false,
-                    renderTask: null
-                });
-            }
-
-            // Apply layout visibility
-            this.updateLayoutDisplay();
-
-            // Scroll to initial position
-            if (this.currentPageIndex > 0 || initialOffsetPercent > 0) {
-                this.goToPage(this.currentPageIndex, initialOffsetPercent);
-            } else {
-                this.scheduleVirtualization();
-            }
-
-            console.log(`[FolioReader] Loaded ${this.totalPages} pages successfully.`);
-        } catch (err) {
-            console.error('[FolioReader] Load error:', err);
-            this.container.innerHTML = `<div class="folio-reader-error">Failed to load document: ${err.message}</div>`;
+    async notify(method, payload) {
+        if (this.disposed || !this.dotNetHelper) return;
+        try { await this.dotNetHelper.invokeMethodAsync(method, ...(payload === undefined ? [] : [payload])); }
+        catch (error) {
+            console.error(`[FolioReader] ${method} failed`, error);
+            window.chrome?.webview?.postMessage({kind:'reader-error',code:`interop:${method}`,detail:String(error.message || error)});
         }
     }
-
-    formatOutline(rawOutline) {
-        if (!rawOutline || !Array.isArray(rawOutline)) return [];
-
-        const formatNode = (node) => {
-            let pageIndex = 0;
-            if (node.dest) {
-                // If destination object has explicit target or page index
-                if (Array.isArray(node.dest) && typeof node.dest[0] === 'object') {
-                    // Ref resolved later if needed
-                }
-            }
-            return {
-                title: node.title || 'Untitled',
-                pageIndex: pageIndex,
-                destination: typeof node.dest === 'string' ? node.dest : null,
-                children: (node.items || []).map(formatNode)
-            };
-        };
-
-        return rawOutline.map(formatNode);
+    async loadDocument(url, initialPage = 0, initialOffset = 0, initialZoom = 1, mode = 'continuous', password = null) {
+        let timeout;
+        try {
+            this.container.replaceChildren();
+            this.loadingTask = pdfjs.getDocument({ url, password: password || undefined, isEvalSupported: false, disableAutoFetch: true });
+            timeout = setTimeout(() => this.loadingTask?.destroy(), 30000);
+            this.pdfDoc = await this.loadingTask.promise;
+            clearTimeout(timeout);
+            if (this.disposed) return;
+            this.totalPages = this.pdfDoc.numPages;
+            this.currentPageIndex = resolvePageIndex(initialPage, this.totalPages);
+            this.zoom = initialZoom === -1 || initialZoom === -2 ? initialZoom : Math.max(.25, Math.min(4, initialZoom));
+            this.layoutMode = mode; this.rotation = 0;
+            const firstPage = await this.pdfDoc.getPage(this.currentPageIndex + 1);
+            const viewport = firstPage.getViewport({ scale: 1 });
+            const fragment = document.createDocumentFragment();
+            this.pages = Array.from({ length: this.totalPages }, (_, index) => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'folio-page-wrapper'; wrapper.dataset.pageIndex = index; wrapper.setAttribute('aria-label', `Page ${index + 1}`);
+                const canvasWrap = document.createElement('div'); canvasWrap.className = 'folio-canvas-layer';
+                const textLayer = document.createElement('div'); textLayer.className = 'folio-text-layer textLayer';
+                const linkLayer = document.createElement('div'); linkLayer.className = 'folio-link-layer';
+                const overlay = document.createElement('div'); overlay.className = 'folio-overlay-layer';
+                const dogEar = document.createElement('button'); dogEar.className = 'folio-dog-ear'; dogEar.setAttribute('aria-label', `Bookmark page ${index + 1}`); dogEar.setAttribute('aria-pressed', 'false'); dogEar.innerHTML = '<span class="folio-dog-ear-triangle"></span>';
+                dogEar.addEventListener('click', () => this.notify('OnDogEarToggled', index), { signal: this.events.signal });
+                wrapper.append(canvasWrap, textLayer, linkLayer, overlay, dogEar); fragment.append(wrapper);
+                return { index, container: wrapper, canvasWrap, textLayer, linkLayer, overlayLayer: overlay, dogEar,
+                    width: viewport.width, height: viewport.height, proxy: index === this.currentPageIndex ? firstPage : null,
+                    rendered: false, rendering: false, generation: 0, annotations: [] };
+            });
+            this.container.append(fragment);
+            this.updateLayoutDisplay(); this.goToPage(this.currentPageIndex, initialOffset, false, false);
+            await this.renderPage(this.pages[this.currentPageIndex]);
+            if (this.disposed) return;
+            await this.notify('OnDocumentLoaded', { totalPages: this.totalPages, outline: [] });
+            this.scheduleVirtualization();
+            this.pdfDoc.getOutline().then(async outline => {
+                const resolved = await this.formatOutline(outline);
+                await this.notify('OnOutlineLoaded', resolved);
+            }).catch(() => {});
+        } catch (error) {
+            clearTimeout(timeout);
+            if (this.disposed) return;
+            await this.notify('OnReaderError', { code: error.name === 'PasswordException' ? 'password' : 'load', message: 'The document could not be opened.' });
+            console.error('[FolioReader] Document loading failed', error);
+        }
     }
-
+    async destinationIndex(destination) {
+        const dest = typeof destination === 'string' ? await this.pdfDoc.getDestination(destination) : destination;
+        if (!Array.isArray(dest)) return 0;
+        return resolvePageIndex(typeof dest[0] === 'number' ? dest[0] : await this.pdfDoc.getPageIndex(dest[0]), this.totalPages);
+    }
+    async formatOutline(outline) {
+        return await Promise.all((outline || []).map(async node => ({ title: node.title || 'Untitled',
+            pageIndex: await this.destinationIndex(node.dest).catch(() => 0), children: await this.formatOutline(node.items) })));
+    }
     getEffectiveZoom() {
         if (this.zoom > 0) return this.zoom;
-        if (!this.container || this.pages.length === 0) return 1.0;
-
-        const containerWidth = this.container.clientWidth - 40; // padding
-        const containerHeight = this.container.clientHeight - 40;
-        const firstPage = this.pages[0].geometry;
-
-        if (this.zoom === -1) {
-            // Fit Width
-            return Math.max(0.25, Math.min(4.0, containerWidth / firstPage.visibleWidth));
-        } else if (this.zoom === -2) {
-            // Fit Page
-            const scaleW = containerWidth / firstPage.visibleWidth;
-            const scaleH = containerHeight / firstPage.visibleHeight;
-            return Math.max(0.25, Math.min(4.0, Math.min(scaleW, scaleH)));
-        }
-        return 1.0;
+        const page = this.pages[this.currentPageIndex];
+        if (!page) return 1;
+        const sideways = this.rotation % 180 !== 0;
+        const w = sideways ? page.height : page.width, h = sideways ? page.width : page.height;
+        const scaleW = Math.max(1, this.container.clientWidth - 64) / w;
+        const scaleH = Math.max(1, this.container.clientHeight - 48) / h;
+        return Math.max(.25, Math.min(4, this.zoom === -2 ? Math.min(scaleW, scaleH) : scaleW));
     }
-
-    updateLayoutDisplay() {
-        if (this.layoutMode === 'single') {
-            this.pages.forEach((p, idx) => {
-                p.container.style.display = idx === this.currentPageIndex ? 'block' : 'none';
-            });
-        } else {
-            this.pages.forEach(p => {
-                p.container.style.display = 'block';
-            });
+    updatePageDimensions() {
+        const scale = this.getEffectiveZoom(), sideways = this.rotation % 180 !== 0;
+        for (const page of this.pages) {
+            page.container.style.width = `${(sideways ? page.height : page.width) * scale}px`;
+            page.container.style.height = `${(sideways ? page.width : page.height) * scale}px`;
         }
+    }
+    updateLayoutDisplay() {
+        for (const page of this.pages) page.container.style.display = this.layoutMode === 'single' && page.index !== this.currentPageIndex ? 'none' : 'block';
         this.updatePageDimensions();
     }
-
-    updatePageDimensions() {
-        const scale = this.getEffectiveZoom();
-        this.pages.forEach(p => {
-            const rot = (p.geometry.rotation + this.rotation) % 360;
-            const isSideways = (rot === 90 || rot === 270);
-            const w = (isSideways ? p.geometry.pdfHeight : p.geometry.pdfWidth) * scale;
-            const h = (isSideways ? p.geometry.pdfWidth : p.geometry.pdfHeight) * scale;
-
-            p.container.style.width = `${w}px`;
-            p.container.style.height = `${h}px`;
-        });
+    currentOffset() {
+        const page = this.pages[this.currentPageIndex];
+        return page ? Math.max(0, Math.min(1, (this.container.scrollTop - page.container.offsetTop) / page.container.offsetHeight)) : 0;
     }
-
     handleScroll() {
-        if (this.layoutMode === 'single') return;
-
-        // Determine currently visible page and scroll offset
-        const scrollTop = this.container.scrollTop;
-        const containerHeight = this.container.clientHeight;
-        const centerY = scrollTop + containerHeight / 3;
-
-        for (let i = 0; i < this.pages.length; i++) {
-            const p = this.pages[i];
-            const top = p.container.offsetTop;
-            const height = p.container.offsetHeight;
-
-            if (centerY >= top && centerY <= top + height) {
-                if (this.currentPageIndex !== i) {
-                    this.currentPageIndex = i;
-                }
-                const offsetPercent = height > 0 ? Math.max(0, Math.min(1, (scrollTop - top) / height)) : 0;
-
-                // Debounce telemetry dispatch to Blazor
-                clearTimeout(this.scrollDebounceTimer);
-                this.scrollDebounceTimer = setTimeout(() => {
-                    if (this.dotNetHelper) {
-                        this.dotNetHelper.invokeMethodAsync('OnPositionChanged', {
-                            pageIndex: this.currentPageIndex,
-                            offsetPercent: offsetPercent,
-                            zoom: this.zoom
-                        });
-                    }
-                }, 300);
-                break;
-            }
+        if (this.disposed || !this.pages.length) return;
+        const marker = this.container.scrollTop + Math.min(120, this.container.clientHeight / 4);
+        if (this.layoutMode !== 'single') {
+            let nearest = 0;
+            for (const page of this.pages) { if (page.container.offsetTop <= marker) nearest = page.index; else break; }
+            this.currentPageIndex = nearest;
         }
-
+        // Throttle rather than debounce: uninterrupted scrolling still reports progress.
+        if (!this.positionTimer) this.positionTimer = setTimeout(() => { this.positionTimer = null; this.emitPosition(); }, 200);
         this.scheduleVirtualization();
     }
-
+    async emitPosition() {
+        if (this.positionBusy) { this.positionPending = true; return; }
+        this.positionBusy = true;
+        try {
+            do {
+                this.positionPending = false;
+                await this.notify('OnPositionChanged', { pageIndex: this.currentPageIndex, offsetPercent: this.currentOffset(), zoom: this.zoom });
+            } while (this.positionPending && !this.disposed);
+        } finally { this.positionBusy = false; }
+    }
     scheduleVirtualization() {
-        if (this.isDisposed || this.pages.length === 0) return;
-
-        const effectiveScale = this.getEffectiveZoom();
-        const buffer = 2; // Render +/- 2 pages around visible window
-
-        let start = Math.max(0, this.currentPageIndex - buffer);
-        let end = Math.min(this.pages.length - 1, this.currentPageIndex + buffer);
-
-        if (this.layoutMode === 'single') {
-            start = this.currentPageIndex;
-            end = this.currentPageIndex;
+        if (this.disposed || !this.pages.length) return;
+        const firstVisible = this.pages.findIndex(p => p.container.offsetTop + p.container.offsetHeight > this.container.scrollTop);
+        let endVisible = this.currentPageIndex;
+        for (let i = Math.max(0, firstVisible); i < this.pages.length; i++) {
+            if (this.pages[i].container.offsetTop > this.container.scrollTop + this.container.clientHeight) break;
+            endVisible = i;
         }
-
-        for (let i = 0; i < this.pages.length; i++) {
-            const p = this.pages[i];
-            if (i >= start && i <= end) {
-                if (!p.rendered && !p.rendering) {
-                    this.renderPage(p, effectiveScale);
-                }
-            } else {
-                // Recycle / detach canvas for offscreen pages
-                if (p.rendered) {
-                    this.recyclePage(p);
-                }
-            }
+        const start = this.layoutMode === 'single' ? this.currentPageIndex : Math.max(0, Math.min(this.currentPageIndex, firstVisible) - 1);
+        const end = this.layoutMode === 'single' ? this.currentPageIndex : Math.min(this.pages.length - 1, endVisible + 1);
+        for (const page of this.pages) {
+            const visible = page.index >= start && page.index <= end;
+            page.container.inert = !visible;
+            if (visible) { if (!page.rendered && !page.rendering) this.renderPage(page); }
+            else if (page.rendered || page.rendering) this.recyclePage(page);
         }
     }
-
-    async renderPage(page, scale) {
-        if (page.rendering || this.isDisposed) return;
+    async renderPage(page) {
+        if (!page || page.rendering || this.disposed) return;
         page.rendering = true;
-
+        const generation = ++page.generation;
         try {
-            const totalRotation = (page.geometry.rotation + this.rotation) % 360;
-            const viewport = page.pageProxy.getViewport({ scale: scale, rotation: totalRotation });
-
-            // Clear previous canvas
-            page.canvasWrap.innerHTML = '';
-            const canvas = document.createElement('canvas');
-            const outputScale = window.devicePixelRatio || 1;
-
-            canvas.width = Math.floor(viewport.width * outputScale);
-            canvas.height = Math.floor(viewport.height * outputScale);
-            canvas.style.width = `${Math.floor(viewport.width)}px`;
-            canvas.style.height = `${Math.floor(viewport.height)}px`;
-
-            const ctx = canvas.getContext('2d');
-            ctx.scale(outputScale, outputScale);
-
-            page.canvasWrap.appendChild(canvas);
-
-            page.renderTask = page.pageProxy.render({
-                canvasContext: ctx,
-                viewport: viewport
-            });
-
-            await page.renderTask.promise;
-            page.rendered = true;
-
-            // Render Text Layer
-            try {
-                const textContent = await page.pageProxy.getTextContent();
-                page.textLayer.innerHTML = '';
-                page.textLayer.style.width = `${Math.floor(viewport.width)}px`;
-                page.textLayer.style.height = `${Math.floor(viewport.height)}px`;
-
-                if (pdfjsLib.TextLayer) {
-                    const tl = new pdfjsLib.TextLayer({
-                        textContentSource: textContent,
-                        container: page.textLayer,
-                        viewport: viewport
-                    });
-                    await tl.render();
-                }
-            } catch (tlErr) {
-                console.warn(`[FolioReader] TextLayer render note for p.${page.pageNumber}:`, tlErr);
+            page.proxy ||= await this.pdfDoc.getPage(page.index + 1);
+            if (generation !== page.generation || this.disposed) return;
+            const base = page.proxy.getViewport({ scale: 1 });
+            if (page.width !== base.width || page.height !== base.height) {
+                const offset = this.currentOffset(); page.width = base.width; page.height = base.height; this.updatePageDimensions();
+                this.goToPage(this.currentPageIndex, offset, false);
             }
-        } catch (renderErr) {
-            if (renderErr.name !== 'RenderingCancelledException') {
-                console.error(`[FolioReader] Error rendering page ${page.pageNumber}:`, renderErr);
+            const viewport = page.proxy.getViewport({ scale: this.getEffectiveZoom(), rotation: (page.proxy.rotate + this.rotation) % 360 });
+            const canvas = document.createElement('canvas');
+            const dpr = Math.min(window.devicePixelRatio || 1, 2);
+            canvas.width = Math.ceil(viewport.width * dpr); canvas.height = Math.ceil(viewport.height * dpr);
+            canvas.style.width = `${viewport.width}px`; canvas.style.height = `${viewport.height}px`;
+            page.canvasWrap.replaceChildren(canvas);
+            page.canvasWrap.style.filter = this.theme?.cssFilter || 'none';
+            page.renderTask = page.proxy.render({ canvasContext: canvas.getContext('2d'), viewport,
+                transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null });
+            await page.renderTask.promise;
+            if (generation !== page.generation || this.disposed) return;
+            page.textLayer.replaceChildren();
+            page.container.style.setProperty('--scale-factor', viewport.scale);
+            page.container.style.setProperty('--total-scale-factor', viewport.scale);
+            page.textTask = new pdfjs.TextLayer({ textContentSource: await page.proxy.getTextContent(), container: page.textLayer, viewport });
+            await page.textTask.render();
+            if (generation !== page.generation || this.disposed) return;
+            await this.renderLinks(page, viewport);
+            page.rendered = true;
+            this.drawAnnotations(page.index, page.annotations);
+            this.markSearch(page);
+            await this.notify('OnPageRendered', page.index);
+        } catch (error) {
+            if (generation === page.generation && !this.disposed && error.name !== 'RenderingCancelledException' && error.name !== 'AbortException') {
+                console.error(`[FolioReader] Page ${page.index + 1} failed`, error);
+                window.chrome?.webview?.postMessage({kind:'reader-error',code:error.name,detail:error.message});
+                if (!page.canvasWrap.querySelector('canvas')) page.canvasWrap.textContent = 'This page could not be displayed. Try another page or reopen the book.';
             }
         } finally {
-            page.rendering = false;
-            page.renderTask = null;
+            if (generation === page.generation) { page.rendering = false; page.renderTask = null; page.textTask = null; }
         }
     }
-
+    async renderLinks(page, viewport) {
+        page.linkLayer.replaceChildren();
+        for (const annotation of await page.proxy.getAnnotations({ intent: 'display' })) {
+            if (annotation.subtype !== 'Link' || (!annotation.url && !annotation.dest)) continue;
+            const [x0,y0,x1,y1] = annotation.rect;
+            const box = [...viewport.convertToViewportPoint(x0,y0), ...viewport.convertToViewportPoint(x1,y1)];
+            const link = document.createElement('button'); link.className = 'folio-pdf-link';
+            link.style.left = `${Math.min(box[0], box[2])}px`; link.style.top = `${Math.min(box[1], box[3])}px`;
+            link.style.width = `${Math.abs(box[2] - box[0])}px`; link.style.height = `${Math.abs(box[3] - box[1])}px`;
+            link.setAttribute('aria-label', annotation.url ? `Open external link: ${annotation.url}` : 'Follow reference in this book');
+            link.title = annotation.url || 'Go to reference';
+            link.addEventListener('click', async () => {
+                if (annotation.url) await this.notify('OnExternalLinkRequested', annotation.url);
+                else { this.history.splice(this.historyIndex + 1); this.history.push({ page: this.currentPageIndex, offset: this.currentOffset() }); this.historyIndex = this.history.length - 1; this.goToPage(await this.destinationIndex(annotation.dest)); }
+            }, { signal: this.events.signal });
+            page.linkLayer.append(link);
+        }
+    }
     recyclePage(page) {
-        if (page.renderTask) {
-            try { page.renderTask.cancel(); } catch { }
-        }
-        page.canvasWrap.innerHTML = '';
-        page.textLayer.innerHTML = '';
-        page.rendered = false;
-        page.rendering = false;
-        page.renderTask = null;
+        page.generation++; page.renderTask?.cancel(); page.textTask?.cancel();
+        page.canvasWrap.querySelectorAll('canvas').forEach(c => { c.width = 0; c.height = 0; });
+        page.canvasWrap.replaceChildren(); page.textLayer.replaceChildren(); page.linkLayer.replaceChildren();
+        page.rendered = false; page.rendering = false; page.renderTask = null; page.textTask = null;
     }
-
-    goToPage(pageIndex, offsetPercent = 0.0) {
-        pageIndex = Math.max(0, Math.min(pageIndex, this.pages.length - 1));
-        this.currentPageIndex = pageIndex;
-
-        if (this.layoutMode === 'single') {
-            this.updateLayoutDisplay();
-            this.container.scrollTop = 0;
-            this.scheduleVirtualization();
-        } else {
-            const page = this.pages[pageIndex];
-            if (page && page.container) {
-                const top = page.container.offsetTop;
-                const height = page.container.offsetHeight;
-                this.container.scrollTop = top + (height * offsetPercent);
-                this.scheduleVirtualization();
-            }
-        }
-
-        if (this.dotNetHelper) {
-            this.dotNetHelper.invokeMethodAsync('OnPositionChanged', {
-                pageIndex: this.currentPageIndex,
-                offsetPercent: offsetPercent,
-                zoom: this.zoom
-            });
-        }
+    goToPage(index, offset = 0, report = true, schedule = true) {
+        if (!this.pages.length) return;
+        this.currentPageIndex = resolvePageIndex(index, this.pages.length);
+        if (this.layoutMode === 'single') this.updateLayoutDisplay();
+        const page = this.pages[this.currentPageIndex];
+        this.container.scrollTop = page.container.offsetTop + page.container.offsetHeight * Math.max(0, Math.min(1, offset));
+        if (schedule) this.scheduleVirtualization(); if (report) this.emitPosition();
     }
-
-    setZoom(newZoom) {
-        this.zoom = newZoom;
-        this.pages.forEach(p => this.recyclePage(p));
-        this.updatePageDimensions();
-        this.scheduleVirtualization();
+    refreshLayout() {
+        const index = this.currentPageIndex, offset = this.currentOffset();
+        this.pages.forEach(p => this.recyclePage(p)); this.updateLayoutDisplay(); this.goToPage(index, offset);
     }
-
-    setFitWidth() {
-        this.zoom = -1;
-        this.pages.forEach(p => this.recyclePage(p));
-        this.updatePageDimensions();
-        this.scheduleVirtualization();
-    }
-
-    setFitPage() {
-        this.zoom = -2;
-        this.pages.forEach(p => this.recyclePage(p));
-        this.updatePageDimensions();
-        this.scheduleVirtualization();
-    }
-
-    setLayoutMode(mode) {
-        if (this.layoutMode === mode) return;
-        this.layoutMode = mode;
-        this.pages.forEach(p => this.recyclePage(p));
-        this.updateLayoutDisplay();
-        this.goToPage(this.currentPageIndex, 0);
-    }
-
-    setRotation(degrees) {
-        this.rotation = ((this.rotation + degrees) % 360 + 360) % 360;
-        this.pages.forEach(p => this.recyclePage(p));
-        this.updatePageDimensions();
-        this.scheduleVirtualization();
-    }
-
+    setZoom(zoom) { this.zoom = zoom; this.refreshLayout(); }
+    setFitWidth() { this.setZoom(-1); }
+    setFitPage() { this.setZoom(-2); }
+    setLayoutMode(mode) { this.layoutMode = mode; this.refreshLayout(); }
+    setRotation(degrees) { this.rotation = ((this.rotation + degrees) % 360 + 360) % 360; this.refreshLayout(); }
     handleTextSelection() {
         const selection = window.getSelection();
-        if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
-            this.clearSelectionBox();
-            return;
-        }
-
-        const text = selection.toString().trim();
-        if (!text) {
-            this.clearSelectionBox();
-            return;
-        }
-
+        if (!selection || selection.isCollapsed || !selection.rangeCount) return;
         const range = selection.getRangeAt(0);
-        // Find which page container holds this selection
-        let node = range.commonAncestorContainer;
-        while (node && !node.classList?.contains('folio-page-wrapper')) {
-            node = node.parentElement;
-        }
-
-        if (node && node.dataset.pageIndex) {
-            const pageIndex = parseInt(node.dataset.pageIndex, 10);
-            const page = this.pages[pageIndex];
-            const pageRect = node.getBoundingClientRect();
-            const clientRects = range.getClientRects();
-
-            // Render bounding box with white circular handles matching screenshot
-            this.renderSelectionBoundingBox(page, range.getBoundingClientRect(), pageRect);
-
-            const normalizedRects = [];
-            for (let i = 0; i < clientRects.length; i++) {
-                const r = clientRects[i];
-                if (r.width <= 0 || r.height <= 0) continue;
-
-                normalizedRects.push({
-                    x: Math.max(0, Math.min(1, (r.left - pageRect.left) / pageRect.width)),
-                    y: Math.max(0, Math.min(1, (r.top - pageRect.top) / pageRect.height)),
-                    width: Math.min(1, r.width / pageRect.width),
-                    height: Math.min(1, r.height / pageRect.height)
-                });
-            }
-
-            if (this.dotNetHelper && normalizedRects.length > 0) {
-                this.dotNetHelper.invokeMethodAsync('OnTextSelected', {
-                    pageIndex: pageIndex,
-                    selectedText: text,
-                    rects: normalizedRects
-                });
-            }
+        const closestPage = node => (node?.nodeType === 1 ? node : node?.parentElement)?.closest('.folio-page-wrapper');
+        const node = closestPage(range.startContainer), end = closestPage(range.endContainer);
+        if (!node) return;
+        if (node !== end) { this.notify('OnSelectionUnavailable'); return; }
+        const pageRect = node.getBoundingClientRect();
+        const rects = Array.from(range.getClientRects()).filter(r => r.width > 1 && r.height > 1)
+            .map(r => rotateRect(clampRect({ x: (r.left - pageRect.left) / pageRect.width, y: (r.top - pageRect.top) / pageRect.height, width: r.width / pageRect.width, height: r.height / pageRect.height }), -this.rotation));
+        const text = selection.toString().trim();
+        if (text && rects.length) {
+            const bounds = range.getBoundingClientRect();
+            this.notify('OnTextSelected', { pageIndex: Number(node.dataset.pageIndex), selectedText: text, rects,
+                clientX: Math.max(12, Math.min(window.innerWidth - 360, bounds.left)), clientY: Math.max(70, bounds.top - 52) });
         }
     }
-
-    renderSelectionBoundingBox(page, selRect, pageRect) {
-        if (!page || !page.overlayLayer) return;
-        this.clearSelectionBox();
-
-        const box = document.createElement('div');
-        box.id = 'folio-active-selection-box';
-        box.className = 'folio-bounding-box-active';
-        box.style.left = `${Math.max(0, selRect.left - pageRect.left - 4)}px`;
-        box.style.top = `${Math.max(0, selRect.top - pageRect.top - 4)}px`;
-        box.style.width = `${selRect.width + 8}px`;
-        box.style.height = `${selRect.height + 8}px`;
-
-        // 8 handles (Corners & Edges) matching screenshot
-        ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].forEach(pos => {
-            const handle = document.createElement('div');
-            handle.className = `folio-handle folio-handle-${pos}`;
-            box.appendChild(handle);
-        });
-
-        page.overlayLayer.appendChild(box);
-    }
-
-    clearSelectionBox() {
-        const el = document.getElementById('folio-active-selection-box');
-        if (el) el.remove();
-    }
-
-    drawOverlays(pageIndex, rects, colorHex = '#FFE082') {
-        const page = this.pages[pageIndex];
-        if (!page || !page.overlayLayer) return;
-
-        page.overlayLayer.innerHTML = '';
-        rects.forEach(r => {
-            const el = document.createElement('div');
-            el.className = 'folio-highlight-overlay';
-            el.style.left = `${r.x * 100}%`;
-            el.style.top = `${r.y * 100}%`;
-            el.style.width = `${r.width * 100}%`;
-            el.style.height = `${r.height * 100}%`;
-            el.style.backgroundColor = colorHex;
-            page.overlayLayer.appendChild(el);
-        });
-    }
-
-    clearOverlays(pageIndex) {
-        const page = this.pages[pageIndex];
-        if (page && page.overlayLayer) {
-            page.overlayLayer.innerHTML = '';
-        }
-    }
-
-    async getPageText(pageIndex) {
-        if (!this.pdfDoc || pageIndex < 0 || pageIndex >= this.totalPages) return null;
-        try {
-            const page = await this.pdfDoc.getPage(pageIndex + 1);
-            const tc = await page.getTextContent();
-            const viewport = page.getViewport({ scale: 1.0 });
-            const items = [];
-            for (let i = 0; i < tc.items.length; i++) {
-                const item = tc.items[i];
-                if (!item.str || !item.str.trim()) continue;
-                const tx = item.transform[4];
-                const ty = item.transform[5];
-                const w = item.width;
-                const h = item.height;
-                items.push({
-                    str: item.str,
-                    rect: {
-                        x: Math.max(0, Math.min(1, tx / viewport.width)),
-                        y: Math.max(0, Math.min(1, (viewport.height - ty - h) / viewport.height)),
-                        width: Math.min(1, w / viewport.width),
-                        height: Math.min(1, h / viewport.height)
-                    }
-                });
-            }
-            return {
-                text: tc.items.map(i => i.str).join(' '),
-                items: items
-            };
-        } catch (e) {
-            console.error('[FolioReader] getPageText error:', e);
-            return null;
-        }
-    }
-
-    drawAnnotations(pageIndex, annotations) {
-        const page = this.pages[pageIndex];
-        if (!page || !page.overlayLayer) return;
-
-        // Clear existing annotation elements on this page
+    clearSelectionBox() { window.getSelection()?.removeAllRanges(); }
+    drawAnnotations(index, annotations) {
+        const page = this.pages[index]; if (!page) return;
+        page.annotations = annotations || [];
         page.overlayLayer.querySelectorAll('.folio-annotation-item').forEach(el => el.remove());
-
-        if (!annotations || !Array.isArray(annotations)) return;
-
-        annotations.forEach(ann => {
-            const rects = ann.rects || [];
-            rects.forEach(r => {
-                const el = document.createElement('div');
-                el.className = `folio-annotation-item folio-annotation-${(ann.type || 'highlight').toLowerCase()}`;
-                el.dataset.annotationId = ann.id;
-                el.style.left = `${r.x * 100}%`;
-                el.style.top = `${r.y * 100}%`;
-                el.style.width = `${r.width * 100}%`;
-                el.style.height = `${r.height * 100}%`;
-
-                if (ann.type === 'Highlight' || ann.type === 0) {
-                    el.style.backgroundColor = ann.colorHex || '#FFEB3B';
-                    el.style.opacity = '0.35';
-                } else if (ann.type === 'Underline' || ann.type === 1) {
-                    el.style.borderBottom = `2px solid ${ann.colorHex || '#1473E6'}`;
-                } else if (ann.type === 'Strike' || ann.type === 2) {
-                    el.style.borderTop = `2px solid ${ann.colorHex || '#FF5252'}`;
-                    el.style.marginTop = `${(r.height * 100) / 2}%`;
-                } else if (ann.type === 'AreaSnip' || ann.type === 5) {
-                    el.style.border = `2px dashed ${ann.colorHex || '#1473E6'}`;
-                    el.style.backgroundColor = 'rgba(20, 115, 230, 0.1)';
-                    el.style.borderRadius = '4px';
-                }
-
-                el.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    if (this.dotNetHelper) {
-                        this.dotNetHelper.invokeMethodAsync('OnAnnotationClicked', ann.id);
-                    }
-                });
-
-                page.overlayLayer.appendChild(el);
-            });
-        });
-    }
-
-    pulseAnnotation(annotationId) {
-        const els = document.querySelectorAll(`[data-annotation-id="${annotationId}"]`);
-        els.forEach(el => {
-            el.classList.add('folio-annotation-pulsing');
-            setTimeout(() => el.classList.remove('folio-annotation-pulsing'), 1400);
-        });
-    }
-
-    setDogEar(pageIndex, isFolded) {
-        const page = this.pages[pageIndex];
-        if (page && page.dogEar) {
-            if (isFolded) {
-                page.dogEar.classList.add('active');
-            } else {
-                page.dogEar.classList.remove('active');
+        for (const annotation of page.annotations) for (const original of annotation.rects || []) {
+            const r = rotateRect(original, this.rotation), el = document.createElement('div');
+            el.className = `folio-annotation-item folio-annotation-${(annotation.type || 'Highlight').toLowerCase()}`;
+            el.dataset.annotationId = annotation.id;
+            Object.assign(el.style, { left: `${r.x * 100}%`, top: `${r.y * 100}%`, width: `${r.width * 100}%`, height: `${r.height * 100}%` });
+            if (annotation.type === 'Underline') {
+                const edge = {0:'borderBottom',90:'borderLeft',180:'borderTop',270:'borderRight'}[this.rotation];
+                el.style[edge] = `2px solid ${annotation.colorHex}`;
             }
+            else if (annotation.type === 'Strike') { el.style.background = `linear-gradient(${this.rotation % 180 ? 'to right' : 'to bottom'}, transparent 45%, ${annotation.colorHex} 45%, ${annotation.colorHex} 55%, transparent 55%)`; }
+            else { el.style.backgroundColor = annotation.colorHex; el.style.opacity = '.3'; }
+            el.addEventListener('dblclick', () => this.notify('OnAnnotationClicked', annotation.id), { signal: this.events.signal });
+            page.overlayLayer.append(el);
         }
     }
-
-    setSnipMode(enabled) {
-        this.isSnipMode = enabled;
-        if (enabled) {
-            this.container.classList.add('folio-snip-active');
-        } else {
-            this.container.classList.remove('folio-snip-active');
-        }
+    drawOverlays(index, rects, color = '#FFE082') { const page = this.pages[index]; if (!page) return; for (const rect of rects) { const r = rotateRect(rect, this.rotation), el = document.createElement('div'); el.className = 'folio-highlight-overlay'; Object.assign(el.style, { left:`${r.x*100}%`, top:`${r.y*100}%`, width:`${r.width*100}%`, height:`${r.height*100}%`, backgroundColor:color }); page.overlayLayer.append(el); } }
+    clearOverlays(index) { this.pages[index]?.overlayLayer.querySelectorAll('.folio-highlight-overlay').forEach(el => el.remove()); }
+    pulseAnnotation(id) { document.querySelectorAll(`[data-annotation-id="${id}"]`).forEach(el => { el.classList.add('folio-annotation-pulsing'); setTimeout(() => el.classList.remove('folio-annotation-pulsing'), 1000); }); }
+    setDogEar(index, folded) { const ear = this.pages[index]?.dogEar; ear?.classList.toggle('active', folded); ear?.setAttribute('aria-pressed', folded ? 'true' : 'false'); }
+    setSnipMode() { /* Area annotations are deferred; the core selection workflow is supported. */ }
+    async getPageText(index) {
+        if (!this.pdfDoc) return null;
+        const page = await this.pdfDoc.getPage(index + 1), content = await page.getTextContent();
+        return { text: content.items.map(i => i.str || '').join(' '), items: [] };
     }
-
-    handleSnipMouseDown(e) {
-        if (!this.isSnipMode) return;
-        const pageWrapper = e.target.closest('.folio-page-wrapper');
-        if (!pageWrapper) return;
-
-        this.isSnipDragging = true;
-        this.snipActivePage = pageWrapper;
-        const rect = pageWrapper.getBoundingClientRect();
-        this.snipStartX = e.clientX - rect.left;
-        this.snipStartY = e.clientY - rect.top;
-
-        this.snipDragEl = document.createElement('div');
-        this.snipDragEl.className = 'folio-snip-drag-rect';
-        this.snipDragEl.style.left = `${this.snipStartX}px`;
-        this.snipDragEl.style.top = `${this.snipStartY}px`;
-        this.snipDragEl.style.width = '0px';
-        this.snipDragEl.style.height = '0px';
-        pageWrapper.appendChild(this.snipDragEl);
-        e.preventDefault();
+    async getThumbnail(index) {
+        if (!this.pdfDoc || this.disposed) return null;
+        const page = await this.pdfDoc.getPage(index + 1);
+        const base = page.getViewport({ scale: 1 }), viewport = page.getViewport({ scale: 110 / base.width });
+        const canvas = document.createElement('canvas'); canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+        const result = canvas.toDataURL('image/png'); canvas.width = canvas.height = 0; return result;
     }
-
-    handleSnipMouseMove(e) {
-        if (!this.isSnipMode || !this.isSnipDragging || !this.snipActivePage || !this.snipDragEl) return;
-        const rect = this.snipActivePage.getBoundingClientRect();
-        const currentX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
-        const currentY = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
-
-        const left = Math.min(this.snipStartX, currentX);
-        const top = Math.min(this.snipStartY, currentY);
-        const width = Math.abs(currentX - this.snipStartX);
-        const height = Math.abs(currentY - this.snipStartY);
-
-        this.snipDragEl.style.left = `${left}px`;
-        this.snipDragEl.style.top = `${top}px`;
-        this.snipDragEl.style.width = `${width}px`;
-        this.snipDragEl.style.height = `${height}px`;
-    }
-
-    handleSnipMouseUp(e) {
-        if (!this.isSnipMode || !this.isSnipDragging || !this.snipActivePage || !this.snipDragEl) return;
-        this.isSnipDragging = false;
-        const rect = this.snipActivePage.getBoundingClientRect();
-        const currentX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
-        const currentY = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
-
-        const left = Math.min(this.snipStartX, currentX);
-        const top = Math.min(this.snipStartY, currentY);
-        const width = Math.abs(currentX - this.snipStartX);
-        const height = Math.abs(currentY - this.snipStartY);
-
-        this.snipDragEl.remove();
-        this.snipDragEl = null;
-
-        if (width > 15 && height > 15 && this.dotNetHelper) {
-            const pageIndex = parseInt(this.snipActivePage.dataset.pageIndex, 10);
-            this.setSnipMode(false);
-            this.dotNetHelper.invokeMethodAsync('OnSnipCompleted', {
-                pageIndex: pageIndex,
-                rect: {
-                    x: left / rect.width,
-                    y: top / rect.height,
-                    width: width / rect.width,
-                    height: height / rect.height
-                }
-            });
-        }
-        this.snipActivePage = null;
-    }
-
     async search(query, forward = true) {
-        if (!query || !this.pdfDoc) return;
-        query = query.trim().toLowerCase();
-
-        if (this.currentSearchQuery !== query) {
-            this.currentSearchQuery = query;
-            this.searchMatches = [];
-            this.currentSearchMatchIndex = -1;
-
-            // Search through text across all pages
-            for (let i = 1; i <= this.totalPages; i++) {
-                const p = await this.pdfDoc.getPage(i);
-                const tc = await p.getTextContent();
-                const str = tc.items.map(item => item.str).join(' ').toLowerCase();
-
-                let pos = str.indexOf(query);
-                while (pos !== -1) {
-                    this.searchMatches.push({
-                        pageIndex: i - 1,
-                        charIndex: pos
-                    });
-                    pos = str.indexOf(query, pos + query.length);
-                }
+        if (!this.pdfDoc || !query.trim()) return;
+        const normalized = query.trim().toLowerCase();
+        if (normalized !== this.currentSearchQuery) {
+            this.currentSearchQuery = normalized; this.currentSearchMatchIndex = -1; this.searchMatches = [];
+            const version = ++this.searchVersion;
+            for (let index = 0; index < this.totalPages; index++) {
+                const proxy = await this.pdfDoc.getPage(index + 1), content = await proxy.getTextContent();
+                if (version !== this.searchVersion || this.disposed) return;
+                const text = content.items.map(i => i.str || '').join(' ').toLowerCase();
+                let position = text.indexOf(normalized);
+                while (position !== -1) { this.searchMatches.push({ pageIndex:index, charIndex:position }); position = text.indexOf(normalized, position + normalized.length); }
+                if (index === this.currentPageIndex) this.markSearch(this.pages[index]);
+                if (index % 8 === 0) await new Promise(resolve => setTimeout(resolve, 0));
             }
         }
-
-        if (this.searchMatches.length === 0) {
-            if (this.dotNetHelper) {
-                this.dotNetHelper.invokeMethodAsync('OnSearchMatch', {
-                    currentMatch: 0,
-                    totalMatches: 0,
-                    pageIndex: this.currentPageIndex
-                });
-            }
-            return;
+        const total = this.searchMatches.length;
+        if (total) {
+            this.currentSearchMatchIndex = (this.currentSearchMatchIndex + (forward ? 1 : -1) + total) % total;
+            this.goToPage(this.searchMatches[this.currentSearchMatchIndex].pageIndex);
         }
-
-        if (forward) {
-            this.currentSearchMatchIndex = (this.currentSearchMatchIndex + 1) % this.searchMatches.length;
-        } else {
-            this.currentSearchMatchIndex = (this.currentSearchMatchIndex - 1 + this.searchMatches.length) % this.searchMatches.length;
-        }
-
-        const match = this.searchMatches[this.currentSearchMatchIndex];
-        this.goToPage(match.pageIndex, 0.0);
-
-        if (this.dotNetHelper) {
-            this.dotNetHelper.invokeMethodAsync('OnSearchMatch', {
-                currentMatch: this.currentSearchMatchIndex + 1,
-                totalMatches: this.searchMatches.length,
-                pageIndex: match.pageIndex
-            });
-        }
+        this.pages.filter(p => p.rendered).forEach(p => this.markSearch(p));
+        await this.notify('OnSearchMatch', { currentMatch:total ? this.currentSearchMatchIndex + 1 : 0, totalMatches:total, pageIndex:this.currentPageIndex });
     }
-
-    clearSearch() {
-        this.searchMatches = [];
-        this.currentSearchMatchIndex = -1;
-        this.currentSearchQuery = '';
-    }
-
+    markSearch(page) { if (!page) return; for (const span of page.textLayer.querySelectorAll('span')) span.classList.toggle('folio-search-hit', !!this.currentSearchQuery && span.textContent.toLowerCase().includes(this.currentSearchQuery)); }
+    clearSearch() { this.searchVersion++; this.currentSearchQuery = ''; this.searchMatches = []; this.currentSearchMatchIndex = -1; this.pages.forEach(p => this.markSearch(p)); }
     handleKeyDown(e) {
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-
-        if (e.key === 'ArrowRight' || e.key === 'PageDown') {
-            e.preventDefault();
-            this.goToPage(this.currentPageIndex + 1, 0);
-        } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
-            e.preventDefault();
-            this.goToPage(this.currentPageIndex - 1, 0);
-        } else if (e.key === 'Home') {
-            e.preventDefault();
-            this.goToPage(0, 0);
-        } else if (e.key === 'End') {
-            e.preventDefault();
-            this.goToPage(this.totalPages - 1, 0);
+        if (e.target.closest('input,textarea,select,[contenteditable="true"],.mud-dialog') || this.disposed) return;
+        const ctrl = e.ctrlKey || e.metaKey, key = e.key.toLowerCase();
+        if ((ctrl && ['g','d','f','k','+','=','-'].includes(key)) || ['F11','Escape'].includes(e.key) || (!ctrl && ['h','c'].includes(key) && window.getSelection()?.toString().trim())) {
+            e.preventDefault(); this.notify('OnReaderShortcut', { key:e.key, ctrlKey:ctrl, altKey:e.altKey }); return;
         }
-    }
-
-    applyTheme(theme) {
-        if (!this.container) return;
-
-        this.container.style.setProperty('--folio-paper-bg', theme.backgroundHex || '#FFFFFF');
-        this.container.style.setProperty('--folio-paper-ink', theme.inkHex || '#1B1B1B');
-        this.container.style.setProperty('--folio-warmth-alpha', theme.warmthAlpha || 0);
-        this.container.style.setProperty('--folio-dim-alpha', theme.dimAlpha || 0);
-        this.container.style.setProperty('--folio-vignette-opacity', theme.vignetteOpacity || 0);
-        this.container.style.setProperty('--folio-grain-opacity', theme.grainOpacity || 0);
-
-        // Instant canvas recoloring for night/black themes (<= 150 ms without re-render)
-        const canvasFilter = theme.cssFilter || 'none';
-        this.container.querySelectorAll('.folio-canvas-layer').forEach(el => {
-            el.style.filter = canvasFilter;
-        });
-    }
-
-    setFocusRuler(enabled, lines = 1) {
-        this.isRulerEnabled = enabled;
-        this.focusLines = lines;
-        const ruler = document.getElementById('folio-active-focus-ruler');
-        if (ruler) {
-            ruler.style.display = enabled ? 'block' : 'none';
-            ruler.style.height = `${Math.max(28, lines * 28)}px`;
+        if (e.altKey && e.key === 'ArrowLeft' && this.historyIndex >= 0) {
+            e.preventDefault(); const current = { page:this.currentPageIndex, offset:this.currentOffset() };
+            const target = this.history[this.historyIndex]; this.history[this.historyIndex--] = current; this.goToPage(target.page, target.offset); return;
         }
-    }
-
-    dispose() {
-        this.isDisposed = true;
-        if (this.resizeObserver) {
-            this.resizeObserver.disconnect();
+        if (e.altKey && e.key === 'ArrowRight' && this.historyIndex + 1 < this.history.length) {
+            e.preventDefault(); const current = { page:this.currentPageIndex, offset:this.currentOffset() };
+            const target = this.history[++this.historyIndex]; this.history[this.historyIndex] = current; this.goToPage(target.page,target.offset); return;
         }
-        this.pages.forEach(p => this.recyclePage(p));
-        this.pages = [];
-        this.pdfDoc = null;
+        const deltas = { ArrowRight:1, PageDown:1, ArrowLeft:-1, PageUp:-1 };
+        if (e.key in deltas) { e.preventDefault(); this.goToPage(this.currentPageIndex + deltas[e.key]); }
+        else if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); this.goToPage(e.key === 'Home' ? 0 : this.totalPages - 1); }
+    }
+    applyTheme(theme) { this.theme = theme; this.pages.forEach(p => p.canvasWrap.style.filter = theme.cssFilter || 'none'); }
+    setFocusRuler() { }
+    async dispose() {
+        this.disposed = true; this.searchVersion++; clearTimeout(this.positionTimer); clearTimeout(this.chromeTimer); clearTimeout(this.selectionTimer); this.events?.abort(); this.resizeObserver?.disconnect();
+        this.pages.forEach(p => this.recyclePage(p)); this.pages = []; this.dotNetHelper = null;
+        await this.loadingTask?.destroy(); this.pdfDoc = null; this.loadingTask = null;
+        this.container?.replaceChildren();
     }
 }
-
-// Global instance attached to window for Blazor JS interop
-window.folioReader = new FolioReaderEngine();
-
+const methods = ['loadDocument','goToPage','setZoom','setFitWidth','setFitPage','setLayoutMode','setRotation','search','clearSearch','drawOverlays','clearOverlays','getPageText','getThumbnail','drawAnnotations','pulseAnnotation','setDogEar','setSnipMode','clearSelectionBox','applyTheme','setFocusRuler'];
+window.folioReader = {
+    engine: null,
+    get pdfDoc() { return this.engine?.pdfDoc; },
+    init(id, helper) { this.engine = new FolioReaderEngine(); this.engine.init(id, helper); },
+    async dispose() { await this.engine?.dispose(); this.engine = null; }
+};
+for (const method of methods) window.folioReader[method] = (...args) => window.folioReader.engine?.[method](...args);

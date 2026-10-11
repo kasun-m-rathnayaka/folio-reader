@@ -7,6 +7,7 @@ public static class FolioUIServiceCollectionExtensions
     public static IServiceCollection AddFolioUI(this IServiceCollection services)
     {
         services.AddScoped<ReaderJsBridge>();
+        services.AddSingleton<Folio.Application.Common.Interfaces.IReadingSessionLifetime, ReadingSessionLifetime>();
         return services;
     }
 }

@@ -1,0 +1,12 @@
+{
+  "name": "folio-reader-assets",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test ../../tests/Folio.Reader.Tests/*.test.mjs",
+    "check": "node --check wwwroot/js/folio-reader.js && node --check wwwroot/js/folio-shell.js && node scripts/verify-assets.mjs",
+    "test:reader": "node ../../tests/Folio.Reader.Tests/reader.integration.mjs"
+  },
+  "dependencies": { "pdfjs-dist": "6.4.299" },
+  "devDependencies": { "playwright": "1.62.1" }
+}

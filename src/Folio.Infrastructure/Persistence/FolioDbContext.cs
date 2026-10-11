@@ -9,8 +9,21 @@ namespace Folio.Infrastructure.Persistence;
 /// </summary>
 public class FolioDbContext : DbContext
 {
-    public FolioDbContext(DbContextOptions<FolioDbContext> options) : base(options)
+    private readonly LibraryMaintenanceGate? _maintenance;
+    private readonly int _generation;
+    public FolioDbContext(DbContextOptions<FolioDbContext> options, LibraryMaintenanceGate? maintenance = null) : base(options)
     {
+        _maintenance = maintenance;
+        _generation = maintenance?.Generation ?? 0;
+    }
+
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        if (_maintenance == null) return await base.SaveChangesAsync(cancellationToken);
+        await using var lease = await _maintenance.AcquireAsync(cancellationToken);
+        if (_generation != _maintenance.Generation)
+            throw new InvalidOperationException("The library was restored while this operation was running. Retry the operation.");
+        return await base.SaveChangesAsync(cancellationToken);
     }
 
     public DbSet<Book> Books => Set<Book>();

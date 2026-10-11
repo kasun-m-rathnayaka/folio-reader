@@ -1,266 +1,91 @@
-@inject IBookRepository BookRepository
-@inject IUnitOfWork UnitOfWork
-@inject IBookImportService BookImportService
-@inject IFilePickerService FilePickerService
+@using Microsoft.AspNetCore.Components.Web.Virtualization
+@implements IAsyncDisposable
+@inject ILibraryService Library
+@inject IAppPreferencesService Preferences
+@inject IDialogService Dialogs
 @inject ISnackbar Snackbar
-@inject IDialogService DialogService
+@inject IJSRuntime JS
 
-<div class="pa-6" style="height: 100%; overflow-y: auto; background-color: var(--md-sys-color-background);">
-    <!-- Continue Reading Row -->
-    <ContinueReadingCarousel Books="@_recentlyReadBooks" OnOpenBook="@HandleOpenBook" />
-
-    <!-- Filter & Sort Bar -->
-    <div class="d-flex flex-wrap justify-space-between align-center mb-6 gap-3">
-        <div class="d-flex align-center gap-2">
-            <MudChip T="string"
-                     Variant="@(_filterStatus == null ? Variant.Filled : Variant.Outlined)"
-                     Color="Color.Primary"
-                     OnClick="@(() => SetFilter(null))">
-                All (@_allBooks.Count)
-            </MudChip>
-            <MudChip T="string"
-                     Variant="@(_filterStatus == ReadingStatus.Reading ? Variant.Filled : Variant.Outlined)"
-                     Color="Color.Primary"
-                     OnClick="@(() => SetFilter(ReadingStatus.Reading))">
-                Reading (@_allBooks.Count(b => b.Status == ReadingStatus.Reading))
-            </MudChip>
-            <MudChip T="string"
-                     Variant="@(_filterStatus == ReadingStatus.WantToRead ? Variant.Filled : Variant.Outlined)"
-                     Color="Color.Primary"
-                     OnClick="@(() => SetFilter(ReadingStatus.WantToRead))">
-                Want to Read (@_allBooks.Count(b => b.Status == ReadingStatus.WantToRead))
-            </MudChip>
-            <MudChip T="string"
-                     Variant="@(_filterStatus == ReadingStatus.Finished ? Variant.Filled : Variant.Outlined)"
-                     Color="Color.Primary"
-                     OnClick="@(() => SetFilter(ReadingStatus.Finished))">
-                Finished (@_allBooks.Count(b => b.Status == ReadingStatus.Finished))
-            </MudChip>
-        </div>
-
-        <div class="d-flex align-center gap-2">
-            <MudSelect T="string" Value="@_sortOption" ValueChanged="@OnSortChanged" Dense="true" Margin="Margin.Dense" Style="width: 140px;">
-                <MudSelectItem Value="@("Recent")">Recent</MudSelectItem>
-                <MudSelectItem Value="@("Title")">Title</MudSelectItem>
-                <MudSelectItem Value="@("Author")">Author</MudSelectItem>
-            </MudSelect>
-
-            <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
-                <MudIconButton Icon="@Icons.Material.Filled.GridView"
-                               Color="@(_isGridView ? Color.Primary : Color.Default)"
-                               OnClick="@(() => _isGridView = true)"
-                               aria-label="Grid view" />
-                <MudIconButton Icon="@Icons.Material.Filled.ViewList"
-                               Color="@(!_isGridView ? Color.Primary : Color.Default)"
-                               OnClick="@(() => _isGridView = false)"
-                               aria-label="List view" />
-            </MudButtonGroup>
-
-            <MudIconButton Icon="@Icons.Material.Filled.Backup"
-                           Variant="Variant.Outlined"
-                           Size="Size.Small"
-                           Color="Color.Default"
-                           OnClick="OpenBackupDialogAsync"
-                           title="Backup & Restore Library"
-                           aria-label="Backup and restore" />
+<section class="folio-library-page">
+    <div class="folio-library-intro">
+        <div><div class="folio-eyebrow">@(_isTrash ? "RECOVER YOUR BOOKS" : "A LITTLE SPACE TO READ")</div><h1>@Title</h1><p>@(_isTrash ? "Removed books keep their notes and reading position. Restore them whenever you need." : "Your books, your notes, your own pace.")</p></div>
+        <span class="folio-library-count">@_total @(_total == 1 ? "book" : "books")</span>
+    </div>
+    @if (!_isTrash && StatusFilter == null && Shelf == null && string.IsNullOrWhiteSpace(SearchQuery) && _recent.Count > 0)
+    {
+        <ContinueReadingCarousel Books="@_recent" OnOpenBook="OnOpenBook" />
+    }
+    <div class="folio-library-controls">
+        <div><h2>@(_isTrash ? "Removed books" : "All books")</h2><span class="folio-muted">@(string.IsNullOrWhiteSpace(SearchQuery) ? "Choose something worth your time." : $"Results for “{SearchQuery}”")</span></div>
+        <div class="folio-controls-right"><label class="folio-sort"><span>Sort by</span><select aria-label="Sort books" @bind="_sort" @bind:after="RefreshAsync"><option value="Recent">Recent</option><option value="Title">Title</option><option value="Author">Author</option><option value="Added">Date added</option><option value="Progress">Progress</option></select></label>
+            <div class="folio-segmented"><button class="@(_grid ? "active" : "")" aria-label="Grid view" aria-pressed="@_grid" @onclick="() => SetGrid(true)"><MudIcon Icon="@Icons.Material.Outlined.GridView" Size="Size.Small" /></button><button class="@(!_grid ? "active" : "")" aria-label="List view" aria-pressed="@(!_grid)" @onclick="() => SetGrid(false)"><MudIcon Icon="@Icons.Material.Outlined.ViewList" Size="Size.Small" /></button></div>
         </div>
     </div>
-
-    <!-- Empty State -->
-    @if (FilteredBooks.Count == 0)
+    @if (_error != null)
     {
-        <div class="d-flex flex-column align-center justify-center py-16">
-            <MudIcon Icon="@Icons.Material.Filled.AutoStories" Size="Size.Large" Style="font-size: 64px; color: #4A4A4A;" />
-            <MudText Typo="Typo.h6" Class="mt-4 font-weight-medium" Style="color: #FFFFFF;">
-                Your library is empty
-            </MudText>
-            <MudText Typo="Typo.body2" Class="mt-1 mb-4" Style="color: #8E8E8E;">
-                Import PDF documents to start reading and annotating.
-            </MudText>
-            <button class="folio-primary-btn" @onclick="@HandleImportFromEmpty">
-                <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" />
-                <span>Import PDF</span>
-            </button>
+        <div class="folio-empty-state" role="alert"><h2>We couldn’t load your library</h2><p>@_error</p><button class="folio-primary-btn" @onclick="RefreshAsync">Try again</button></div>
+    }
+    else if (_loading) { <div class="folio-empty-state"><MudProgressCircular Indeterminate="true" Size="Size.Small" /><p>Loading your books…</p></div> }
+    else if (_total == 0)
+    {
+        <div class="folio-empty-state"><div class="folio-empty-icon"><MudIcon Icon="@Icons.Material.Outlined.AutoStories" /></div>
+            <h2>@(_isTrash ? "Nothing in Trash" : string.IsNullOrWhiteSpace(SearchQuery) && StatusFilter == null && Shelf == null ? "Make room for a good book" : "No books match this view")</h2>
+            <p>@(_isTrash ? "Books you remove from your library will appear here." : string.IsNullOrWhiteSpace(SearchQuery) && StatusFilter == null && Shelf == null ? "Add a PDF to start a library that feels like yours." : "Try another search, reading status, or shelf.")</p>
+            @if (!_isTrash) { <button class="folio-primary-btn" @onclick="OnImport"><MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" />Add books</button> }
         </div>
     }
-    else if (_isGridView)
-    {
-        <!-- Virtualized Responsive Grid -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 24px;">
-            @foreach (var book in FilteredBooks)
-            {
-                <BookCard Book="@book"
-                          OnOpen="@HandleOpenBook"
-                          OnStatusChanged="@HandleStatusChanged"
-                          OnRemove="@HandleRemoveBook" />
-            }
-        </div>
-    }
-    else
-    {
-        <!-- List View -->
-        <MudTable Items="@FilteredBooks" Hover="true" Dense="true" Elevation="1" Style="border-radius: 12px;">
-            <HeaderContent>
-                <MudTh>Title</MudTh>
-                <MudTh>Author</MudTh>
-                <MudTh>Pages</MudTh>
-                <MudTh>Status</MudTh>
-                <MudTh Style="text-align: right;">Actions</MudTh>
-            </HeaderContent>
-            <RowTemplate>
-                <MudTd DataLabel="Title" Class="font-weight-medium" Style="cursor: pointer;" @onclick="@(() => HandleOpenBook(context))">
-                    @context.Title
-                </MudTd>
-                <MudTd DataLabel="Author">@(context.Author ?? "Unknown")</MudTd>
-                <MudTd DataLabel="Pages">@context.PageCount</MudTd>
-                <MudTd DataLabel="Status">
-                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="@GetStatusColor(context.Status)">
-                        @context.Status
-                    </MudChip>
-                </MudTd>
-                <MudTd Style="text-align: right;">
-                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" OnClick="@(() => HandleOpenBook(context))">
-                        Read
-                    </MudButton>
-                </MudTd>
-            </RowTemplate>
-        </MudTable>
-    }
-</div>
-
+    <div id="folio-library-grid" class="folio-books-scroll" style="display: @(_total > 0 && !_loading && _error == null ? "block" : "none");">
+        <Virtualize @ref="_virtual" TItem="LibraryRow" ItemsProvider="LoadRows" ItemSize="@(_grid ? 340 : 88)" OverscanCount="2">
+            <ItemContent Context="row"><div class="@(_grid ? "folio-book-row" : "folio-book-list-row")" style="@(_grid ? $"grid-template-columns: repeat({_columns}, minmax(0, 1fr));" : "")">
+                @foreach (var book in row.Books) { <BookCard @key="book.Id" Book="book" ListMode="@(!_grid)" Trash="@_isTrash" OnOpen="OnOpenBook" OnStatusChanged="StatusChanged" OnRemove="Remove" OnEdit="Edit" /> }
+            </div></ItemContent>
+            <Placeholder><div class="folio-row-placeholder" style="height: @(_grid ? "340px" : "88px");"><span>Loading books…</span></div></Placeholder>
+        </Virtualize>
+    </div>
+</section>
 @code {
-    [Parameter]
-    public string? SearchQuery { get; set; }
-
-    [Parameter]
-    public EventCallback<Book> OnOpenBook { get; set; }
-
-    private List<Book> _allBooks = new();
-    private List<Book> _recentlyReadBooks = new();
-    private ReadingStatus? _filterStatus = null;
-    private string _sortOption = "Recent";
-    private bool _isGridView = true;
-
-    protected override async Task OnInitializedAsync()
+    [Parameter] public string? SearchQuery { get; set; }
+    [Parameter] public ReadingStatus? StatusFilter { get; set; }
+    [Parameter] public Shelf? Shelf { get; set; }
+    [Parameter] public bool Trash { get; set; }
+    [Parameter] public EventCallback<Book> OnOpenBook { get; set; }
+    [Parameter] public EventCallback OnImport { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+    private Virtualize<LibraryRow>? _virtual;
+    private DotNetObjectReference<LibraryView>? _reference;
+    private IReadOnlyList<Book> _recent = [];
+    private int _columns = 4, _total;
+    private bool _grid = true, _loading = true, _isTrash;
+    private LibrarySort _sort = LibrarySort.Recent;
+    private string? _filterKey, _error;
+    private string Title => _isTrash ? "Trash" : Shelf?.Name ?? StatusFilter switch { ReadingStatus.Reading => "Currently reading", ReadingStatus.WantToRead => "Want to read", ReadingStatus.Finished => "Finished books", _ => "Your library" };
+    private record LibraryRow(IReadOnlyList<Book> Books);
+    protected override void OnInitialized() { _grid = Preferences.Current.GridView; _reference = DotNetObjectReference.Create(this); }
+    protected override async Task OnParametersSetAsync()
     {
-        await LoadBooksAsync();
+        var key = $"{SearchQuery}|{StatusFilter}|{Shelf?.Id}|{Trash}";
+        if (_filterKey != key) { _filterKey = key; _isTrash = Trash; await RefreshAsync(); }
     }
-
+    protected override async Task OnAfterRenderAsync(bool firstRender) { if (firstRender) await JS.InvokeVoidAsync("folioShell.observeGrid", _reference); }
+    private LibraryQuery Query(int start, int count) => new(SearchQuery, StatusFilter, Shelf?.Id, _isTrash, _sort, start, count);
+    private async ValueTask<ItemsProviderResult<LibraryRow>> LoadRows(ItemsProviderRequest request)
+    {
+        var columns = _grid ? _columns : 1;
+        var page = await Library.QueryAsync(Query(request.StartIndex * columns, Math.Min(request.Count * columns, 200)), request.CancellationToken);
+        var rows = page.Books.Chunk(columns).Select(b => new LibraryRow(b)).ToList();
+        return new(rows, (int)Math.Ceiling((double)page.Total / columns));
+    }
     public async Task RefreshAsync()
     {
-        await LoadBooksAsync();
-        StateHasChanged();
+        _error = null;
+        try { _total = (await Library.QueryAsync(Query(0, 1))).Total; _recent = await Library.GetRecentAsync(); if (_virtual != null) await _virtual.RefreshDataAsync(); }
+        catch (Exception ex) { _error = ex.Message; }
+        _loading = false; await InvokeAsync(StateHasChanged);
     }
-
-    private async Task LoadBooksAsync()
-    {
-        var books = await BookRepository.GetAllAsync();
-        _allBooks = books.ToList();
-
-        var recent = await BookRepository.GetRecentlyReadAsync(count: 5);
-        _recentlyReadBooks = recent.ToList();
-    }
-
-    private void SetFilter(ReadingStatus? status)
-    {
-        _filterStatus = status;
-    }
-
-    private void OnSortChanged(string sort)
-    {
-        _sortOption = sort;
-    }
-
-    private IReadOnlyList<Book> FilteredBooks
-    {
-        get
-        {
-            var query = _allBooks.AsEnumerable();
-
-            if (_filterStatus.HasValue)
-            {
-                query = query.Where(b => b.Status == _filterStatus.Value);
-            }
-
-            if (!string.IsNullOrWhiteSpace(SearchQuery))
-            {
-                query = query.Where(b => b.Title.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase) ||
-                                         (b.Author != null && b.Author.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase)));
-            }
-
-            query = _sortOption switch
-            {
-                "Title" => query.OrderBy(b => b.Title),
-                "Author" => query.OrderBy(b => b.Author ?? string.Empty),
-                _ => query.OrderByDescending(b => b.LastReadAt ?? b.CreatedAt)
-            };
-
-            return query.ToList();
-        }
-    }
-
-    private async Task HandleStatusChanged((Book book, ReadingStatus newStatus) args)
-    {
-        args.book.Status = args.newStatus;
-        BookRepository.Update(args.book);
-        await UnitOfWork.SaveChangesAsync();
-        Snackbar.Add($"Status updated to {args.newStatus}", Severity.Info);
-        StateHasChanged();
-    }
-
-    private async Task HandleRemoveBook(Book book)
-    {
-        BookRepository.Remove(book);
-        await UnitOfWork.SaveChangesAsync();
-        _allBooks.Remove(book);
-        _recentlyReadBooks.Remove(book);
-        Snackbar.Add($"Removed '{book.Title}' from library", Severity.Normal);
-        StateHasChanged();
-    }
-
-    private async Task HandleOpenBook(Book book)
-    {
-        book.Status = ReadingStatus.Reading;
-        book.LastReadAt = DateTimeOffset.UtcNow;
-        BookRepository.Update(book);
-        await UnitOfWork.SaveChangesAsync();
-
-        if (OnOpenBook.HasDelegate)
-        {
-            await OnOpenBook.InvokeAsync(book);
-        }
-    }
-
-    private async Task HandleImportFromEmpty()
-    {
-        var files = await FilePickerService.PickPdfFilesAsync();
-        if (files.Count > 0)
-        {
-            Snackbar.Add($"Importing {files.Count} book(s)...", Severity.Info);
-            var results = await BookImportService.ImportFilesAsync(files);
-            int newCount = results.Count(r => r.IsNew);
-            if (newCount > 0)
-            {
-                Snackbar.Add($"Successfully imported {newCount} new book(s)!", Severity.Success);
-            }
-            await RefreshAsync();
-        }
-    }
-
-    private async Task OpenBackupDialogAsync()
-    {
-        var dialog = await DialogService.ShowAsync<BackupDialog>("Library Backup & Restore");
-        var result = await dialog.Result;
-        if (result is not null && !result.Canceled)
-        {
-            await RefreshAsync();
-        }
-    }
-
-    private Color GetStatusColor(ReadingStatus status) => status switch
-    {
-        ReadingStatus.Reading => Color.Primary,
-        ReadingStatus.Finished => Color.Success,
-        _ => Color.Default
-    };
+    [JSInvokable] public async Task OnColumnsChanged(int columns) { columns = Math.Clamp(columns, 1, 8); if (_columns == columns) return; _columns = columns; if (_virtual != null) await _virtual.RefreshDataAsync(); await InvokeAsync(StateHasChanged); }
+    private async Task SetGrid(bool grid) { _grid = grid; Preferences.Save(Preferences.Current with { GridView = grid }); await RefreshAsync(); }
+    private async Task StatusChanged((Book Book, ReadingStatus Status) change) { await Library.SetStatusAsync(change.Book.Id, change.Status); await RefreshAsync(); await OnChanged.InvokeAsync(); }
+    private async Task Remove(Book book) { await Library.SetTrashAsync(book.Id, !_isTrash); Snackbar.Add(_isTrash ? "Book restored with its notes and position." : "Moved to Trash. Your notes and position are kept.", Severity.Info); await RefreshAsync(); await OnChanged.InvokeAsync(); }
+    private async Task Edit(Book book) { var dialog = await Dialogs.ShowAsync<EditBookDialog>("Book details", new DialogParameters<EditBookDialog> { { x => x.Book, book } }); if (await dialog.Result is { Canceled: false }) { await RefreshAsync(); await OnChanged.InvokeAsync(); } }
+    public async ValueTask DisposeAsync() { try { await JS.InvokeVoidAsync("folioShell.disconnectGrid"); } catch (JSDisconnectedException) { } _reference?.Dispose(); }
 }

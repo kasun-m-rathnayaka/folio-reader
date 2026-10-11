@@ -71,7 +71,8 @@ public class FileStore : IFileStore
         string destination = GetBookPath(sha256);
 
         // Deduplication: if target book already exists and is not empty, preserve it
-        if (File.Exists(destination) && new FileInfo(destination).Length > 0)
+        if (File.Exists(destination) && new FileInfo(destination).Length > 0 &&
+            string.Equals(await ComputeSha256Async(destination, cancellationToken), sha256, StringComparison.OrdinalIgnoreCase))
         {
             return destination;
         }

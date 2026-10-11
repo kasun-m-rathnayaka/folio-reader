@@ -156,7 +156,7 @@ public class SearchAndBackupTests : IDisposable
 
         // Assert
         Assert.NotNull(metadata);
-        Assert.Equal("1.0.0", metadata.AppVersion);
+        Assert.Equal("0.2.0", metadata.AppVersion);
         Assert.Equal(1, metadata.BooksCount);
         Assert.Equal(0, metadata.AnnotationsCount);
 

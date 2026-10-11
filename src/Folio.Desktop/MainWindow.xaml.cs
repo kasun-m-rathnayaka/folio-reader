@@ -2,6 +2,8 @@ using System.IO;
 using System.Windows;
 using Folio.Application.Common.Interfaces;
 using Microsoft.Web.WebView2.Core;
+using System.Text.Json;
+using Microsoft.Extensions.Logging;
 
 namespace Folio.Desktop;
 
@@ -10,13 +12,25 @@ namespace Folio.Desktop;
 /// </summary>
 public partial class MainWindow : Window
 {
+    private readonly Services.WindowCloseCoordinator _close;
     public MainWindow(IServiceProvider services, IFileStore fileStore)
     {
         InitializeComponent();
 
         blazorWebView.Services = services;
+        _close = new Services.WindowCloseCoordinator(this, async () =>
+        {
+            var session = (IReadingSessionLifetime?)services.GetService(typeof(IReadingSessionLifetime));
+            if (session?.SaveBeforeClose is { } save) await save();
+            await ((App)System.Windows.Application.Current).StopHostAsync();
+        }, ex =>
+        {
+            ((ILogger<MainWindow>?)services.GetService(typeof(ILogger<MainWindow>)))?.LogError(ex, "Could not flush the reader before window close.");
+            MessageBox.Show("Folio could not close cleanly. Your last saved position is kept. Please try closing again.", "Folio", MessageBoxButton.OK, MessageBoxImage.Warning);
+        });
+        Closed += (_, _) => _close.Dispose();
 
-        blazorWebView.BlazorWebViewInitialized += (sender, e) =>
+        blazorWebView.BlazorWebViewInitialized += async (sender, e) =>
         {
             try
             {
@@ -25,6 +39,37 @@ public partial class MainWindow : Window
                     "folio.books",
                     fileStore.BooksDirectory,
                     CoreWebView2HostResourceAccessKind.Allow);
+                e.WebView.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                    "folio.covers", fileStore.CoversDirectory, CoreWebView2HostResourceAccessKind.DenyCors);
+                e.WebView.CoreWebView2.NavigationStarting += (_, navigation) =>
+                {
+                    if (!Uri.TryCreate(navigation.Uri, UriKind.Absolute, out var uri) ||
+                        (uri.Scheme != "https" || uri.Host != "0.0.0.1")) navigation.Cancel = true;
+                };
+                e.WebView.CoreWebView2.NewWindowRequested += (_, request) => request.Handled = true;
+                e.WebView.CoreWebView2.WebMessageReceived += (_, message) =>
+                {
+                    try
+                    {
+                        using var payload = JsonDocument.Parse(message.WebMessageAsJson);
+                        if (payload.RootElement.ValueKind == JsonValueKind.Object &&
+                            payload.RootElement.TryGetProperty("kind", out var kind) && kind.GetString() == "reader-error")
+                        {
+                            var logger = (ILogger<MainWindow>?)services.GetService(typeof(ILogger<MainWindow>));
+                            logger?.LogError("Reader engine {Code}: {Detail}", payload.RootElement.GetProperty("code").GetString(), payload.RootElement.GetProperty("detail").GetString());
+                        }
+                    }
+                    catch (JsonException) { }
+                };
+                var receiver = e.WebView.CoreWebView2.GetDevToolsProtocolEventReceiver("Runtime.exceptionThrown");
+                receiver.DevToolsProtocolEventReceived += (_, details) =>
+                {
+                    using var payload = JsonDocument.Parse(details.ParameterObjectAsJson);
+                    var exception = payload.RootElement.GetProperty("exceptionDetails");
+                    var description = exception.TryGetProperty("exception", out var value) && value.TryGetProperty("description", out var text) ? text.GetString() : exception.GetProperty("text").GetString();
+                    ((ILogger<MainWindow>?)services.GetService(typeof(ILogger<MainWindow>)))?.LogError("WebView runtime error: {Description}", description);
+                };
+                await e.WebView.CoreWebView2.CallDevToolsProtocolMethodAsync("Runtime.enable", "{}");
 
                 e.WebView.CoreWebView2.Settings.IsPasswordAutosaveEnabled = false;
                 e.WebView.CoreWebView2.Settings.IsGeneralAutofillEnabled = false;

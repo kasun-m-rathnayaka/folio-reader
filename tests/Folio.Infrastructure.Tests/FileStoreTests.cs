@@ -69,6 +69,20 @@ public class FileStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task StoreBookAsync_RepairsACorruptManagedCopyWithoutChangingTheSource()
+    {
+        Directory.CreateDirectory(_tempDir);
+        var source = Path.Combine(_tempDir, "original.pdf");
+        await File.WriteAllTextAsync(source, "%PDF-1.7 original content");
+        var hash = await _fileStore.ComputeSha256Async(source);
+        var managed = await _fileStore.StoreBookAsync(source, hash);
+        await File.WriteAllTextAsync(managed, "damaged copy");
+        await _fileStore.StoreBookAsync(source, hash);
+        Assert.Equal(hash, await _fileStore.ComputeSha256Async(managed));
+        Assert.Equal(hash, await _fileStore.ComputeSha256Async(source));
+    }
+
+    [Fact]
     public void GetBookPath_ReturnsExpectedPath()
     {
         string hash = "a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0";

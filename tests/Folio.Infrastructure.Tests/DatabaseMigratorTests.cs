@@ -44,11 +44,11 @@ public class DatabaseMigratorTests : IDisposable
             Assert.Equal(0, initialVersion);
 
             int migratedVersion = await migrator.MigrateAsync();
-            Assert.Equal(1, migratedVersion);
+            Assert.Equal(DatabaseMigrator.LatestVersion, migratedVersion);
 
             // Re-check version
             int verifiedVersion = await migrator.GetCurrentVersionAsync();
-            Assert.Equal(1, verifiedVersion);
+            Assert.Equal(DatabaseMigrator.LatestVersion, verifiedVersion);
 
             // Verify tables exist by inserting a shelf
             await context.Shelves.AddAsync(new Domain.Entities.Shelf { Name = "Science Fiction" });
@@ -73,8 +73,8 @@ public class DatabaseMigratorTests : IDisposable
         int v1 = await migrator.MigrateAsync();
         int v2 = await migrator.MigrateAsync();
 
-        Assert.Equal(1, v1);
-        Assert.Equal(1, v2);
+        Assert.Equal(DatabaseMigrator.LatestVersion, v1);
+        Assert.Equal(DatabaseMigrator.LatestVersion, v2);
     }
 }
 

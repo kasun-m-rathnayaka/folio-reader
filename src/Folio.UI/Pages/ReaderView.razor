@@ -1,1021 +1,251 @@
-@using System.Timers
+@using Microsoft.Extensions.DependencyInjection
+@using Microsoft.Extensions.Logging
 @using Folio.Application.Reading
 @using Folio.Application.Reading.DTOs
 @using Folio.Application.Annotations
 @using Folio.Application.Annotations.DTOs
-@using Folio.Application.Audio
-@using Folio.Application.Study
-@using Folio.Application.Reflow
-@using Folio.Domain.Audio
-@using Folio.Domain.Entities
-@using Folio.Domain.Enums
-@using Folio.Domain.Geometry
-@using Folio.Domain.OCR
-@using Folio.Domain.Theme
-@using Folio.UI.Components
 @using Folio.UI.Services
-@inject ReaderJsBridge ReaderBridge
-@inject IReadingPositionService ReadingPositionService
-@inject IBookmarkService BookmarkService
-@inject IAnnotationService AnnotationService
-@inject IAnnotationExportService ExportService
-@inject IAudioPlaybackService AudioService
-@inject ISentenceSegmenter SentenceSegmenter
-@inject ITextNormalizer TextNormalizer
-@inject ILayoutBlockClassifier BlockClassifier
-@inject IStudyService StudyService
-@inject IReflowService ReflowService
+@using Folio.Domain.Geometry
+@inject ReaderJsBridge Reader
+@inject IServiceScopeFactory Scopes
+@inject IReadingSessionLifetime Session
+@inject ILibraryService Library
+@inject IFilePickerService FilePicker
+@inject IExternalLinkService Links
+@inject IAppPreferencesService Preferences
+@inject IDialogService Dialogs
 @inject ISnackbar Snackbar
-@inject IDialogService DialogService
 @inject IJSRuntime JS
+@inject ILogger<ReaderView> Logger
 @implements IAsyncDisposable
 
-<div class="d-flex flex-column @(_isZenMode ? "folio-zen-active" : "")"
-     style="height: 100%; width: 100%; position: relative; overflow: hidden; background-color: var(--md-sys-color-background);"
-     tabindex="0"
-     @onkeydown="HandleKeyDown">
-
-    <!-- Top Reader Toolbar -->
-    <ReaderToolbar Title="@Book.Title"
-                   CurrentPage="@(_currentPageIndex + 1)"
-                   TotalPages="@Math.Max(1, _totalPages)"
-                   Zoom="@_zoom"
-                   LayoutMode="@_layoutMode"
-                   IsOutlineOpen="@_isOutlineOpen"
-                   IsSearchOpen="@_isSearchOpen"
-                   IsZenMode="@_isZenMode"
-                   IsDogEared="@_isDogEared"
-                   IsNotesOpen="@_isNotesOpen"
-                   IsAudioPlaying="@AudioService.IsPlaying"
-                   IsReflowMode="@_isReflowMode"
-                   OnBack="@HandleBack"
-                   OnToggleOutline="@ToggleOutline"
-                   OnToggleDogEar="@ToggleDogEarAsync"
-                   OnToggleNotes="@ToggleNotes"
-                   OnToggleAudio="@ToggleReadAloudAsync"
-                   OnToggleReflow="@ToggleReflowModeAsync"
-                   OnOpenNotebook="@OpenNotebookAsync"
-                   OnOpenStudyTools="@OpenStudyToolsAsync"
-                   OnPrevPage="@HandlePrevPage"
-                   OnNextPage="@HandleNextPage"
-                   OnOpenGoToPage="@OpenGoToPageDialog"
-                   OnZoomIn="@HandleZoomIn"
-                   OnZoomOut="@HandleZoomOut"
-                   OnFitWidth="@HandleFitWidth"
-                   OnFitPage="@HandleFitPage"
-                   OnToggleLayoutMode="@ToggleLayoutMode"
-                   OnRotateClockwise="@RotateClockwise"
-                   OnToggleSearch="@ToggleSearch"
-                   OnToggleZenMode="@ToggleZenMode" />
-
-    <!-- In-Book Search Floating Bar -->
-    @if (_isSearchOpen)
-    {
-        <FindInBookBar Query="@_searchQuery"
-                       CurrentMatch="@_currentSearchMatch"
-                       TotalMatches="@_totalSearchMatches"
-                       OnQueryChanged="@HandleSearchQueryChanged"
-                       OnFindNext="@HandleFindNext"
-                       OnFindPrevious="@HandleFindPrevious"
-                       OnClose="@(() => _isSearchOpen = false)" />
-    }
-
-    <!-- Main Reader Workspace -->
-    <div class="d-flex" style="flex: 1; height: calc(100% - 48px); width: 100%; overflow: hidden; position: relative;">
-        <!-- Collapsible Inspector / Edit & Tools Panel (Matches screenshot) -->
-        @if (_isOutlineOpen)
-        {
-            <InspectorPanel Outline="@_outline"
-                            CurrentPageIndex="@_currentPageIndex"
-                            LayoutMode="@_layoutMode"
-                            ThemeSettings="@_themeSettings"
-                            OnSelectPage="@HandleSelectOutlinePage"
-                            OnRotate="@RotateDegrees"
-                            OnFitWidth="@HandleFitWidth"
-                            OnFitPage="@HandleFitPage"
-                            OnToggleLayout="@ToggleLayoutMode"
-                            OnThemeSettingsChanged="@HandleThemeSettingsChanged"
-                            OnClose="@ToggleOutline" />
-        }
-
-        <!-- Reflow Document View (FR-RFL-01..05) -->
-        @if (_isReflowMode)
-        {
-            <ReflowView Document="@_reflowDocument"
-                        ThemeSettings="@_themeSettings"
-                        OnSelectBlock="@HandleSelectReflowBlock"
-                        OnClose="@ToggleReflowModeAsync" />
-        }
-
-        <!-- PDF.js Canvas & TextLayer Host Container -->
-        <div id="folio-pdf-container" style="flex: 1; height: 100%; width: 100%; position: relative; display: @(_isReflowMode ? "none" : "block");">
-            <!-- Floating Vertical Tool Rail (Matches screenshot pill) -->
-            <FloatingToolRail ActiveTool="@_activeTool"
-                              OnToolChanged="@HandleToolChanged"
-                              OnMoreOptions="@OpenCommandPaletteAsync" />
-
-            <!-- Floating Selection Quick Bar (FR-ANN-01) -->
-            <SelectionQuickBar IsVisible="@_isSelectionBarVisible"
-                               ClientX="@_selectionClientX"
-                               ClientY="@_selectionClientY"
-                               OnApplyHighlight="@HandleApplyHighlight"
-                               OnAddNote="@HandleAddNoteFromSelection"
-                               OnCopyQuote="@HandleCopyQuoteFromSelection"
-                               OnDefine="@HandleDefineSelection"
-                               OnDismiss="@HandleDismissSelection" />
-
-            <!-- Floating Audio Narration Player Bar (FR-TTS-01..05) -->
-            <AudioPlayerBar IsVisible="@_isAudioBarVisible"
-                            OnStop="@HandleStopAudio" />
-
-            <!-- Multi-Layer Physical Book & Lighting Stack (FR-FEL-01..03, §6.4) -->
-            <div class="folio-lighting-warmth" style="opacity: @(_themeSettings.WarmthAlpha.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture));"></div>
-            <div class="folio-lighting-dim" style="opacity: @(_themeSettings.DimAlpha.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture));"></div>
-            @if (_themeSettings.EnableVignette)
+<div class="folio-reader @(_zen ? "folio-zen-active" : "")">
+    <ReaderToolbar Title="@Book.Title" CurrentPage="@(_page + 1)" TotalPages="@Math.Max(1, _pages)" Zoom="@_zoom" LayoutMode="@_mode"
+        IsOutlineOpen="@_contents" IsSearchOpen="@_find" IsZenMode="@_zen" IsDogEared="@_bookmarked" IsNotesOpen="@_notes"
+        OnBack="Back" OnToggleOutline="() => _contents = !_contents" OnToggleDogEar="() => ToggleBookmark(_page)" OnToggleNotes="() => _notes = !_notes"
+        OnOpenNotebook="Notebook" OnPrevPage="() => GoTo(_page - 1)" OnNextPage="() => GoTo(_page + 1)" OnOpenGoToPage="GoToDialog"
+        OnZoomIn="() => ZoomBy(.25)" OnZoomOut="() => ZoomBy(-.25)" OnFitWidth="FitWidth" OnFitPage="FitPage" OnToggleLayoutMode="ToggleLayout"
+        OnRotateClockwise="() => Reader.SetRotationAsync(90).AsTask()" OnToggleSearch="ToggleFind" OnToggleZenMode="() => _zen = !_zen" />
+    @if (_find) { <FindInBookBar Query="@_query" CurrentMatch="@_match" TotalMatches="@_matches" OnQueryChanged="q => Find(q)" OnFindNext="() => Find(_query)" OnFindPrevious="() => Find(_query, false)" OnClose="ToggleFind" /> }
+    <div class="folio-reader-workspace">
+        @if (_contents) { <ReaderSidebar Outline="@_outline" Bookmarks="@_bookmarks" CurrentPage="@_page" TotalPages="@_pages" OnSelectPage="GoTo" OnClose="() => _contents = false" OnAddBookmark="NamedBookmark" OnDeleteBookmark="DeleteBookmark" /> }
+        <div class="folio-reader-viewport">
+            <div id="folio-pdf-container"></div>
+            @if (!_loaded || _error != null)
             {
-                <div class="folio-lighting-vignette" style="opacity: 0.75;"></div>
+                <div class="folio-reader-state" aria-live="polite">
+                    @if (_error != null)
+                    {
+                        <MudIcon Icon="@Icons.Material.Outlined.Description" Size="Size.Large" /><h2>@(_passwordRequired ? "This PDF is password protected" : "We couldn’t open this book")</h2><p>@_error</p>
+                        @if (_passwordRequired) { <input class="folio-input-field" type="password" aria-label="PDF password" placeholder="Password" @bind="_password" /> }
+                        <div class="d-flex gap-2"><button class="folio-primary-btn" @onclick="Retry">@(_passwordRequired ? "Unlock PDF" : "Try again")</button><button class="folio-subtle-btn" @onclick="Locate">Locate PDF</button><button class="folio-subtle-btn" @onclick="Back">Back to library</button></div>
+                    }
+                    else { <MudProgressCircular Indeterminate="true" Size="Size.Small" /><p>Opening your book…</p> }
+                </div>
             }
-            @if (_themeSettings.EnableRuler)
-            {
-                <div id="folio-active-focus-ruler" class="folio-focus-ruler" style="display: block;"></div>
-            }
-
-            <div class="folio-reader-loading">
-                Initializing reader...
-            </div>
         </div>
-
-        <!-- Marginalia Lane (FR-ANN-02) -->
-        @if (_isNotesOpen)
-        {
-            <MarginaliaLane Annotations="@_pageAnnotations"
-                            ActiveAnnotationId="@_activeAnnotationId"
-                            OnSelectAnnotation="@HandleSelectAnnotationCard"
-                            OnDeleteAnnotation="@HandleDeleteAnnotation"
-                            OnSaveNote="@HandleSaveNote"
-                            OnClose="@(() => _isNotesOpen = false)" />
-        }
+        @if (_notes) { <MarginaliaLane Annotations="@_annotations" ActiveAnnotationId="@_activeAnnotation" OnSelectAnnotation="SelectAnnotation" OnDeleteAnnotation="DeleteAnnotation" OnSaveNote="SaveNote" OnClose="() => _notes = false" /> }
     </div>
+    <SelectionQuickBar IsVisible="@_selectionVisible" ClientX="@_selectionX" ClientY="@_selectionY" OnApplyHighlight="Highlight" OnAddNote="AddNote" OnCopyQuote="CopyQuote" OnDismiss="DismissSelection" />
+    <footer class="folio-reader-status"><span>@(_loaded ? $"Page {_page + 1} of {_pages}" : "PDF reader")</span><div class="folio-reader-status-progress"><span style="width: @Progress%;"></span></div>
+        @if (_saveError) { <button class="folio-subtle-btn folio-error-text" @onclick="() => Persist(true)">Position not saved · Retry</button> }
+        else { <span class="folio-save-status">@(_loaded ? "Position saved automatically" : "Local PDF · Original preserved")</span> }
+        <label class="folio-reader-light"><span>Page</span><select aria-label="Page lighting" @bind="_lighting" @bind:after="ApplyLighting"><option value="original">Original</option><option value="warm">Warm light</option></select></label>
+    </footer>
 </div>
-
 @code {
-    [Parameter] public Book Book { get; set; } = default!;
+    [Parameter, EditorRequired] public Book Book { get; set; } = default!;
+    [Parameter] public int? InitialPageIndex { get; set; }
     [Parameter] public EventCallback OnBackToLibrary { get; set; }
-
-    private DotNetObjectReference<ReaderView>? _dotNetRef;
-    private int _currentPageIndex = 0;
-    private int _totalPages = 1;
-    private double _zoom = 1.0;
-    private double _currentOffsetPercent = 0.0;
-    private ReaderViewMode _layoutMode = ReaderViewMode.Continuous;
-
-    private bool _isOutlineOpen = false;
-    private bool _isSearchOpen = false;
-    private bool _isZenMode = false;
-    private bool _hasInitializedViewer = false;
-
-    private bool _isDogEared = false;
-    private bool _isNotesOpen = false;
-    private List<AnnotationDto> _pageAnnotations = new();
-    private Guid? _activeAnnotationId;
-    private ThemeSettings _themeSettings = ThemeSettings.Default;
-
-    private bool _isSelectionBarVisible = false;
-    private double _selectionClientX = 300;
-    private double _selectionClientY = 150;
-    private string? _selectedText;
-    private IReadOnlyList<NormalizedRect> _selectedRects = Array.Empty<NormalizedRect>();
-
-    private string _searchQuery = "";
-    private int _currentSearchMatch = 0;
-    private int _totalSearchMatches = 0;
-    private List<OutlineNodeDto> _outline = new();
-    private string _activeTool = "select";
-    private bool _isAudioBarVisible = false;
-    private bool _isReflowMode = false;
-    private ReflowDocument? _reflowDocument;
-
-    // Telemetry and session active reading tracker (FR-MEM-01..04)
-    private DateTimeOffset _lastInteractionTime = DateTimeOffset.UtcNow;
-    private long _accumulatedActiveSeconds = 0;
-    private Timer? _activeTimer;
-    private Timer? _debounceAutosaveTimer;
-
+    private DotNetObjectReference<ReaderView>? _reference;
+    private readonly CancellationTokenSource _lifetime = new();
+    private readonly SemaphoreSlim _saveLock = new(1, 1);
+    private Task? _saveLoop;
+    private Func<Task>? _closeSave;
+    private bool _loaded, _disposed, _find, _contents, _notes, _zen, _bookmarked, _selectionVisible, _saveError, _passwordRequired;
+    private int _page, _pages, _selectionPage, _match, _matches, _version, _savedVersion;
+    private double _offset, _zoom = -2, _selectionX, _selectionY;
+    private long _activeSeconds;
+    private ReaderViewMode _mode = ReaderViewMode.Continuous;
+    private DateTimeOffset _activity = DateTimeOffset.UtcNow, _trackedAt = DateTimeOffset.UtcNow;
+    private string _query = "", _lighting = "original", _password = "", _selectionText = "";
+    private string? _error;
+    private IReadOnlyList<NormalizedRect> _selectionRects = [];
+    private IReadOnlyList<AnnotationDto> _annotations = [];
+    private IReadOnlyList<BookmarkDto> _bookmarks = [];
+    private List<OutlineNodeDto> _outline = [];
+    private Guid? _activeAnnotation;
+    private int Progress => (int)Math.Clamp(100.0 * (_page + 1) / Math.Max(1, _pages), 0, 100);
     protected override void OnInitialized()
     {
-        _dotNetRef = DotNetObjectReference.Create(this);
-
-        // Audio follow-along listener
-        AudioService.SentenceStarted += OnAudioSentenceStarted;
-        AudioService.PlaybackEnded += OnAudioPlaybackEnded;
-
-        // 1-second interval timer for tracking active reading time (FR-MEM-04)
-        _activeTimer = new Timer(1000);
-        _activeTimer.Elapsed += OnActiveTimerTick;
-        _activeTimer.AutoReset = true;
-        _activeTimer.Start();
-
-        // 2-second debounce timer for position persistence
-        _debounceAutosaveTimer = new Timer(2000);
-        _debounceAutosaveTimer.Elapsed += OnDebounceTimerElapsed;
-        _debounceAutosaveTimer.AutoReset = false;
+        _pages = Book.PageCount; _reference = DotNetObjectReference.Create(this);
+        // Native close must not depend on a renderer that may already be tearing down.
+        _closeSave = () => Persist(true, repaint: false); Session.SaveBeforeClose = _closeSave;
     }
-
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && !_hasInitializedViewer)
-        {
-            _hasInitializedViewer = true;
-
-            // Load saved reading position from SQLite
-            var savedPos = await ReadingPositionService.GetPositionAsync(Book.Id);
-            if (savedPos != null)
-            {
-                _currentPageIndex = savedPos.PageIndex;
-                _currentOffsetPercent = savedPos.OffsetPercent;
-                _zoom = savedPos.Zoom > 0 ? savedPos.Zoom : 1.0;
-                _layoutMode = savedPos.ViewMode;
-            }
-
-            // Initialize JavaScript PDF engine
-            await ReaderBridge.InitAsync("folio-pdf-container", _dotNetRef!);
-
-            string pdfUrl = $"https://folio.books/{Book.Sha256}.pdf";
-            string layoutModeStr = _layoutMode == ReaderViewMode.SinglePage ? "single" : "continuous";
-
-            await ReaderBridge.LoadDocumentAsync(
-                pdfUrl,
-                _currentPageIndex,
-                _currentOffsetPercent,
-                _zoom,
-                layoutModeStr);
-
-            // Display resume toast if resumed past page 1 (FR-MEM-02)
-            if (_currentPageIndex > 0)
-            {
-                Snackbar.Add($"Resumed at page {_currentPageIndex + 1}", Severity.Info, config =>
-                {
-                    config.Action = "Start from beginning";
-                    config.ActionColor = Color.Primary;
-                    config.OnClick = _ => HandleGoToPage(0);
-                });
-            }
-        }
-    }
-
-    private void RecordActivity()
-    {
-        _lastInteractionTime = DateTimeOffset.UtcNow;
-    }
-
-    private void OnActiveTimerTick(object? sender, ElapsedEventArgs e)
-    {
-        // Pause timer if user is idle for more than 2 minutes (FR-MEM-04)
-        if (DateTimeOffset.UtcNow - _lastInteractionTime <= TimeSpan.FromMinutes(2))
-        {
-            _accumulatedActiveSeconds++;
-        }
-    }
-
-    private async void OnDebounceTimerElapsed(object? sender, ElapsedEventArgs e)
-    {
-        await PersistPositionAsync();
-    }
-
-    private async Task PersistPositionAsync()
-    {
+        if (!firstRender) return;
         try
         {
-            await ReadingPositionService.SavePositionAsync(
-                Book.Id,
-                _currentPageIndex,
-                _currentOffsetPercent,
-                _zoom,
-                _layoutMode,
-                _accumulatedActiveSeconds);
-            _accumulatedActiveSeconds = 0;
+            var position = await Use<IReadingPositionService, ReadingPosition?>(s => s.GetPositionAsync(Book.Id));
+            if (position != null) { _page = position.PageIndex; _offset = position.OffsetPercent; _zoom = position.Zoom; _mode = position.ViewMode; }
+            if (InitialPageIndex.HasValue) { _page = InitialPageIndex.Value; _offset = 0; }
+            _page = Math.Clamp(_page, 0, Math.Max(0, _pages - 1));
+            await Reader.InitAsync("folio-pdf-container", _reference!);
+            await OpenDocument();
+            _saveLoop = SaveLoop();
         }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Failed to persist reading position: {ex.Message}");
-        }
+        catch (Exception ex) { Logger.LogError(ex, "Reader initialization failed for {BookId}", Book.Id); _error = "The reader could not start. Return to the library and try again."; StateHasChanged(); }
     }
-
-    [JSInvokable]
-    public async Task OnDocumentLoaded(DocumentLoadedPayload payload)
+    private async Task<TValue> Use<TService, TValue>(Func<TService, Task<TValue>> action) where TService : notnull
     {
-        _totalPages = payload.TotalPages > 0 ? payload.TotalPages : Book.PageCount;
-        _outline = payload.Outline ?? new List<OutlineNodeDto>();
-        await LoadPageAnnotationsAndBookmarksAsync(_currentPageIndex);
+        await using var scope = Scopes.CreateAsyncScope();
+        return await action(scope.ServiceProvider.GetRequiredService<TService>());
+    }
+    private async Task OpenDocument()
+    {
+        _loaded = false; _error = null; StateHasChanged();
+        if (!File.Exists(Book.FilePath)) { _error = "The managed PDF is missing. Locate the original document to restore it; your notes are kept."; return; }
+        await JS.InvokeVoidAsync("folioReader.loadDocument", $"https://folio.books/{Book.Sha256}.pdf", _page, _offset, _zoom, _mode == ReaderViewMode.SinglePage ? "single" : "continuous", _password);
+    }
+    private async Task Retry() { await Reader.DisposeAsync(); await Reader.InitAsync("folio-pdf-container", _reference!); await OpenDocument(); }
+    private async Task Locate()
+    {
+        var paths = await FilePicker.PickPdfFilesAsync(); if (paths.Count == 0) return;
+        try { await Library.RelinkAsync(Book.Id, paths[0]); Book = (await Library.GetBookAsync(Book.Id))!; await Retry(); }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+    }
+    private async Task SaveLoop()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(2));
+        try { while (await timer.WaitForNextTickAsync(_lifetime.Token)) await InvokeAsync(() => Persist(false)); }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+    }
+    private async Task Persist(bool throwOnError, bool repaint = true)
+    {
+        if (!_loaded) return;
+        await _saveLock.WaitAsync();
+        try
+        {
+            var now = DateTimeOffset.UtcNow;
+            if (now - _activity < TimeSpan.FromMinutes(2)) _activeSeconds += (long)Math.Max(0, Math.Min(5, (now - _trackedAt).TotalSeconds));
+            _trackedAt = now;
+            if (_savedVersion == _version && _activeSeconds == 0 && !_saveError) return;
+            var version = _version; var seconds = _activeSeconds;
+            await Use<IReadingPositionService, bool>(async s => { await s.SavePositionAsync(Book.Id, _page, _offset, _zoom, _mode, seconds); return true; });
+            _activeSeconds -= seconds; _savedVersion = version; _saveError = false;
+        }
+        catch (Exception ex) { _saveError = true; Logger.LogError(ex, "Could not save position for {BookId}", Book.Id); if (throwOnError) throw; }
+        finally { _saveLock.Release(); }
+        if (!_disposed && repaint) await InvokeAsync(StateHasChanged);
+    }
+    [JSInvokable] public async Task OnDocumentLoaded(DocumentPayload payload)
+    {
+        _pages = payload.TotalPages; _loaded = true; _error = null; _password = ""; _version++;
+        if (Book.PageCount != _pages) { await Library.SetPageCountAsync(Book.Id, _pages); Book.PageCount = _pages; }
+        if (!Book.StatusIsManual && Book.Status == ReadingStatus.WantToRead) { await Library.SetStatusAsync(Book.Id, ReadingStatus.Reading, manual: false); Book.Status = ReadingStatus.Reading; }
+        await LoadPage(_page); await RefreshBookmarks(); await ApplyLighting(); await InvokeAsync(StateHasChanged);
+    }
+    [JSInvokable] public Task OnOutlineLoaded(List<OutlineNodeDto> outline) { _outline = outline; return InvokeAsync(StateHasChanged); }
+    [JSInvokable] public async Task OnPositionChanged(PositionPayload payload)
+    {
+        if (_disposed) return;
+        _activity = DateTimeOffset.UtcNow; var previous = _page;
+        _page = Math.Clamp(payload.PageIndex, 0, Math.Max(0, _pages - 1)); _offset = payload.OffsetPercent; _zoom = payload.Zoom; _version++;
+        if (_loaded && previous != _page) { await LoadPage(_page); _bookmarked = _bookmarks.Any(b => b.PageIndex == _page && b.IsDogEar); }
         await InvokeAsync(StateHasChanged);
     }
-
-    [JSInvokable]
-    public async Task OnPositionChanged(PositionPayload payload)
+    [JSInvokable] public async Task OnPageRendered(int page) { if (_disposed) return; await LoadPage(page); }
+    private async Task LoadPage(int page)
     {
-        RecordActivity();
-        int prevPage = _currentPageIndex;
-        _currentPageIndex = payload.PageIndex;
-        _currentOffsetPercent = payload.OffsetPercent;
-        if (payload.Zoom > 0)
+        var annotations = await Use<IAnnotationService, IReadOnlyList<AnnotationDto>>(s => s.GetAnnotationsForPageAsync(Book.Id, page));
+        if (_disposed) return;
+        await Reader.DrawAnnotationsAsync(page, annotations.Select(a => new { id = a.Id.ToString(), type = a.Type.ToString(), colorHex = a.Color.ToHex(), rects = a.Rects }));
+        await Reader.SetDogEarAsync(page, _bookmarks.Any(b => b.PageIndex == page && b.IsDogEar));
+        if (_page == page) _annotations = annotations;
+    }
+    private async Task RefreshBookmarks() { _bookmarks = await Use<IBookmarkService, IReadOnlyList<BookmarkDto>>(s => s.GetBookmarksAsync(Book.Id)); _bookmarked = _bookmarks.Any(b => b.PageIndex == _page && b.IsDogEar); foreach (var bookmark in _bookmarks.Where(b => b.IsDogEar)) await Reader.SetDogEarAsync(bookmark.PageIndex, true); }
+    [JSInvokable] public async Task OnDogEarToggled(int page) => await ToggleBookmark(page);
+    private async Task ToggleBookmark(int page) { if (!_loaded) return; var result = await Use<IBookmarkService, BookmarkDto?>(s => s.ToggleDogEarAsync(Book.Id, page)); await Reader.SetDogEarAsync(page, result != null); await RefreshBookmarks(); await InvokeAsync(StateHasChanged); }
+    private async Task DeleteBookmark(Guid id) { var bookmark = _bookmarks.FirstOrDefault(b => b.Id == id); await Use<IBookmarkService, bool>(s => s.DeleteBookmarkAsync(id)); if (bookmark != null) await Reader.SetDogEarAsync(bookmark.PageIndex, false); await RefreshBookmarks(); }
+    private async Task NamedBookmark(string label) { await Use<IBookmarkService, BookmarkDto>(s => s.CreateNamedBookmarkAsync(new(Book.Id, _page, label))); await RefreshBookmarks(); }
+    [JSInvokable] public Task OnTextSelected(TextSelectionDto selection)
+    {
+        _activity = DateTimeOffset.UtcNow; _selectionPage = selection.PageIndex; _selectionText = selection.SelectedText; _selectionRects = selection.Rects;
+        _selectionX = selection.ClientX / Preferences.Current.FontScale; _selectionY = selection.ClientY / Preferences.Current.FontScale; _selectionVisible = true; return InvokeAsync(StateHasChanged);
+    }
+    [JSInvokable] public Task OnSelectionUnavailable() { Snackbar.Add("Select text on one page at a time.", Severity.Info); return Task.CompletedTask; }
+    private async Task Highlight((HighlightColor Color, AnnotationType Type) choice) => await CreateAnnotation(choice.Type, choice.Color, null);
+    private async Task AddNote() { await CreateAnnotation(AnnotationType.MarginNote, HighlightColor.Yellow, ""); _notes = true; }
+    private async Task CreateAnnotation(AnnotationType type, HighlightColor color, string? note)
+    {
+        if (!_loaded || _selectionRects.Count == 0) return;
+        try
         {
-            _zoom = payload.Zoom;
+            var annotation = await Use<IAnnotationService, AnnotationDto>(s => s.CreateAnnotationAsync(new(Book.Id, _selectionPage, type, color, _selectionRects, _selectionText, Note: note)));
+            _activeAnnotation = annotation.Id; await LoadPage(_selectionPage); await DismissSelection();
         }
-
-        if (prevPage != _currentPageIndex)
-        {
-            await LoadPageAnnotationsAndBookmarksAsync(_currentPageIndex);
-        }
-
-        // Trigger 2s debounced auto-save
-        _debounceAutosaveTimer?.Stop();
-        _debounceAutosaveTimer?.Start();
-
+        catch (Exception ex) { Logger.LogError(ex, "Could not save annotation for {BookId}", Book.Id); Snackbar.Add("The annotation could not be saved. Please try again.", Severity.Error); }
+    }
+    private async Task DismissSelection() { _selectionVisible = false; _selectionText = ""; _selectionRects = []; await Reader.ClearSelectionBoxAsync(); }
+    private async Task CopyQuote() { await Use<IAnnotationExportService, bool>(async s => { await JS.InvokeVoidAsync("navigator.clipboard.writeText", s.FormatQuoteCitation(_selectionText, Book.Title, Book.Author, _selectionPage)); return true; }); await DismissSelection(); Snackbar.Add("Quote copied.", Severity.Info); }
+    [JSInvokable] public async Task OnAnnotationClicked(string id) { if (Guid.TryParse(id, out var value)) { _activeAnnotation = value; _notes = true; await InvokeAsync(StateHasChanged); } }
+    private async Task SelectAnnotation(Guid id) { _activeAnnotation = id; await Reader.PulseAnnotationAsync(id); }
+    private async Task DeleteAnnotation(Guid id) { await Use<IAnnotationService, bool>(s => s.DeleteAnnotationAsync(id)); await LoadPage(_page); }
+    private async Task SaveNote((Guid Id, string Note) note) { await Use<IAnnotationService, AnnotationDto?>(s => s.UpdateAnnotationAsync(new(note.Id, Note: note.Note))); await LoadPage(_page); }
+    private async Task GoTo(int page) { if (!_loaded) return; await DismissSelection(); await Reader.GoToPageAsync(Math.Clamp(page, 0, _pages - 1)); }
+    private async Task GoToDialog()
+    {
+        if (!_loaded) return;
+        var dialog = await Dialogs.ShowAsync<GoToPageDialog>("Go to page", new DialogParameters<GoToPageDialog> { { x => x.CurrentPage, _page + 1 }, { x => x.TotalPages, _pages } });
+        if (await dialog.Result is { Canceled: false, Data: int page }) await GoTo(page - 1);
+    }
+    private async Task FitWidth() { _zoom = -1; await Reader.SetFitWidthAsync(); }
+    private async Task FitPage() { _zoom = -2; await Reader.SetFitPageAsync(); }
+    private async Task ZoomBy(double delta) { _zoom = Math.Clamp((_zoom > 0 ? _zoom : 1) + delta, .25, 4); await Reader.SetZoomAsync(_zoom); }
+    private async Task ToggleLayout() { _mode = _mode == ReaderViewMode.Continuous ? ReaderViewMode.SinglePage : ReaderViewMode.Continuous; _version++; await Reader.SetLayoutModeAsync(_mode == ReaderViewMode.SinglePage ? "single" : "continuous"); }
+    private async Task ToggleFind() { _find = !_find; if (!_find) { _query = ""; await Reader.ClearSearchAsync(); } }
+    private async Task Find(string query, bool forward = true) { _query = query; if (string.IsNullOrWhiteSpace(query)) { _matches = _match = 0; await Reader.ClearSearchAsync(); } else await Reader.SearchAsync(query, forward); }
+    [JSInvokable] public Task OnSearchMatch(SearchPayload match) { _match = match.CurrentMatch; _matches = match.TotalMatches; return InvokeAsync(StateHasChanged); }
+    private async Task ApplyLighting() => await Reader.ApplyThemeAsync(new { cssFilter = _lighting == "warm" ? "sepia(0.16)" : "none" });
+    private async Task Notebook()
+    {
+        var dialog = await Dialogs.ShowAsync<NotebookView>("Notebook", new DialogParameters<NotebookView> { { x => x.BookId, Book.Id }, { x => x.BookTitle, Book.Title }, { x => x.Author, Book.Author }, { x => x.OnJumpToPage, EventCallback.Factory.Create<int>(this, GoTo) } }, new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Large });
+        await dialog.Result; await LoadPage(_page);
+    }
+    [JSInvokable] public Task OnReaderError(ErrorPayload error) { _loaded = false; _passwordRequired = error.Code == "password"; _error = _passwordRequired ? "Enter the document password. It is used only for this session." : "The PDF may be missing, damaged, or unavailable. Your notes and bookmarks are preserved."; return InvokeAsync(StateHasChanged); }
+    [JSInvokable] public async Task OnExternalLinkRequested(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https")) return;
+        if (await Dialogs.ShowMessageBox("Open external link?", uri.GetLeftPart(UriPartial.Authority), yesText: "Open in browser", cancelText: "Cancel") == true) await Links.OpenAsync(uri);
+    }
+    [JSInvokable] public async Task OnReaderShortcut(ShortcutPayload shortcut)
+    {
+        var key = shortcut.Key.ToLowerInvariant();
+        if (shortcut.CtrlKey) { switch (key) { case "g": await GoToDialog(); break; case "f": await ToggleFind(); break; case "d": await ToggleBookmark(_page); break; case "k": await Commands(); break; case "+": case "=": await ZoomBy(.25); break; case "-": await ZoomBy(-.25); break; } }
+        else if (key == "f11") _zen = !_zen;
+        else if (key == "h" && _selectionVisible) await Highlight((HighlightColor.Yellow, AnnotationType.Highlight));
+        else if (key == "c" && _selectionVisible) await AddNote();
+        else if (key == "escape") { if (_selectionVisible) await DismissSelection(); else if (_find) await ToggleFind(); else if (_contents) _contents = false; else if (_notes) _notes = false; else if (_zen) _zen = false; else await Back(); }
         await InvokeAsync(StateHasChanged);
     }
-
-    [JSInvokable]
-    public void OnTextSelected(TextSelectionDto payload)
+    private async Task Commands()
     {
-        RecordActivity();
-        _selectedText = payload.SelectedText;
-        _selectedRects = payload.Rects;
-        _isSelectionBarVisible = true;
-        _selectionClientX = 350;
-        _selectionClientY = 160;
-        InvokeAsync(StateHasChanged);
+        var dialog = await Dialogs.ShowAsync<CommandPalette>("Reader commands");
+        if (await dialog.Result is { Canceled: false, Data: string command }) switch (command) { case "goto": await GoToDialog(); break; case "find": await ToggleFind(); break; case "fitwidth": await FitWidth(); break; case "fitpage": await FitPage(); break; case "zoomin": await ZoomBy(.25); break; case "zoomout": await ZoomBy(-.25); break; case "rotate": await Reader.SetRotationAsync(90); break; case "layout": await ToggleLayout(); break; case "toc": _contents = !_contents; break; case "notebook": await Notebook(); break; case "zen": _zen = !_zen; break; case "back": await Back(); break; }
     }
-
-    [JSInvokable]
-    public async Task OnSnipCompleted(SnipPayload payload)
-    {
-        RecordActivity();
-        var ann = await AnnotationService.CreateAnnotationAsync(new CreateAnnotationDto(
-            BookId: Book.Id,
-            PageIndex: payload.PageIndex,
-            Type: AnnotationType.AreaSnip,
-            Color: HighlightColor.Blue,
-            Rects: new[] { payload.Rect },
-            Note: "Area Snip"
-        ));
-        _pageAnnotations.Add(ann);
-        await RedrawPageAnnotationsAsync();
-        _isNotesOpen = true;
-        Snackbar.Add("Area snip captured", Severity.Success);
-        await InvokeAsync(StateHasChanged);
-    }
-
-    [JSInvokable]
-    public async Task OnDogEarToggled(int pageIndex)
-    {
-        RecordActivity();
-        var result = await BookmarkService.ToggleDogEarAsync(Book.Id, pageIndex);
-        _isDogEared = result != null;
-        await ReaderBridge.SetDogEarAsync(pageIndex, _isDogEared);
-        Snackbar.Add(_isDogEared ? $"Page {pageIndex + 1} dog-eared" : $"Page {pageIndex + 1} dog-ear removed", Severity.Info);
-        await InvokeAsync(StateHasChanged);
-    }
-
-    [JSInvokable]
-    public void OnAnnotationClicked(string annId)
-    {
-        RecordActivity();
-        if (Guid.TryParse(annId, out var id))
-        {
-            _activeAnnotationId = id;
-            _isNotesOpen = true;
-            InvokeAsync(StateHasChanged);
-        }
-    }
-
-    private async Task LoadPageAnnotationsAndBookmarksAsync(int pageIndex)
-    {
-        _isDogEared = await BookmarkService.IsPageDogEaredAsync(Book.Id, pageIndex);
-        var annotations = await AnnotationService.GetAnnotationsForPageAsync(Book.Id, pageIndex);
-        _pageAnnotations = annotations.ToList();
-        await RedrawPageAnnotationsAsync();
-        await ReaderBridge.SetDogEarAsync(pageIndex, _isDogEared);
-    }
-
-    private async Task RedrawPageAnnotationsAsync()
-    {
-        var rawList = _pageAnnotations.Select(a => new
-        {
-            id = a.Id.ToString(),
-            type = a.Type.ToString(),
-            colorHex = a.Color.ToHex(),
-            rects = a.Rects
-        }).ToList();
-        await ReaderBridge.DrawAnnotationsAsync(_currentPageIndex, rawList);
-    }
-
-    private async Task ToggleDogEarAsync()
-    {
-        await OnDogEarToggled(_currentPageIndex);
-    }
-
-    private void ToggleNotes()
-    {
-        _isNotesOpen = !_isNotesOpen;
-    }
-
-    private async Task OpenNotebookAsync()
-    {
-        var parameters = new DialogParameters<NotebookView>
-        {
-            { x => x.BookId, Book.Id },
-            { x => x.BookTitle, Book.Title },
-            { x => x.Author, Book.Author },
-            { x => x.OnJumpToPage, EventCallback.Factory.Create<int>(this, HandleGoToPage) }
-        };
-        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Large };
-        await DialogService.ShowAsync<NotebookView>("Notebook", parameters, options);
-    }
-
-    private async Task OpenStudyToolsAsync()
-    {
-        RecordActivity();
-        var pageTextData = await ReaderBridge.GetPageTextAsync(_currentPageIndex);
-        var parameters = new DialogParameters<StudyModal>
-        {
-            { x => x.BookId, Book.Id },
-            { x => x.BookTitle, Book.Title },
-            { x => x.CurrentPageIndex, _currentPageIndex },
-            { x => x.CurrentPageText, pageTextData?.Text ?? "" }
-        };
-        var options = new DialogOptions { CloseButton = true };
-        await DialogService.ShowAsync<StudyModal>("Study Tools", parameters, options);
-    }
-
-    private async Task HandleSelectAnnotationCard(Guid annId)
-    {
-        _activeAnnotationId = annId;
-        await ReaderBridge.PulseAnnotationAsync(annId);
-    }
-
-    private async Task HandleDeleteAnnotation(Guid annId)
-    {
-        await AnnotationService.DeleteAnnotationAsync(annId);
-        _pageAnnotations.RemoveAll(a => a.Id == annId);
-        await RedrawPageAnnotationsAsync();
-        Snackbar.Add("Annotation deleted", Severity.Info);
-    }
-
-    private async Task HandleSaveNote((Guid Id, string Note) data)
-    {
-        await AnnotationService.UpdateAnnotationAsync(new UpdateAnnotationDto(data.Id, Note: data.Note));
-        var idx = _pageAnnotations.FindIndex(a => a.Id == data.Id);
-        if (idx >= 0)
-        {
-            var old = _pageAnnotations[idx];
-            _pageAnnotations[idx] = old with { Note = data.Note };
-        }
-        Snackbar.Add("Note updated", Severity.Success);
-    }
-
-    private async Task HandleApplyHighlight((HighlightColor Color, AnnotationType Type) option)
-    {
-        if (string.IsNullOrEmpty(_selectedText) || _selectedRects.Count == 0) return;
-
-        var ann = await AnnotationService.CreateAnnotationAsync(new CreateAnnotationDto(
-            BookId: Book.Id,
-            PageIndex: _currentPageIndex,
-            Type: option.Type,
-            Color: option.Color,
-            Rects: _selectedRects,
-            SelectedText: _selectedText
-        ));
-
-        _pageAnnotations.Add(ann);
-        await RedrawPageAnnotationsAsync();
-        _isSelectionBarVisible = false;
-        await ReaderBridge.ClearSelectionBoxAsync();
-        Snackbar.Add($"{option.Type} created", Severity.Success);
-    }
-
-    private async Task HandleAddNoteFromSelection()
-    {
-        if (string.IsNullOrEmpty(_selectedText) || _selectedRects.Count == 0) return;
-
-        var ann = await AnnotationService.CreateAnnotationAsync(new CreateAnnotationDto(
-            BookId: Book.Id,
-            PageIndex: _currentPageIndex,
-            Type: AnnotationType.MarginNote,
-            Color: HighlightColor.Yellow,
-            Rects: _selectedRects,
-            SelectedText: _selectedText,
-            Note: "Note added from selection"
-        ));
-
-        _pageAnnotations.Add(ann);
-        await RedrawPageAnnotationsAsync();
-        _activeAnnotationId = ann.Id;
-        _isNotesOpen = true;
-        _isSelectionBarVisible = false;
-        await ReaderBridge.ClearSelectionBoxAsync();
-    }
-
-    private async Task HandleCopyQuoteFromSelection()
-    {
-        if (!string.IsNullOrEmpty(_selectedText))
-        {
-            string citation = ExportService.FormatQuoteCitation(_selectedText, Book.Title, Book.Author, _currentPageIndex);
-            await JS.InvokeVoidAsync("navigator.clipboard.writeText", citation);
-            Snackbar.Add("Quote citation copied to clipboard", Severity.Success);
-        }
-        _isSelectionBarVisible = false;
-        await ReaderBridge.ClearSelectionBoxAsync();
-    }
-
-    private async Task HandleDefineSelection()
-    {
-        if (string.IsNullOrEmpty(_selectedText)) return;
-
-        var term = _selectedText.Trim();
-        var context = _selectedText;
-        _isSelectionBarVisible = false;
-        await ReaderBridge.ClearSelectionBoxAsync();
-
-        var parameters = new DialogParameters<DefineDialog>
-        {
-            { x => x.Term, term },
-            { x => x.Context, context }
-        };
-        var options = new DialogOptions { CloseButton = true };
-        await DialogService.ShowAsync<DefineDialog>("Define & Explain", parameters, options);
-    }
-
-    private async Task HandleDismissSelection()
-    {
-        _isSelectionBarVisible = false;
-        await ReaderBridge.ClearSelectionBoxAsync();
-    }
-
-    [JSInvokable]
-    public void OnSearchMatch(SearchMatchPayload payload)
-    {
-        RecordActivity();
-        _currentSearchMatch = payload.CurrentMatch;
-        _totalSearchMatches = payload.TotalMatches;
-        _currentPageIndex = payload.PageIndex;
-        InvokeAsync(StateHasChanged);
-    }
-
-    private async Task HandleBack()
-    {
-        await PersistPositionAsync();
-        if (OnBackToLibrary.HasDelegate)
-        {
-            await OnBackToLibrary.InvokeAsync();
-        }
-    }
-
-    private async Task HandlePrevPage()
-    {
-        RecordActivity();
-        if (_currentPageIndex > 0)
-        {
-            await HandleGoToPage(_currentPageIndex - 1);
-        }
-    }
-
-    private async Task HandleNextPage()
-    {
-        RecordActivity();
-        if (_currentPageIndex < _totalPages - 1)
-        {
-            await HandleGoToPage(_currentPageIndex + 1);
-        }
-    }
-
-    private async Task HandleGoToPage(int pageIndex)
-    {
-        RecordActivity();
-        _currentPageIndex = Math.Clamp(pageIndex, 0, _totalPages - 1);
-        await ReaderBridge.GoToPageAsync(_currentPageIndex, 0.0);
-        StateHasChanged();
-    }
-
-    private async Task HandleThemeSettingsChanged(ThemeSettings settings)
-    {
-        RecordActivity();
-        _themeSettings = settings;
-        await ReaderBridge.ApplyThemeAsync(new
-        {
-            backgroundHex = settings.Theme.GetBackgroundHex(),
-            inkHex = settings.Theme.GetInkHex(),
-            cssFilter = settings.Theme.GetCssFilter(),
-            warmthAlpha = settings.WarmthAlpha,
-            dimAlpha = settings.DimAlpha,
-            vignetteOpacity = settings.EnableVignette ? 0.75 : 0.0
-        });
-
-        await ReaderBridge.SetFocusRulerAsync(settings.EnableRuler, settings.FocusLines > 0 ? settings.FocusLines : 1);
-        StateHasChanged();
-    }
-
-    private async Task OpenGoToPageDialog()
-    {
-        RecordActivity();
-        var parameters = new DialogParameters<GoToPageDialog>
-        {
-            { x => x.CurrentPage, _currentPageIndex + 1 },
-            { x => x.TotalPages, _totalPages }
-        };
-
-        var dialog = await DialogService.ShowAsync<GoToPageDialog>("Go to Page", parameters);
-        var result = await dialog.Result;
-
-        if (result != null && !result.Canceled && result.Data is int targetPage)
-        {
-            await HandleGoToPage(targetPage - 1);
-        }
-    }
-
-    private async Task HandleZoomIn()
-    {
-        RecordActivity();
-        double current = _zoom > 0 ? _zoom : 1.0;
-        _zoom = Math.Min(4.0, Math.Round(current + 0.25, 2));
-        await ReaderBridge.SetZoomAsync(_zoom);
-    }
-
-    private async Task HandleZoomOut()
-    {
-        RecordActivity();
-        double current = _zoom > 0 ? _zoom : 1.0;
-        _zoom = Math.Max(0.25, Math.Round(current - 0.25, 2));
-        await ReaderBridge.SetZoomAsync(_zoom);
-    }
-
-    private async Task HandleFitWidth()
-    {
-        RecordActivity();
-        _zoom = -1;
-        await ReaderBridge.SetFitWidthAsync();
-    }
-
-    private async Task HandleFitPage()
-    {
-        RecordActivity();
-        _zoom = -2;
-        await ReaderBridge.SetFitPageAsync();
-    }
-
-    private async Task ToggleLayoutMode()
-    {
-        RecordActivity();
-        _layoutMode = _layoutMode == ReaderViewMode.Continuous
-            ? ReaderViewMode.SinglePage
-            : ReaderViewMode.Continuous;
-
-        string mode = _layoutMode == ReaderViewMode.SinglePage ? "single" : "continuous";
-        await ReaderBridge.SetLayoutModeAsync(mode);
-    }
-
-    private async Task ToggleReflowModeAsync()
-    {
-        RecordActivity();
-        _isReflowMode = !_isReflowMode;
-        if (_isReflowMode && _reflowDocument == null)
-        {
-            string pdfPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Folio", "books", $"{Book.Sha256}.pdf");
-            if (!File.Exists(pdfPath) && File.Exists(Book.FilePath))
-            {
-                pdfPath = Book.FilePath;
-            }
-            try
-            {
-                _reflowDocument = await ReflowService.BuildReflowDocumentAsync(Book.Id, pdfPath);
-            }
-            catch (Exception ex)
-            {
-                Snackbar.Add($"Reflow generation failed: {ex.Message}", Severity.Warning);
-            }
-        }
-        StateHasChanged();
-    }
-
-    private async Task HandleSelectReflowBlock(int pageIndex)
-    {
-        _isReflowMode = false;
-        await HandleGoToPage(pageIndex);
-    }
-
-    private async Task RotateClockwise()
-    {
-        RecordActivity();
-        await ReaderBridge.SetRotationAsync(90);
-    }
-
-    private async Task HandleToolChanged(string tool)
-    {
-        RecordActivity();
-        _activeTool = tool;
-        if (tool == "snip")
-        {
-            await ReaderBridge.SetSnipModeAsync(true);
-            Snackbar.Add("Drag a rectangle on the page to snip an area", Severity.Info);
-        }
-        else if (tool == "note")
-        {
-            _isNotesOpen = true;
-        }
-        else if (tool == "highlight")
-        {
-            if (!string.IsNullOrEmpty(_selectedText))
-            {
-                await HandleApplyHighlight((HighlightColor.Yellow, AnnotationType.Highlight));
-            }
-        }
-        else if (tool == "audio")
-        {
-            await ToggleReadAloudAsync();
-        }
-        else
-        {
-            await ReaderBridge.SetSnipModeAsync(false);
-        }
-    }
-
-    private async Task RotateDegrees(int delta)
-    {
-        RecordActivity();
-        await ReaderBridge.SetRotationAsync(delta);
-    }
-
-    private void ToggleOutline()
-    {
-        RecordActivity();
-        _isOutlineOpen = !_isOutlineOpen;
-    }
-
-    private void ToggleSearch()
-    {
-        RecordActivity();
-        _isSearchOpen = !_isSearchOpen;
-        if (!_isSearchOpen)
-        {
-            _searchQuery = "";
-            _ = ReaderBridge.ClearSearchAsync();
-        }
-    }
-
-    private void ToggleZenMode()
-    {
-        RecordActivity();
-        _isZenMode = !_isZenMode;
-    }
-
-    private async Task HandleSelectOutlinePage(int pageIndex)
-    {
-        await HandleGoToPage(pageIndex);
-    }
-
-    private async Task HandleSearchQueryChanged(string query)
-    {
-        RecordActivity();
-        _searchQuery = query;
-        if (!string.IsNullOrWhiteSpace(_searchQuery))
-        {
-            await ReaderBridge.SearchAsync(_searchQuery, forward: true);
-        }
-        else
-        {
-            _currentSearchMatch = 0;
-            _totalSearchMatches = 0;
-            await ReaderBridge.ClearSearchAsync();
-        }
-    }
-
-    private async Task HandleFindNext()
-    {
-        RecordActivity();
-        if (!string.IsNullOrWhiteSpace(_searchQuery))
-        {
-            await ReaderBridge.SearchAsync(_searchQuery, forward: true);
-        }
-    }
-
-    private async Task HandleFindPrevious()
-    {
-        RecordActivity();
-        if (!string.IsNullOrWhiteSpace(_searchQuery))
-        {
-            await ReaderBridge.SearchAsync(_searchQuery, forward: false);
-        }
-    }
-
-    private async Task HandleKeyDown(KeyboardEventArgs e)
-    {
-        RecordActivity();
-
-        if (e.CtrlKey && e.Key.Equals("g", StringComparison.OrdinalIgnoreCase))
-        {
-            await OpenGoToPageDialog();
-        }
-        else if (e.CtrlKey && e.Key.Equals("d", StringComparison.OrdinalIgnoreCase))
-        {
-            await ToggleDogEarAsync();
-        }
-        else if (e.CtrlKey && e.Key.Equals("f", StringComparison.OrdinalIgnoreCase))
-        {
-            ToggleSearch();
-        }
-        else if (e.CtrlKey && e.Key.Equals("k", StringComparison.OrdinalIgnoreCase))
-        {
-            await OpenCommandPaletteAsync();
-        }
-        else if (e.Key.Equals("h", StringComparison.OrdinalIgnoreCase) && !e.CtrlKey && !e.AltKey && !string.IsNullOrEmpty(_selectedText))
-        {
-            await HandleApplyHighlight((HighlightColor.Yellow, AnnotationType.Highlight));
-        }
-        else if (e.Key.Equals("c", StringComparison.OrdinalIgnoreCase) && !e.CtrlKey && !e.AltKey && !string.IsNullOrEmpty(_selectedText))
-        {
-            await HandleAddNoteFromSelection();
-        }
-        else if (e.Key == "F11")
-        {
-            ToggleZenMode();
-        }
-        else if (e.Key.Equals("t", StringComparison.OrdinalIgnoreCase) && !e.CtrlKey && !e.AltKey && string.IsNullOrEmpty(_selectedText))
-        {
-            await ToggleReflowModeAsync();
-        }
-        else if (e.Key == "Escape")
-        {
-            if (_isSearchOpen)
-            {
-                ToggleSearch();
-            }
-            else if (_isOutlineOpen)
-            {
-                ToggleOutline();
-            }
-            else if (_isZenMode)
-            {
-                ToggleZenMode();
-            }
-            else
-            {
-                await HandleBack();
-            }
-        }
-    }
-
-    private async Task OpenCommandPaletteAsync()
-    {
-        var dialog = await DialogService.ShowAsync<CommandPalette>("Command Palette");
-        var result = await dialog.Result;
-
-        if (result != null && !result.Canceled && result.Data is string action)
-        {
-            switch (action)
-            {
-                case "goto": await OpenGoToPageDialog(); break;
-                case "find": ToggleSearch(); break;
-                case "fitwidth": await HandleFitWidth(); break;
-                case "fitpage": await HandleFitPage(); break;
-                case "zoomin": await HandleZoomIn(); break;
-                case "zoomout": await HandleZoomOut(); break;
-                case "rotate": await RotateClockwise(); break;
-                case "layout": await ToggleLayoutMode(); break;
-                case "toc": ToggleOutline(); break;
-                case "notebook": await OpenNotebookAsync(); break;
-                case "zen": ToggleZenMode(); break;
-                case "audio": await ToggleReadAloudAsync(); break;
-                case "reflow": await ToggleReflowModeAsync(); break;
-                case "study": await OpenStudyToolsAsync(); break;
-                case "backup": await DialogService.ShowAsync<BackupDialog>("Backup & Restore"); break;
-                case "back": await HandleBack(); break;
-            }
-        }
-    }
-
-    private async Task ToggleReadAloudAsync()
-    {
-        RecordActivity();
-        if (AudioService.IsPlaying)
-        {
-            await AudioService.StopAsync();
-            _isAudioBarVisible = false;
-            await ReaderBridge.ClearOverlaysAsync(_currentPageIndex);
-        }
-        else
-        {
-            _isAudioBarVisible = true;
-            await StartNarrationAsync(_currentPageIndex);
-        }
-    }
-
-    private async Task StartNarrationAsync(int pageIndex)
-    {
-        var pageTextData = await ReaderBridge.GetPageTextAsync(pageIndex);
-        var sentences = new List<SentenceSpoken>();
-
-        if (pageTextData != null && !string.IsNullOrWhiteSpace(pageTextData.Text))
-        {
-            var fallbackRects = pageTextData.Items.Select(i => i.Rect).ToList();
-            var segmented = SentenceSegmenter.Segment(pageTextData.Text, pageIndex, fallbackRects, BlockClassifier, TextNormalizer);
-            sentences.AddRange(segmented);
-        }
-
-        if (sentences.Count == 0)
-        {
-            sentences.Add(new SentenceSpoken
-            {
-                PageIndex = pageIndex,
-                OriginalText = $"Page {pageIndex + 1} has no readable text content.",
-                SpokenText = $"Page {pageIndex + 1} has no readable text content.",
-                Rects = Array.Empty<NormalizedRect>(),
-                Kind = TextBlockKind.Paragraph,
-                ShouldSkip = false,
-                EstimatedDurationSeconds = 2.0
-            });
-        }
-
-        await AudioService.PlayAsync(sentences, 0);
-    }
-
-    private void OnAudioSentenceStarted(SentenceSpoken sentence)
-    {
-        _ = InvokeAsync(async () =>
-        {
-            if (_currentPageIndex != sentence.PageIndex)
-            {
-                await HandleGoToPage(sentence.PageIndex);
-            }
-            if (sentence.Rects.Count > 0)
-            {
-                await ReaderBridge.DrawOverlaysAsync(sentence.PageIndex, sentence.Rects, "#64B5F6");
-            }
-            StateHasChanged();
-        });
-    }
-
-    private void OnAudioPlaybackEnded()
-    {
-        _ = InvokeAsync(async () =>
-        {
-            await ReaderBridge.ClearOverlaysAsync(_currentPageIndex);
-            _isAudioBarVisible = false;
-            StateHasChanged();
-        });
-    }
-
-    private async Task HandleStopAudio()
-    {
-        await AudioService.StopAsync();
-        await ReaderBridge.ClearOverlaysAsync(_currentPageIndex);
-        _isAudioBarVisible = false;
-    }
-
+    private async Task Back() { try { await Persist(true); await OnBackToLibrary.InvokeAsync(); } catch { Snackbar.Add("Position could not be saved. Retry before leaving the book.", Severity.Error); } }
     public async ValueTask DisposeAsync()
     {
-        AudioService.SentenceStarted -= OnAudioSentenceStarted;
-        AudioService.PlaybackEnded -= OnAudioPlaybackEnded;
-        await AudioService.StopAsync();
-
-        _activeTimer?.Stop();
-        _activeTimer?.Dispose();
-        _debounceAutosaveTimer?.Stop();
-        _debounceAutosaveTimer?.Dispose();
-
-        await PersistPositionAsync();
-
-        if (_dotNetRef != null)
-        {
-            _dotNetRef.Dispose();
-            _dotNetRef = null;
-        }
-
-        await ReaderBridge.DisposeAsync();
+        _disposed = true; _lifetime.Cancel();
+        if (_saveLoop != null) await _saveLoop;
+        await Persist(false);
+        if (Session.SaveBeforeClose == _closeSave) Session.SaveBeforeClose = null;
+        await Reader.DisposeAsync(); _reference?.Dispose(); _lifetime.Dispose();
     }
-
-    public class DocumentLoadedPayload
-    {
-        public int TotalPages { get; set; }
-        public List<OutlineNodeDto>? Outline { get; set; }
-    }
-
-    public class PositionPayload
-    {
-        public int PageIndex { get; set; }
-        public double OffsetPercent { get; set; }
-        public double Zoom { get; set; }
-    }
-
-    public class SearchMatchPayload
-    {
-        public int CurrentMatch { get; set; }
-        public int TotalMatches { get; set; }
-        public int PageIndex { get; set; }
-    }
-
-    public class SnipPayload
-    {
-        public int PageIndex { get; set; }
-        public NormalizedRect Rect { get; set; }
-    }
+    public record DocumentPayload(int TotalPages);
+    public record PositionPayload(int PageIndex, double OffsetPercent, double Zoom);
+    public record SearchPayload(int CurrentMatch, int TotalMatches, int PageIndex);
+    public record ErrorPayload(string Code, string Message);
+    public record ShortcutPayload(string Key, bool CtrlKey, bool AltKey);
 }
-

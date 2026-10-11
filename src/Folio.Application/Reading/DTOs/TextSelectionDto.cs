@@ -12,5 +12,8 @@ public class TextSelectionDto
     public string SelectedText { get; set; } = string.Empty;
 
     public List<NormalizedRect> Rects { get; set; } = new();
+
+    public double ClientX { get; set; }
+    public double ClientY { get; set; }
 }
 
