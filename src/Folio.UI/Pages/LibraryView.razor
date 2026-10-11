@@ -3,6 +3,7 @@
 @inject IBookImportService BookImportService
 @inject IFilePickerService FilePickerService
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
 
 <div class="pa-6" style="height: 100%; overflow-y: auto; background-color: var(--md-sys-color-background);">
     <!-- Continue Reading Row -->
@@ -54,6 +55,14 @@
                                OnClick="@(() => _isGridView = false)"
                                aria-label="List view" />
             </MudButtonGroup>
+
+            <MudIconButton Icon="@Icons.Material.Filled.Backup"
+                           Variant="Variant.Outlined"
+                           Size="Size.Small"
+                           Color="Color.Default"
+                           OnClick="OpenBackupDialogAsync"
+                           title="Backup & Restore Library"
+                           aria-label="Backup and restore" />
         </div>
     </div>
 
@@ -234,6 +243,16 @@
             {
                 Snackbar.Add($"Successfully imported {newCount} new book(s)!", Severity.Success);
             }
+            await RefreshAsync();
+        }
+    }
+
+    private async Task OpenBackupDialogAsync()
+    {
+        var dialog = await DialogService.ShowAsync<BackupDialog>("Library Backup & Restore");
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled)
+        {
             await RefreshAsync();
         }
     }

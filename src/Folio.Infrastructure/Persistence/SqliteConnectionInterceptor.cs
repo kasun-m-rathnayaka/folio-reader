@@ -28,16 +28,30 @@ public class SqliteConnectionInterceptor : DbConnectionInterceptor
 
     private static void EnablePragmas(DbConnection connection)
     {
-        using var command = connection.CreateCommand();
-        command.CommandText = PragmaCommands;
-        command.ExecuteNonQuery();
+        try
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = PragmaCommands;
+            command.ExecuteNonQuery();
+        }
+        catch (Exception)
+        {
+            // Silently ignore on read-only probing connections (e.g. EF Core Exists() probe)
+        }
     }
 
     private static async Task EnablePragmasAsync(DbConnection connection, CancellationToken cancellationToken)
     {
-        await using var command = connection.CreateCommand();
-        command.CommandText = PragmaCommands;
-        await command.ExecuteNonQueryAsync(cancellationToken);
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = PragmaCommands;
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        catch (Exception)
+        {
+            // Silently ignore on read-only probing connections
+        }
     }
 }
 

@@ -24,5 +24,22 @@ public class WpfFilePickerService : IFilePickerService
 
         return Task.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
     }
+
+    public Task<string?> PickZipFileAsync()
+    {
+        var dialog = new OpenFileDialog
+        {
+            Filter = "Zip Archives (*.zip)|*.zip|All Files (*.*)|*.*",
+            Multiselect = false,
+            Title = "Select Folio Backup Archive"
+        };
+
+        if (dialog.ShowDialog() == true && !string.IsNullOrEmpty(dialog.FileName))
+        {
+            return Task.FromResult<string?>(dialog.FileName);
+        }
+
+        return Task.FromResult<string?>(null);
+    }
 }
 

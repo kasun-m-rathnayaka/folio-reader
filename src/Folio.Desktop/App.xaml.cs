@@ -1,3 +1,4 @@
+using System.Windows;
 using Folio.AI;
 using Folio.Application;
 using Folio.Application.Common.Interfaces;

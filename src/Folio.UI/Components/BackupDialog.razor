@@ -1,0 +1,125 @@
+@using Folio.Application.Backup
+@using Folio.Application.Common.Interfaces
+@inject IBackupService BackupService
+@inject IFilePickerService FilePickerService
+@inject ISnackbar Snackbar
+
+<MudDialog Style="background: #1E1E1E; color: #FFFFFF; border: 1px solid #333333; border-radius: 8px; min-width: 480px; max-width: 600px;">
+    <TitleContent>
+        <div class="d-flex align-center gap-2">
+            <MudIcon Icon="@Icons.Material.Filled.Backup" Style="color: #1473E6;" Size="Size.Small" />
+            <MudText Typo="Typo.subtitle1" Style="font-weight: 600; color: #FFFFFF;">
+                Library Backup & Restore
+            </MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <div class="d-flex flex-column gap-4 py-2">
+            <div style="font-size: 13px; color: #9E9E9E; line-height: 1.5;">
+                Create an atomic portable archive (.zip) containing your entire reading database, annotations, bookmarks, reading positions, and statistics.
+            </div>
+
+            <!-- Create Backup Action -->
+            <div style="background: #252525; border: 1px solid #383838; border-radius: 6px; padding: 14px;" class="d-flex align-center justify-space-between">
+                <div>
+                    <div style="font-size: 13px; font-weight: 600; color: #FFFFFF;">Export Full Library Backup</div>
+                    <div style="font-size: 11px; color: #9E9E9E;">Saves a consolidated SQLite snapshot archive</div>
+                </div>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                           OnClick="HandleCreateBackup" Disabled="@_isBusy"
+                           Style="text-transform: none; font-weight: 600;">
+                    Create Backup
+                </MudButton>
+            </div>
+
+            <!-- Restore Backup Action -->
+            <div style="background: #252525; border: 1px solid #383838; border-radius: 6px; padding: 14px;" class="d-flex align-center justify-space-between">
+                <div>
+                    <div style="font-size: 13px; font-weight: 600; color: #FFFFFF;">Restore from Archive</div>
+                    <div style="font-size: 11px; color: #9E9E9E;">Overwrites current data with safe rollback protection</div>
+                </div>
+                <MudButton Variant="Variant.Outlined" Color="Color.Warning" Size="Size.Small"
+                           OnClick="HandleRestoreBackup" Disabled="@_isBusy"
+                           Style="text-transform: none; font-weight: 600;">
+                    Select File & Restore
+                </MudButton>
+            </div>
+
+            @if (_lastBackupPath != null)
+            {
+                <div style="background: rgba(129, 199, 132, 0.1); border: 1px solid #81C784; border-radius: 4px; padding: 8px 12px; font-size: 12px; color: #81C784;">
+                    Backup saved: @_lastBackupPath
+                </div>
+            }
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="Close" Style="color: #9E9E9E; text-transform: none;">
+            Close
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    private bool _isBusy = false;
+    private string? _lastBackupPath;
+
+    private async Task HandleCreateBackup()
+    {
+        _isBusy = true;
+        try
+        {
+            string appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            string backupDir = Path.Combine(appData, "Folio", "backups");
+            string backupPath = Path.Combine(backupDir, $"folio_backup_{DateTime.Now:yyyyMMdd_HHmmss}.zip");
+
+            await BackupService.CreateBackupAsync(backupPath);
+            _lastBackupPath = backupPath;
+            Snackbar.Add("Backup archive created successfully!", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Backup failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    private async Task HandleRestoreBackup()
+    {
+        string? zipPath = await FilePickerService.PickZipFileAsync();
+        if (string.IsNullOrEmpty(zipPath)) return;
+
+        _isBusy = true;
+        try
+        {
+            var meta = await BackupService.InspectBackupAsync(zipPath);
+            if (meta == null)
+            {
+                Snackbar.Add("Invalid or unreadable backup file.", Severity.Error);
+                return;
+            }
+
+            bool success = await BackupService.RestoreBackupAsync(zipPath);
+            if (success)
+            {
+                Snackbar.Add($"Restored {meta.BooksCount} books and {meta.AnnotationsCount} annotations! Please restart Folio.", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Restore error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    private void Close() => MudDialog.Cancel();
+}

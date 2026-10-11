@@ -884,6 +884,9 @@
                 case "notebook": await OpenNotebookAsync(); break;
                 case "zen": ToggleZenMode(); break;
                 case "audio": await ToggleReadAloudAsync(); break;
+                case "reflow": await ToggleReflowModeAsync(); break;
+                case "study": await OpenStudyToolsAsync(); break;
+                case "backup": await DialogService.ShowAsync<BackupDialog>("Backup & Restore"); break;
                 case "back": await HandleBack(); break;
             }
         }

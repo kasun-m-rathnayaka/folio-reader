@@ -53,6 +53,8 @@ public static class DependencyInjection
         services.AddSingleton<IPdfRasterizer, Folio.Infrastructure.Rasterization.WinRtPdfRasterizer>();
         services.AddSingleton<Folio.Application.OCR.IOcrService, Folio.Infrastructure.OCR.WindowsOcrService>();
         services.AddSingleton<Folio.Application.Reflow.IReflowService, Folio.Infrastructure.Reflow.ReflowService>();
+        services.AddScoped<Folio.Application.Search.ISearchService, Folio.Infrastructure.Search.LibrarySearchService>();
+        services.AddScoped<Folio.Application.Backup.IBackupService, Folio.Infrastructure.Backup.BackupService>();
 
         services.AddSingleton<IBatteryMonitor, Folio.Infrastructure.Jobs.WindowsBatteryMonitor>();
         services.AddSingleton<Folio.Infrastructure.Jobs.BackgroundJobQueue>();

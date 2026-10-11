@@ -6,5 +6,6 @@ namespace Folio.Application.Common.Interfaces;
 public interface IFilePickerService
 {
     Task<IReadOnlyList<string>> PickPdfFilesAsync();
+    Task<string?> PickZipFileAsync();
 }
 
