@@ -1,0 +1,93 @@
+@using Folio.Application.Audio
+@using Folio.Domain.Audio
+@inject IAudioPlaybackService AudioService
+
+@if (IsVisible)
+{
+    <div class="folio-audio-player-bar">
+        <!-- Spoken Text Snippet Preview -->
+        <div class="d-flex align-center gap-2" style="flex: 1; overflow: hidden;">
+            <MudIcon Icon="@Icons.Material.Filled.VolumeUp"
+                     Size="Size.Small"
+                     Style="color: #1473E6; animation: folio-pulse 1.5s infinite;" />
+            <span class="folio-audio-text-preview" title="@AudioService.CurrentSentence?.OriginalText">
+                @(AudioService.CurrentSentence?.OriginalText ?? "Starting narration...")
+            </span>
+        </div>
+
+        <!-- Controls: Prev, Play/Pause, Next -->
+        <div class="d-flex align-center gap-1 mx-3">
+            <button class="folio-subtle-btn" style="width: 28px; height: 28px; padding: 0;"
+                    @onclick="HandlePrevious"
+                    title="Previous Sentence">
+                <MudIcon Icon="@Icons.Material.Filled.SkipPrevious" Size="Size.Small" />
+            </button>
+
+            @if (AudioService.IsPaused)
+            {
+                <button class="folio-primary-btn" style="width: 32px; height: 32px; padding: 0; border-radius: 50%;"
+                        @onclick="HandleResume"
+                        title="Resume Narration">
+                    <MudIcon Icon="@Icons.Material.Filled.PlayArrow" Size="Size.Small" />
+                </button>
+            }
+            else
+            {
+                <button class="folio-primary-btn" style="width: 32px; height: 32px; padding: 0; border-radius: 50%;"
+                        @onclick="HandlePause"
+                        title="Pause Narration">
+                    <MudIcon Icon="@Icons.Material.Filled.Pause" Size="Size.Small" />
+                </button>
+            }
+
+            <button class="folio-subtle-btn" style="width: 28px; height: 28px; padding: 0;"
+                    @onclick="HandleNext"
+                    title="Next Sentence">
+                <MudIcon Icon="@Icons.Material.Filled.SkipNext" Size="Size.Small" />
+            </button>
+        </div>
+
+        <!-- Speed Selector -->
+        <div class="d-flex align-center gap-1">
+            <button class="folio-subtle-btn" style="font-size: 11px; padding: 3px 8px; font-weight: 600;"
+                    @onclick="CycleSpeed"
+                    title="Playback Speed">
+                @($"{AudioService.Speed:0.0}x")
+            </button>
+        </div>
+
+        <div style="height: 18px; width: 1px; background: #383838; margin: 0 4px;"></div>
+
+        <!-- Close / Stop -->
+        <button class="folio-subtle-btn" style="width: 24px; height: 24px; padding: 0;"
+                @onclick="HandleStop"
+                title="Stop Narration">
+            <MudIcon Icon="@Icons.Material.Filled.Close" Size="Size.Small" Style="font-size: 14px;" />
+        </button>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public EventCallback OnStop { get; set; }
+
+    private readonly float[] _speeds = new[] { 1.0f, 1.25f, 1.5f, 1.75f, 2.0f };
+
+    private async Task HandleResume() => await AudioService.ResumeAsync();
+    private async Task HandlePause() => await AudioService.PauseAsync();
+    private async Task HandleNext() => await AudioService.NextAsync();
+    private async Task HandlePrevious() => await AudioService.PreviousAsync();
+
+    private async Task HandleStop()
+    {
+        await AudioService.StopAsync();
+        await OnStop.InvokeAsync();
+    }
+
+    private async Task CycleSpeed()
+    {
+        int idx = Array.IndexOf(_speeds, AudioService.Speed);
+        float next = _speeds[(idx + 1) % _speeds.Length];
+        await AudioService.SetSpeedAsync(next);
+    }
+}

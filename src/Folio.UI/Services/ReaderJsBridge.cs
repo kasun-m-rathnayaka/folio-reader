@@ -75,6 +75,11 @@ public class ReaderJsBridge : IAsyncDisposable
         await _jsRuntime.InvokeVoidAsync("folioReader.clearOverlays", pageIndex);
     }
 
+    public async ValueTask<PageTextPayload?> GetPageTextAsync(int pageIndex)
+    {
+        return await _jsRuntime.InvokeAsync<PageTextPayload?>("folioReader.getPageText", pageIndex);
+    }
+
     public async ValueTask DrawAnnotationsAsync(int pageIndex, object annotations)
     {
         await _jsRuntime.InvokeVoidAsync("folioReader.drawAnnotations", pageIndex, annotations);
@@ -122,4 +127,8 @@ public class ReaderJsBridge : IAsyncDisposable
         }
     }
 }
+
+public record PageTextItem(string Str, NormalizedRect Rect);
+public record PageTextPayload(string Text, List<PageTextItem> Items);
+
 

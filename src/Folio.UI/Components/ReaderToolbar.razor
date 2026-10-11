@@ -129,6 +129,15 @@
                        aria-label="Open Notebook" />
     </MudTooltip>
 
+    <!-- Read Aloud (FR-TTS-01..05) -->
+    <MudTooltip Text="Read Aloud">
+        <MudIconButton Icon="@Icons.Material.Filled.Headphones"
+                       Size="Size.Small"
+                       Color="@(IsAudioPlaying ? Color.Primary : Color.Default)"
+                       OnClick="@(() => OnToggleAudio.InvokeAsync())"
+                       aria-label="Read Aloud" />
+    </MudTooltip>
+
     <!-- Zen / Fullscreen Mode -->
     <MudTooltip Text="Zen Mode (F11)">
         <MudIconButton Icon="@(IsZenMode ? Icons.Material.Filled.FullscreenExit : Icons.Material.Filled.Fullscreen)"
@@ -150,11 +159,13 @@
     [Parameter] public bool IsZenMode { get; set; }
     [Parameter] public bool IsDogEared { get; set; }
     [Parameter] public bool IsNotesOpen { get; set; }
+    [Parameter] public bool IsAudioPlaying { get; set; }
 
     [Parameter] public EventCallback OnBack { get; set; }
     [Parameter] public EventCallback OnToggleOutline { get; set; }
     [Parameter] public EventCallback OnToggleDogEar { get; set; }
     [Parameter] public EventCallback OnToggleNotes { get; set; }
+    [Parameter] public EventCallback OnToggleAudio { get; set; }
     [Parameter] public EventCallback OnOpenNotebook { get; set; }
     [Parameter] public EventCallback OnPrevPage { get; set; }
     [Parameter] public EventCallback OnNextPage { get; set; }

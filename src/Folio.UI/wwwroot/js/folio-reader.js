@@ -564,6 +564,40 @@ class FolioReaderEngine {
         }
     }
 
+    async getPageText(pageIndex) {
+        if (!this.pdfDoc || pageIndex < 0 || pageIndex >= this.totalPages) return null;
+        try {
+            const page = await this.pdfDoc.getPage(pageIndex + 1);
+            const tc = await page.getTextContent();
+            const viewport = page.getViewport({ scale: 1.0 });
+            const items = [];
+            for (let i = 0; i < tc.items.length; i++) {
+                const item = tc.items[i];
+                if (!item.str || !item.str.trim()) continue;
+                const tx = item.transform[4];
+                const ty = item.transform[5];
+                const w = item.width;
+                const h = item.height;
+                items.push({
+                    str: item.str,
+                    rect: {
+                        x: Math.max(0, Math.min(1, tx / viewport.width)),
+                        y: Math.max(0, Math.min(1, (viewport.height - ty - h) / viewport.height)),
+                        width: Math.min(1, w / viewport.width),
+                        height: Math.min(1, h / viewport.height)
+                    }
+                });
+            }
+            return {
+                text: tc.items.map(i => i.str).join(' '),
+                items: items
+            };
+        } catch (e) {
+            console.error('[FolioReader] getPageText error:', e);
+            return null;
+        }
+    }
+
     drawAnnotations(pageIndex, annotations) {
         const page = this.pages[pageIndex];
         if (!page || !page.overlayLayer) return;

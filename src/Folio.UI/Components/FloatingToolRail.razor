@@ -42,6 +42,13 @@
         <MudIcon Icon="@Icons.Material.Filled.AutoFixNormal" Size="Size.Small" />
     </button>
 
+    <!-- Read Aloud Tool -->
+    <button class="folio-tool-btn @(ActiveTool == "audio" ? "active" : "")"
+            @onclick='@(() => SelectTool("audio"))'
+            title="Read Aloud Narration">
+        <MudIcon Icon="@Icons.Material.Filled.Headphones" Size="Size.Small" />
+    </button>
+
     <div style="height: 1px; width: 24px; background: #383838; margin: 2px auto;"></div>
 
     <!-- More Options -->

@@ -3,6 +3,8 @@
 @using Folio.Application.Reading.DTOs
 @using Folio.Application.Annotations
 @using Folio.Application.Annotations.DTOs
+@using Folio.Application.Audio
+@using Folio.Domain.Audio
 @using Folio.Domain.Entities
 @using Folio.Domain.Enums
 @using Folio.Domain.Geometry
@@ -14,6 +16,10 @@
 @inject IBookmarkService BookmarkService
 @inject IAnnotationService AnnotationService
 @inject IAnnotationExportService ExportService
+@inject IAudioPlaybackService AudioService
+@inject ISentenceSegmenter SentenceSegmenter
+@inject ITextNormalizer TextNormalizer
+@inject ILayoutBlockClassifier BlockClassifier
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject IJSRuntime JS
@@ -35,10 +41,12 @@
                    IsZenMode="@_isZenMode"
                    IsDogEared="@_isDogEared"
                    IsNotesOpen="@_isNotesOpen"
+                   IsAudioPlaying="@AudioService.IsPlaying"
                    OnBack="@HandleBack"
                    OnToggleOutline="@ToggleOutline"
                    OnToggleDogEar="@ToggleDogEarAsync"
                    OnToggleNotes="@ToggleNotes"
+                   OnToggleAudio="@ToggleReadAloudAsync"
                    OnOpenNotebook="@OpenNotebookAsync"
                    OnPrevPage="@HandlePrevPage"
                    OnNextPage="@HandleNextPage"
@@ -97,6 +105,10 @@
                                OnAddNote="@HandleAddNoteFromSelection"
                                OnCopyQuote="@HandleCopyQuoteFromSelection"
                                OnDismiss="@HandleDismissSelection" />
+
+            <!-- Floating Audio Narration Player Bar (FR-TTS-01..05) -->
+            <AudioPlayerBar IsVisible="@_isAudioBarVisible"
+                            OnStop="@HandleStopAudio" />
 
             <!-- Multi-Layer Physical Book & Lighting Stack (FR-FEL-01..03, §6.4) -->
             <div class="folio-lighting-warmth" style="opacity: @(_themeSettings.WarmthAlpha.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture));"></div>
@@ -161,6 +173,7 @@
     private int _totalSearchMatches = 0;
     private List<OutlineNodeDto> _outline = new();
     private string _activeTool = "select";
+    private bool _isAudioBarVisible = false;
 
     // Telemetry and session active reading tracker (FR-MEM-01..04)
     private DateTimeOffset _lastInteractionTime = DateTimeOffset.UtcNow;
@@ -171,6 +184,10 @@
     protected override void OnInitialized()
     {
         _dotNetRef = DotNetObjectReference.Create(this);
+
+        // Audio follow-along listener
+        AudioService.SentenceStarted += OnAudioSentenceStarted;
+        AudioService.PlaybackEnded += OnAudioPlaybackEnded;
 
         // 1-second interval timer for tracking active reading time (FR-MEM-04)
         _activeTimer = new Timer(1000);
@@ -629,6 +646,10 @@
                 await HandleApplyHighlight((HighlightColor.Yellow, AnnotationType.Highlight));
             }
         }
+        else if (tool == "audio")
+        {
+            await ToggleReadAloudAsync();
+        }
         else
         {
             await ReaderBridge.SetSnipModeAsync(false);
@@ -776,13 +797,96 @@
                 case "toc": ToggleOutline(); break;
                 case "notebook": await OpenNotebookAsync(); break;
                 case "zen": ToggleZenMode(); break;
+                case "audio": await ToggleReadAloudAsync(); break;
                 case "back": await HandleBack(); break;
             }
         }
     }
 
+    private async Task ToggleReadAloudAsync()
+    {
+        RecordActivity();
+        if (AudioService.IsPlaying)
+        {
+            await AudioService.StopAsync();
+            _isAudioBarVisible = false;
+            await ReaderBridge.ClearOverlaysAsync(_currentPageIndex);
+        }
+        else
+        {
+            _isAudioBarVisible = true;
+            await StartNarrationAsync(_currentPageIndex);
+        }
+    }
+
+    private async Task StartNarrationAsync(int pageIndex)
+    {
+        var pageTextData = await ReaderBridge.GetPageTextAsync(pageIndex);
+        var sentences = new List<SentenceSpoken>();
+
+        if (pageTextData != null && !string.IsNullOrWhiteSpace(pageTextData.Text))
+        {
+            var fallbackRects = pageTextData.Items.Select(i => i.Rect).ToList();
+            var segmented = SentenceSegmenter.Segment(pageTextData.Text, pageIndex, fallbackRects, BlockClassifier, TextNormalizer);
+            sentences.AddRange(segmented);
+        }
+
+        if (sentences.Count == 0)
+        {
+            sentences.Add(new SentenceSpoken
+            {
+                PageIndex = pageIndex,
+                OriginalText = $"Page {pageIndex + 1} has no readable text content.",
+                SpokenText = $"Page {pageIndex + 1} has no readable text content.",
+                Rects = Array.Empty<NormalizedRect>(),
+                Kind = TextBlockKind.Paragraph,
+                ShouldSkip = false,
+                EstimatedDurationSeconds = 2.0
+            });
+        }
+
+        await AudioService.PlayAsync(sentences, 0);
+    }
+
+    private void OnAudioSentenceStarted(SentenceSpoken sentence)
+    {
+        _ = InvokeAsync(async () =>
+        {
+            if (_currentPageIndex != sentence.PageIndex)
+            {
+                await HandleGoToPage(sentence.PageIndex);
+            }
+            if (sentence.Rects.Count > 0)
+            {
+                await ReaderBridge.DrawOverlaysAsync(sentence.PageIndex, sentence.Rects, "#64B5F6");
+            }
+            StateHasChanged();
+        });
+    }
+
+    private void OnAudioPlaybackEnded()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            await ReaderBridge.ClearOverlaysAsync(_currentPageIndex);
+            _isAudioBarVisible = false;
+            StateHasChanged();
+        });
+    }
+
+    private async Task HandleStopAudio()
+    {
+        await AudioService.StopAsync();
+        await ReaderBridge.ClearOverlaysAsync(_currentPageIndex);
+        _isAudioBarVisible = false;
+    }
+
     public async ValueTask DisposeAsync()
     {
+        AudioService.SentenceStarted -= OnAudioSentenceStarted;
+        AudioService.PlaybackEnded -= OnAudioPlaybackEnded;
+        await AudioService.StopAsync();
+
         _activeTimer?.Stop();
         _activeTimer?.Dispose();
         _debounceAutosaveTimer?.Stop();
