@@ -3,6 +3,7 @@ using Folio.Application;
 using Folio.Application.Common.Interfaces;
 using Folio.Infrastructure;
 using Folio.Infrastructure.Persistence.Migrations;
+using Folio.UI;
 using Microsoft.AspNetCore.Components.WebView.Wpf;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
