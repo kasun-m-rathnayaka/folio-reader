@@ -104,6 +104,7 @@
                                OnApplyHighlight="@HandleApplyHighlight"
                                OnAddNote="@HandleAddNoteFromSelection"
                                OnCopyQuote="@HandleCopyQuoteFromSelection"
+                               OnDefine="@HandleDefineSelection"
                                OnDismiss="@HandleDismissSelection" />
 
             <!-- Floating Audio Narration Player Bar (FR-TTS-01..05) -->
@@ -490,6 +491,24 @@
         }
         _isSelectionBarVisible = false;
         await ReaderBridge.ClearSelectionBoxAsync();
+    }
+
+    private async Task HandleDefineSelection()
+    {
+        if (string.IsNullOrEmpty(_selectedText)) return;
+
+        var term = _selectedText.Trim();
+        var context = _selectedText;
+        _isSelectionBarVisible = false;
+        await ReaderBridge.ClearSelectionBoxAsync();
+
+        var parameters = new DialogParameters<DefineDialog>
+        {
+            { x => x.Term, term },
+            { x => x.Context, context }
+        };
+        var options = new DialogOptions { CloseButton = true };
+        await DialogService.ShowAsync<DefineDialog>("Define & Explain", parameters, options);
     }
 
     private async Task HandleDismissSelection()

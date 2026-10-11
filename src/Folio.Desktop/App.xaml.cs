@@ -1,4 +1,4 @@
-using System.Windows;
+using Folio.AI;
 using Folio.Application;
 using Folio.Application.Common.Interfaces;
 using Folio.Audio;
@@ -34,6 +34,7 @@ public partial class App : System.Windows.Application
                 services.AddFolioInfrastructure();
                 services.AddFolioApplication();
                 services.AddFolioAudio();
+                services.AddFolioAI();
                 services.AddFolioUI();
                 services.AddSingleton<IFilePickerService, Folio.Desktop.Services.WpfFilePickerService>();
 
