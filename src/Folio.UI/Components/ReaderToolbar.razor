@@ -129,6 +129,14 @@
                        aria-label="Open Notebook" />
     </MudTooltip>
 
+    <!-- Study Tools & Flashcards (FR-AIS-01..06) -->
+    <MudTooltip Text="Study Tools & Flashcards">
+        <MudIconButton Icon="@Icons.Material.Filled.School"
+                       Size="Size.Small"
+                       OnClick="@(() => OnOpenStudyTools.InvokeAsync())"
+                       aria-label="Study Tools" />
+    </MudTooltip>
+
     <!-- Read Aloud (FR-TTS-01..05) -->
     <MudTooltip Text="Read Aloud">
         <MudIconButton Icon="@Icons.Material.Filled.Headphones"
@@ -167,6 +175,7 @@
     [Parameter] public EventCallback OnToggleNotes { get; set; }
     [Parameter] public EventCallback OnToggleAudio { get; set; }
     [Parameter] public EventCallback OnOpenNotebook { get; set; }
+    [Parameter] public EventCallback OnOpenStudyTools { get; set; }
     [Parameter] public EventCallback OnPrevPage { get; set; }
     [Parameter] public EventCallback OnNextPage { get; set; }
     [Parameter] public EventCallback OnOpenGoToPage { get; set; }

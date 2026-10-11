@@ -1,4 +1,5 @@
 using Folio.Domain.Entities;
+using Folio.Domain.Study;
 using Microsoft.EntityFrameworkCore;
 
 namespace Folio.Infrastructure.Persistence;
@@ -21,6 +22,9 @@ public class FolioDbContext : DbContext
     public DbSet<BookShelf> BookShelves => Set<BookShelf>();
     public DbSet<BookTag> BookTags => Set<BookTag>();
     public DbSet<Job> Jobs => Set<Job>();
+    public DbSet<ChapterSummary> ChapterSummaries => Set<ChapterSummary>();
+    public DbSet<Flashcard> Flashcards => Set<Flashcard>();
+    public DbSet<VocabularyItem> VocabularyItems => Set<VocabularyItem>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -162,6 +166,27 @@ public class FolioDbContext : DbContext
                   .WithMany()
                   .HasForeignKey(e => e.BookId)
                   .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // ChapterSummary
+        modelBuilder.Entity<ChapterSummary>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.BookId, e.ChapterTitle });
+        });
+
+        // Flashcard
+        modelBuilder.Entity<Flashcard>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.BookId, e.NextReviewDate });
+        });
+
+        // VocabularyItem
+        modelBuilder.Entity<VocabularyItem>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.BookId, e.Word });
         });
     }
 }

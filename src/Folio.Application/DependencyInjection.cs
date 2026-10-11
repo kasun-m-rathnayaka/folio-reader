@@ -12,6 +12,7 @@ public static class DependencyInjection
         services.AddScoped<Folio.Application.Annotations.IBookmarkService, Folio.Application.Annotations.BookmarkService>();
         services.AddScoped<Folio.Application.Annotations.IAnnotationService, Folio.Application.Annotations.AnnotationService>();
         services.AddScoped<Folio.Application.Annotations.IAnnotationExportService, Folio.Application.Annotations.AnnotationExportService>();
+        services.AddScoped<Folio.Application.Study.IStudyService, Folio.Application.Study.StudyService>();
         return services;
     }
 }

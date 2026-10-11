@@ -4,6 +4,7 @@
 @using Folio.Application.Annotations
 @using Folio.Application.Annotations.DTOs
 @using Folio.Application.Audio
+@using Folio.Application.Study
 @using Folio.Domain.Audio
 @using Folio.Domain.Entities
 @using Folio.Domain.Enums
@@ -20,6 +21,7 @@
 @inject ISentenceSegmenter SentenceSegmenter
 @inject ITextNormalizer TextNormalizer
 @inject ILayoutBlockClassifier BlockClassifier
+@inject IStudyService StudyService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject IJSRuntime JS
@@ -48,6 +50,7 @@
                    OnToggleNotes="@ToggleNotes"
                    OnToggleAudio="@ToggleReadAloudAsync"
                    OnOpenNotebook="@OpenNotebookAsync"
+                   OnOpenStudyTools="@OpenStudyToolsAsync"
                    OnPrevPage="@HandlePrevPage"
                    OnNextPage="@HandleNextPage"
                    OnOpenGoToPage="@OpenGoToPageDialog"
@@ -411,6 +414,21 @@
         };
         var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Large };
         await DialogService.ShowAsync<NotebookView>("Notebook", parameters, options);
+    }
+
+    private async Task OpenStudyToolsAsync()
+    {
+        RecordActivity();
+        var pageTextData = await ReaderBridge.GetPageTextAsync(_currentPageIndex);
+        var parameters = new DialogParameters<StudyModal>
+        {
+            { x => x.BookId, Book.Id },
+            { x => x.BookTitle, Book.Title },
+            { x => x.CurrentPageIndex, _currentPageIndex },
+            { x => x.CurrentPageText, pageTextData?.Text ?? "" }
+        };
+        var options = new DialogOptions { CloseButton = true };
+        await DialogService.ShowAsync<StudyModal>("Study Tools", parameters, options);
     }
 
     private async Task HandleSelectAnnotationCard(Guid annId)

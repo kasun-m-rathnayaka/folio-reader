@@ -1,4 +1,5 @@
 using Folio.Application.Common.Interfaces;
+using Folio.Application.Study;
 using Folio.Infrastructure.Persistence;
 using Folio.Infrastructure.Persistence.Migrations;
 using Folio.Infrastructure.Persistence.Repositories;
@@ -45,6 +46,7 @@ public static class DependencyInjection
         services.AddScoped<IBookmarkRepository, BookmarkRepository>();
         services.AddScoped<IAnnotationRepository, AnnotationRepository>();
         services.AddScoped<IJobRepository, JobRepository>();
+        services.AddScoped<IStudyRepository, StudyRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IDatabaseMigrator, DatabaseMigrator>();
         services.AddSingleton<IPdfTextExtractor, Folio.Infrastructure.Extraction.PdfPigTextExtractor>();
