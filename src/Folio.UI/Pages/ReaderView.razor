@@ -5,10 +5,12 @@
 @using Folio.Application.Annotations.DTOs
 @using Folio.Application.Audio
 @using Folio.Application.Study
+@using Folio.Application.Reflow
 @using Folio.Domain.Audio
 @using Folio.Domain.Entities
 @using Folio.Domain.Enums
 @using Folio.Domain.Geometry
+@using Folio.Domain.OCR
 @using Folio.Domain.Theme
 @using Folio.UI.Components
 @using Folio.UI.Services
@@ -22,6 +24,7 @@
 @inject ITextNormalizer TextNormalizer
 @inject ILayoutBlockClassifier BlockClassifier
 @inject IStudyService StudyService
+@inject IReflowService ReflowService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject IJSRuntime JS
@@ -44,11 +47,13 @@
                    IsDogEared="@_isDogEared"
                    IsNotesOpen="@_isNotesOpen"
                    IsAudioPlaying="@AudioService.IsPlaying"
+                   IsReflowMode="@_isReflowMode"
                    OnBack="@HandleBack"
                    OnToggleOutline="@ToggleOutline"
                    OnToggleDogEar="@ToggleDogEarAsync"
                    OnToggleNotes="@ToggleNotes"
                    OnToggleAudio="@ToggleReadAloudAsync"
+                   OnToggleReflow="@ToggleReflowModeAsync"
                    OnOpenNotebook="@OpenNotebookAsync"
                    OnOpenStudyTools="@OpenStudyToolsAsync"
                    OnPrevPage="@HandlePrevPage"
@@ -93,8 +98,17 @@
                             OnClose="@ToggleOutline" />
         }
 
+        <!-- Reflow Document View (FR-RFL-01..05) -->
+        @if (_isReflowMode)
+        {
+            <ReflowView Document="@_reflowDocument"
+                        ThemeSettings="@_themeSettings"
+                        OnSelectBlock="@HandleSelectReflowBlock"
+                        OnClose="@ToggleReflowModeAsync" />
+        }
+
         <!-- PDF.js Canvas & TextLayer Host Container -->
-        <div id="folio-pdf-container" style="flex: 1; height: 100%; width: 100%; position: relative;">
+        <div id="folio-pdf-container" style="flex: 1; height: 100%; width: 100%; position: relative; display: @(_isReflowMode ? "none" : "block");">
             <!-- Floating Vertical Tool Rail (Matches screenshot pill) -->
             <FloatingToolRail ActiveTool="@_activeTool"
                               OnToolChanged="@HandleToolChanged"
@@ -178,6 +192,8 @@
     private List<OutlineNodeDto> _outline = new();
     private string _activeTool = "select";
     private bool _isAudioBarVisible = false;
+    private bool _isReflowMode = false;
+    private ReflowDocument? _reflowDocument;
 
     // Telemetry and session active reading tracker (FR-MEM-01..04)
     private DateTimeOffset _lastInteractionTime = DateTimeOffset.UtcNow;
@@ -657,6 +673,35 @@
         await ReaderBridge.SetLayoutModeAsync(mode);
     }
 
+    private async Task ToggleReflowModeAsync()
+    {
+        RecordActivity();
+        _isReflowMode = !_isReflowMode;
+        if (_isReflowMode && _reflowDocument == null)
+        {
+            string pdfPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Folio", "books", $"{Book.Sha256}.pdf");
+            if (!File.Exists(pdfPath) && File.Exists(Book.FilePath))
+            {
+                pdfPath = Book.FilePath;
+            }
+            try
+            {
+                _reflowDocument = await ReflowService.BuildReflowDocumentAsync(Book.Id, pdfPath);
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Reflow generation failed: {ex.Message}", Severity.Warning);
+            }
+        }
+        StateHasChanged();
+    }
+
+    private async Task HandleSelectReflowBlock(int pageIndex)
+    {
+        _isReflowMode = false;
+        await HandleGoToPage(pageIndex);
+    }
+
     private async Task RotateClockwise()
     {
         RecordActivity();
@@ -792,6 +837,10 @@
         else if (e.Key == "F11")
         {
             ToggleZenMode();
+        }
+        else if (e.Key.Equals("t", StringComparison.OrdinalIgnoreCase) && !e.CtrlKey && !e.AltKey && string.IsNullOrEmpty(_selectedText))
+        {
+            await ToggleReflowModeAsync();
         }
         else if (e.Key == "Escape")
         {

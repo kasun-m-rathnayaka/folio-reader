@@ -1,0 +1,105 @@
+@using Folio.Domain.OCR
+@using Folio.Domain.Theme
+
+<div class="folio-reflow-container" style="background-color: var(--folio-paper-bg, #141414); color: var(--folio-paper-ink, #E0E0E0); height: 100%; width: 100%; overflow-y: auto; position: relative;">
+    <!-- Top Reflow Settings Bar -->
+    <div class="folio-reflow-toolbar d-flex align-center justify-space-between px-4 py-2"
+         style="background: #1A1A1A; border-bottom: 1px solid #2B2B2B; position: sticky; top: 0; z-index: 10;">
+        <div class="d-flex align-center gap-2">
+            <MudIcon Icon="@Icons.Material.Filled.WrapText" Size="Size.Small" Style="color: #1473E6;" />
+            <span style="font-size: 13px; font-weight: 600; color: #FFFFFF;">Reflow Reading Mode</span>
+        </div>
+
+        <div class="d-flex align-center gap-4">
+            <!-- Font Size -->
+            <div class="d-flex align-center gap-1">
+                <button class="folio-subtle-btn" style="width: 24px; height: 24px; padding: 0;"
+                        @onclick="@(() => AdjustFontSize(-1))" title="Decrease Font">
+                    <MudIcon Icon="@Icons.Material.Filled.Remove" Size="Size.Small" />
+                </button>
+                <span style="font-size: 12px; min-width: 36px; text-align: center; color: #E0E0E0;">@(_fontSize)px</span>
+                <button class="folio-subtle-btn" style="width: 24px; height: 24px; padding: 0;"
+                        @onclick="@(() => AdjustFontSize(1))" title="Increase Font">
+                    <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" />
+                </button>
+            </div>
+
+            <!-- Column Width -->
+            <div class="d-flex align-center gap-1">
+                <button class="folio-subtle-btn" style="font-size: 11px; padding: 2px 8px;"
+                        @onclick="CycleColumnWidth" title="Cycle Column Width">
+                    Width: @(_maxWidth)px
+                </button>
+            </div>
+
+            <!-- Close Reflow Mode -->
+            <button class="folio-primary-btn" style="font-size: 12px; padding: 4px 12px;"
+                    @onclick="@(() => OnClose.InvokeAsync())" title="Return to Original PDF (T)">
+                Return to PDF (T)
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Reflow Content Body -->
+    <div class="mx-auto py-8 px-4"
+         style="max-width: @(_maxWidth)px; font-size: @(_fontSize)px; line-height: 1.8; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+        @if (Document == null || Document.Blocks.Count == 0)
+        {
+            <div class="text-center py-12" style="color: #9E9E9E;">
+                Preparing reflow text...
+            </div>
+        }
+        else
+        {
+            @foreach (var block in Document.Blocks)
+            {
+                @if (block.Kind == ReflowBlockKind.Heading1)
+                {
+                    <h1 style="font-size: 1.6em; font-weight: 700; margin: 1.5em 0 0.5em 0; color: #FFFFFF; cursor: pointer;"
+                        @onclick="@(() => OnSelectBlock.InvokeAsync(block.PageIndex))"
+                        title="Jump to Page @(block.PageIndex + 1)">
+                        @block.Text
+                    </h1>
+                }
+                else if (block.Kind == ReflowBlockKind.Heading2)
+                {
+                    <h2 style="font-size: 1.3em; font-weight: 600; margin: 1.2em 0 0.4em 0; color: #8C9EFF; cursor: pointer;"
+                        @onclick="@(() => OnSelectBlock.InvokeAsync(block.PageIndex))"
+                        title="Jump to Page @(block.PageIndex + 1)">
+                        @block.Text
+                    </h2>
+                }
+                else
+                {
+                    <p style="margin-bottom: 1.2em; text-align: justify; cursor: pointer;"
+                       @onclick="@(() => OnSelectBlock.InvokeAsync(block.PageIndex))"
+                       title="Click to view in PDF (Page @(block.PageIndex + 1))">
+                        @block.Text
+                    </p>
+                }
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public ReflowDocument? Document { get; set; }
+    [Parameter] public ThemeSettings ThemeSettings { get; set; } = ThemeSettings.Default;
+    [Parameter] public EventCallback<int> OnSelectBlock { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private int _fontSize = 17;
+    private int _maxWidth = 680;
+    private readonly int[] _widths = new[] { 560, 680, 820 };
+
+    private void AdjustFontSize(int delta)
+    {
+        _fontSize = Math.Clamp(_fontSize + delta, 12, 32);
+    }
+
+    private void CycleColumnWidth()
+    {
+        int idx = Array.IndexOf(_widths, _maxWidth);
+        _maxWidth = _widths[(idx + 1) % _widths.Length];
+    }
+}

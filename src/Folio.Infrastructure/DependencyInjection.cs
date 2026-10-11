@@ -51,6 +51,8 @@ public static class DependencyInjection
         services.AddScoped<IDatabaseMigrator, DatabaseMigrator>();
         services.AddSingleton<IPdfTextExtractor, Folio.Infrastructure.Extraction.PdfPigTextExtractor>();
         services.AddSingleton<IPdfRasterizer, Folio.Infrastructure.Rasterization.WinRtPdfRasterizer>();
+        services.AddSingleton<Folio.Application.OCR.IOcrService, Folio.Infrastructure.OCR.WindowsOcrService>();
+        services.AddSingleton<Folio.Application.Reflow.IReflowService, Folio.Infrastructure.Reflow.ReflowService>();
 
         services.AddSingleton<IBatteryMonitor, Folio.Infrastructure.Jobs.WindowsBatteryMonitor>();
         services.AddSingleton<Folio.Infrastructure.Jobs.BackgroundJobQueue>();

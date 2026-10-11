@@ -86,6 +86,15 @@
                        aria-label="Toggle Layout Mode" />
     </MudTooltip>
 
+    <!-- Reflow Mode Toggle (FR-RFL-01..05) -->
+    <MudTooltip Text="Reflow Text Mode (T)">
+        <MudIconButton Icon="@Icons.Material.Filled.WrapText"
+                       Size="Size.Small"
+                       Color="@(IsReflowMode ? Color.Primary : Color.Default)"
+                       OnClick="@(() => OnToggleReflow.InvokeAsync())"
+                       aria-label="Reflow Text Mode" />
+    </MudTooltip>
+
     <!-- Rotate Clockwise -->
     <MudTooltip Text="Rotate 90° Clockwise">
         <MudIconButton Icon="@Icons.Material.Filled.RotateRight"
@@ -168,12 +177,14 @@
     [Parameter] public bool IsDogEared { get; set; }
     [Parameter] public bool IsNotesOpen { get; set; }
     [Parameter] public bool IsAudioPlaying { get; set; }
+    [Parameter] public bool IsReflowMode { get; set; }
 
     [Parameter] public EventCallback OnBack { get; set; }
     [Parameter] public EventCallback OnToggleOutline { get; set; }
     [Parameter] public EventCallback OnToggleDogEar { get; set; }
     [Parameter] public EventCallback OnToggleNotes { get; set; }
     [Parameter] public EventCallback OnToggleAudio { get; set; }
+    [Parameter] public EventCallback OnToggleReflow { get; set; }
     [Parameter] public EventCallback OnOpenNotebook { get; set; }
     [Parameter] public EventCallback OnOpenStudyTools { get; set; }
     [Parameter] public EventCallback OnPrevPage { get; set; }
