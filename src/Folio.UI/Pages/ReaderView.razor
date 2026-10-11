@@ -6,6 +6,7 @@
 @using Folio.Domain.Entities
 @using Folio.Domain.Enums
 @using Folio.Domain.Geometry
+@using Folio.Domain.Theme
 @using Folio.UI.Components
 @using Folio.UI.Services
 @inject ReaderJsBridge ReaderBridge
@@ -71,11 +72,13 @@
             <InspectorPanel Outline="@_outline"
                             CurrentPageIndex="@_currentPageIndex"
                             LayoutMode="@_layoutMode"
+                            ThemeSettings="@_themeSettings"
                             OnSelectPage="@HandleSelectOutlinePage"
                             OnRotate="@RotateDegrees"
                             OnFitWidth="@HandleFitWidth"
                             OnFitPage="@HandleFitPage"
                             OnToggleLayout="@ToggleLayoutMode"
+                            OnThemeSettingsChanged="@HandleThemeSettingsChanged"
                             OnClose="@ToggleOutline" />
         }
 
@@ -94,6 +97,18 @@
                                OnAddNote="@HandleAddNoteFromSelection"
                                OnCopyQuote="@HandleCopyQuoteFromSelection"
                                OnDismiss="@HandleDismissSelection" />
+
+            <!-- Multi-Layer Physical Book & Lighting Stack (FR-FEL-01..03, §6.4) -->
+            <div class="folio-lighting-warmth" style="opacity: @(_themeSettings.WarmthAlpha.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture));"></div>
+            <div class="folio-lighting-dim" style="opacity: @(_themeSettings.DimAlpha.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture));"></div>
+            @if (_themeSettings.EnableVignette)
+            {
+                <div class="folio-lighting-vignette" style="opacity: 0.75;"></div>
+            }
+            @if (_themeSettings.EnableRuler)
+            {
+                <div id="folio-active-focus-ruler" class="folio-focus-ruler" style="display: block;"></div>
+            }
 
             <div class="folio-reader-loading">
                 Initializing reader...
@@ -133,6 +148,7 @@
     private bool _isNotesOpen = false;
     private List<AnnotationDto> _pageAnnotations = new();
     private Guid? _activeAnnotationId;
+    private ThemeSettings _themeSettings = ThemeSettings.Default;
 
     private bool _isSelectionBarVisible = false;
     private double _selectionClientX = 300;
@@ -507,6 +523,24 @@
         RecordActivity();
         _currentPageIndex = Math.Clamp(pageIndex, 0, _totalPages - 1);
         await ReaderBridge.GoToPageAsync(_currentPageIndex, 0.0);
+        StateHasChanged();
+    }
+
+    private async Task HandleThemeSettingsChanged(ThemeSettings settings)
+    {
+        RecordActivity();
+        _themeSettings = settings;
+        await ReaderBridge.ApplyThemeAsync(new
+        {
+            backgroundHex = settings.Theme.GetBackgroundHex(),
+            inkHex = settings.Theme.GetInkHex(),
+            cssFilter = settings.Theme.GetCssFilter(),
+            warmthAlpha = settings.WarmthAlpha,
+            dimAlpha = settings.DimAlpha,
+            vignetteOpacity = settings.EnableVignette ? 0.75 : 0.0
+        });
+
+        await ReaderBridge.SetFocusRulerAsync(settings.EnableRuler, settings.FocusLines > 0 ? settings.FocusLines : 1);
         StateHasChanged();
     }
 

@@ -1,5 +1,6 @@
 @using Folio.Application.Reading.DTOs
 @using Folio.Domain.Enums
+@using Folio.Domain.Theme
 
 <div class="folio-inspector-panel">
     <!-- Header: Title, Settings, Close (Matches screenshot) -->
@@ -117,7 +118,7 @@
     <div style="height: 1px; background-color: #2B2B2B; margin: 16px 0;"></div>
 
     <!-- Section 2: ADJUST OBJECTS & VIEW (Matches screenshot uppercase header) -->
-    <div class="mb-5">
+    <div class="mb-4">
         <div class="folio-section-label">ADJUST OBJECTS &amp; VIEW</div>
 
         <div class="folio-icon-button-grid mb-3">
@@ -141,7 +142,69 @@
         </div>
     </div>
 
-    <div style="height: 1px; background-color: #2B2B2B; margin: 16px 0;"></div>
+    <div style="height: 1px; background-color: #2B2B2B; margin: 12px 0;"></div>
+
+    <!-- Section 3: READING THEMES & LIGHTING (FR-FEL-01..03, §6.4) -->
+    <div class="mb-4">
+        <div class="folio-section-label">READING THEME</div>
+        <div class="d-flex flex-wrap gap-1 mb-3">
+            @foreach (var theme in Enum.GetValues<ReadingTheme>())
+            {
+                <button class="folio-subtle-btn @(ThemeSettings.Theme == theme ? "active" : "")"
+                        style="font-size: 11px; padding: 4px 8px; display: flex; align-items: center; gap: 4px;"
+                        @onclick="@(() => SelectTheme(theme))">
+                    <span style="width: 10px; height: 10px; border-radius: 50%; background-color: @theme.GetBackgroundHex(); border: 1px solid #555555;"></span>
+                    @theme
+                </button>
+            }
+        </div>
+
+        <div class="d-flex justify-space-between align-center mb-1">
+            <span style="font-size: 11px; color: #8C8C8C;">WARMTH (@ThemeSettings.WarmthPercent%)</span>
+        </div>
+        <MudSlider T="int"
+                   Value="@ThemeSettings.WarmthPercent"
+                   ValueChanged="@HandleWarmthChanged"
+                   Min="0"
+                   Max="100"
+                   Size="Size.Small"
+                   Color="Color.Warning"
+                   Class="mb-3" />
+
+        <div class="d-flex justify-space-between align-center mb-1">
+            <span style="font-size: 11px; color: #8C8C8C;">BRIGHTNESS (@ThemeSettings.BrightnessPercent%)</span>
+        </div>
+        <MudSlider T="int"
+                   Value="@ThemeSettings.BrightnessPercent"
+                   ValueChanged="@HandleBrightnessChanged"
+                   Min="40"
+                   Max="100"
+                   Size="Size.Small"
+                   Color="Color.Primary"
+                   Class="mb-3" />
+
+        <MudSwitch T="bool"
+                   Value="@ThemeSettings.EnableVignette"
+                   ValueChanged="@HandleVignetteChanged"
+                   Label="Lamp Vignette"
+                   Color="Color.Primary"
+                   Size="Size.Small" />
+    </div>
+
+    <div style="height: 1px; background-color: #2B2B2B; margin: 12px 0;"></div>
+
+    <!-- Section 4: FOCUS AIDS (FR-FEL-04) -->
+    <div class="mb-4">
+        <div class="folio-section-label">FOCUS AIDS</div>
+        <MudSwitch T="bool"
+                   Value="@ThemeSettings.EnableRuler"
+                   ValueChanged="@HandleRulerChanged"
+                   Label="Reading Ruler"
+                   Color="Color.Primary"
+                   Size="Size.Small" />
+    </div>
+
+    <div style="height: 1px; background-color: #2B2B2B; margin: 12px 0;"></div>
 
     <!-- Section 3: MODIFY PAGE & CONTENTS (Matches screenshot uppercase header) -->
     <div style="flex: 1; overflow-y: auto;">
@@ -176,6 +239,38 @@
     [Parameter] public EventCallback OnFitPage { get; set; }
     [Parameter] public EventCallback OnToggleLayout { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public ThemeSettings ThemeSettings { get; set; } = ThemeSettings.Default;
+    [Parameter] public EventCallback<ThemeSettings> OnThemeSettingsChanged { get; set; }
+
+    private async Task SelectTheme(ReadingTheme theme)
+    {
+        var updated = ThemeSettings with { Theme = theme };
+        await OnThemeSettingsChanged.InvokeAsync(updated);
+    }
+
+    private async Task HandleWarmthChanged(int warmth)
+    {
+        var updated = ThemeSettings with { WarmthPercent = warmth };
+        await OnThemeSettingsChanged.InvokeAsync(updated);
+    }
+
+    private async Task HandleBrightnessChanged(int brightness)
+    {
+        var updated = ThemeSettings with { BrightnessPercent = brightness };
+        await OnThemeSettingsChanged.InvokeAsync(updated);
+    }
+
+    private async Task HandleVignetteChanged(bool enabled)
+    {
+        var updated = ThemeSettings with { EnableVignette = enabled };
+        await OnThemeSettingsChanged.InvokeAsync(updated);
+    }
+
+    private async Task HandleRulerChanged(bool enabled)
+    {
+        var updated = ThemeSettings with { EnableRuler = enabled };
+        await OnThemeSettingsChanged.InvokeAsync(updated);
+    }
 
     private string _fontFamily = "Segoe UI";
     private int _fontSize = 14;

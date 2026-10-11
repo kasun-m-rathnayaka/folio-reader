@@ -52,6 +52,17 @@ class FolioReaderEngine {
         window.addEventListener('mousemove', (e) => this.handleSnipMouseMove(e));
         window.addEventListener('mouseup', (e) => this.handleSnipMouseUp(e));
 
+        // Reading focus ruler tracking (FR-FEL-04)
+        this.container.addEventListener('mousemove', (e) => {
+            if (!this.isRulerEnabled) return;
+            const ruler = document.getElementById('folio-active-focus-ruler');
+            if (ruler) {
+                const rect = this.container.getBoundingClientRect();
+                const y = e.clientY - rect.top;
+                ruler.style.top = `${y - (ruler.offsetHeight / 2)}px`;
+            }
+        });
+
         // Keyboard navigation
         window.addEventListener('keydown', (e) => this.handleKeyDown(e));
 
@@ -772,6 +783,33 @@ class FolioReaderEngine {
         } else if (e.key === 'End') {
             e.preventDefault();
             this.goToPage(this.totalPages - 1, 0);
+        }
+    }
+
+    applyTheme(theme) {
+        if (!this.container) return;
+
+        this.container.style.setProperty('--folio-paper-bg', theme.backgroundHex || '#FFFFFF');
+        this.container.style.setProperty('--folio-paper-ink', theme.inkHex || '#1B1B1B');
+        this.container.style.setProperty('--folio-warmth-alpha', theme.warmthAlpha || 0);
+        this.container.style.setProperty('--folio-dim-alpha', theme.dimAlpha || 0);
+        this.container.style.setProperty('--folio-vignette-opacity', theme.vignetteOpacity || 0);
+        this.container.style.setProperty('--folio-grain-opacity', theme.grainOpacity || 0);
+
+        // Instant canvas recoloring for night/black themes (<= 150 ms without re-render)
+        const canvasFilter = theme.cssFilter || 'none';
+        this.container.querySelectorAll('.folio-canvas-layer').forEach(el => {
+            el.style.filter = canvasFilter;
+        });
+    }
+
+    setFocusRuler(enabled, lines = 1) {
+        this.isRulerEnabled = enabled;
+        this.focusLines = lines;
+        const ruler = document.getElementById('folio-active-focus-ruler');
+        if (ruler) {
+            ruler.style.display = enabled ? 'block' : 'none';
+            ruler.style.height = `${Math.max(28, lines * 28)}px`;
         }
     }
 

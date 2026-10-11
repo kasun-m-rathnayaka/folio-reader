@@ -100,6 +100,16 @@ public class ReaderJsBridge : IAsyncDisposable
         await _jsRuntime.InvokeVoidAsync("folioReader.clearSelectionBox");
     }
 
+    public async ValueTask ApplyThemeAsync(object themeConfig)
+    {
+        await _jsRuntime.InvokeVoidAsync("folioReader.applyTheme", themeConfig);
+    }
+
+    public async ValueTask SetFocusRulerAsync(bool enabled, int lines = 1)
+    {
+        await _jsRuntime.InvokeVoidAsync("folioReader.setFocusRuler", enabled, lines);
+    }
+
     public async ValueTask DisposeAsync()
     {
         try
