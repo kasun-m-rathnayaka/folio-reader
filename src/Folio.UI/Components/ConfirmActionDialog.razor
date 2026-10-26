@@ -1,0 +1,35 @@
+<MudDialog Class="folio-shelf-dialog folio-confirm-dialog">
+    <TitleContent>
+        <div class="folio-confirm-heading"><span class="folio-confirm-icon" aria-hidden="true"><MudIcon Icon="@Icons.Material.Outlined.DeleteOutline" /></span><h2>@Title</h2></div>
+    </TitleContent>
+    <DialogContent>
+        @if (!string.IsNullOrWhiteSpace(Subject)) { <div class="folio-confirm-subject">@Subject</div> }
+        <p class="folio-confirm-message">@Message</p>
+        @if (!string.IsNullOrWhiteSpace(Detail)) { <p class="folio-confirm-detail">@Detail</p> }
+    </DialogContent>
+    <DialogActions>
+        <button @ref="_cancel" type="button" class="folio-subtle-btn" @onclick="() => Dialog.Cancel()">Cancel</button>
+        <button type="button" class="folio-danger-btn" @onclick="() => Dialog.Close(DialogResult.Ok(true))">@ConfirmText</button>
+    </DialogActions>
+</MudDialog>
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public string Title { get; set; } = "Confirm action";
+    [Parameter] public string Message { get; set; } = "";
+    [Parameter] public string? Subject { get; set; }
+    [Parameter] public string? Detail { get; set; }
+    [Parameter] public string ConfirmText { get; set; } = "Delete";
+    private ElementReference _cancel;
+    protected override async Task OnAfterRenderAsync(bool firstRender) { if (firstRender) await _cancel.FocusAsync(); }
+
+    public static async Task<bool> ShowAsync(IDialogService dialogs, string title, string message, string confirmText, string? subject = null, string? detail = null)
+    {
+        var parameters = new DialogParameters<ConfirmActionDialog>
+        {
+            { x => x.Title, title }, { x => x.Message, message }, { x => x.ConfirmText, confirmText },
+            { x => x.Subject, subject }, { x => x.Detail, detail }
+        };
+        var dialog = await dialogs.ShowAsync<ConfirmActionDialog>(title, parameters, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small });
+        return await dialog.Result is { Canceled: false, Data: true };
+    }
+}

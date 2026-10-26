@@ -1,5 +1,4 @@
 using Folio.Application;
-using Folio.AI;
 using Folio.Application.Common.Interfaces;
 using Folio.Application.Reading;
 using Folio.Domain.Entities;
@@ -18,7 +17,7 @@ public class CompositionTests
         try
         {
             var services=new ServiceCollection(); services.AddLogging();
-            services.AddFolioInfrastructure(o=>o.RootDirectory=root); services.AddFolioApplication(); services.AddFolioAI();
+            services.AddFolioInfrastructure(o=>o.RootDirectory=root); services.AddFolioApplication();
             await using var provider=services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes=true, ValidateOnBuild=true });
             var book=new Book { Sha256=new string('d',64), Title="Composed library", FilePath="fixture.pdf", PageCount=300,
                 ReadingPosition=new() { PageIndex=0, Zoom=1 } };

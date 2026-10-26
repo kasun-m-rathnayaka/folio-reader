@@ -1,0 +1,39 @@
+@inject ILibraryService Library
+@inject IDialogService Dialogs
+<MudDialog Class="folio-shelf-dialog">
+    <TitleContent><h2>Manage shelves</h2></TitleContent>
+    <DialogContent>
+        <p class="folio-muted">Rename shelves or move them into your preferred order. Deleting a shelf keeps its books.</p>
+        <div class="folio-manage-shelves">
+            @for (var i = 0; i < _shelves.Count; i++)
+            {
+                var shelf = _shelves[i]; var index = i;
+                <div class="folio-manage-shelf" @key="shelf.Id">
+                    <input class="folio-input-field" aria-label="@($"Name for {shelf.Name}")" maxlength="100" @bind="shelf.Name" @bind:event="oninput" disabled="@_busy" />
+                    <button class="folio-subtle-btn" disabled="@_busy" @onclick="() => Rename(shelf)">Save</button>
+                    <button class="folio-icon-button" title="Move up" aria-label="Move shelf up" disabled="@(_busy || index == 0)" @onclick="() => Move(shelf, -1)"><MudIcon Icon="@Icons.Material.Filled.KeyboardArrowUp" /></button>
+                    <button class="folio-icon-button" title="Move down" aria-label="Move shelf down" disabled="@(_busy || index == _shelves.Count - 1)" @onclick="() => Move(shelf, 1)"><MudIcon Icon="@Icons.Material.Filled.KeyboardArrowDown" /></button>
+                    <button class="folio-icon-button" title="Delete shelf" aria-label="Delete shelf" disabled="@_busy" @onclick="() => Delete(shelf)"><MudIcon Icon="@Icons.Material.Outlined.Delete" /></button>
+                </div>
+            }
+        </div>
+        @if (_shelves.Count == 0) { <p class="folio-muted">No shelves yet. Create one from the sidebar.</p> }
+        <p class="folio-error-text" role="alert">@_error</p>
+    </DialogContent>
+    <DialogActions><button class="folio-primary-btn" disabled="@_busy" @onclick="() => Dialog.Close(DialogResult.Ok(true))">Done</button></DialogActions>
+</MudDialog>
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    private IReadOnlyList<Shelf> _shelves = [];
+    private bool _busy; private string? _error;
+    protected override async Task OnInitializedAsync() => await Refresh();
+    private async Task Refresh() => _shelves = await Library.GetShelvesAsync();
+    private async Task Run(Func<Task> action) { if (_busy) return; _busy = true; _error = null; try { await action(); await Refresh(); } catch (Exception ex) { _error = ex.Message; } finally { _busy = false; } }
+    private Task Rename(Shelf shelf) => Run(() => Library.RenameShelfAsync(shelf.Id, shelf.Name));
+    private Task Move(Shelf shelf, int direction) => Run(() => Library.MoveShelfAsync(shelf.Id, direction));
+    private async Task Delete(Shelf shelf)
+    {
+        if (await ConfirmActionDialog.ShowAsync(Dialogs, "Delete shelf?", "Remove this shelf from your library?", "Delete shelf", shelf.Name, "Your books and notes will stay in the library."))
+            await Run(() => Library.DeleteShelfAsync(shelf.Id));
+    }
+}

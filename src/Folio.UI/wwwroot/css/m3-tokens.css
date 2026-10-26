@@ -49,6 +49,7 @@ p { margin:0 0 12px; line-height:1.55; }
 .folio-sidebar > :not(.folio-shelves-list) { flex-shrink:0; }
 .folio-brand { display:flex; align-items:center; gap:12px; color:var(--folio-text-primary); background:none; border:0; padding:0 10px 25px; text-align:left; }
 .folio-brand-icon { display:grid; place-items:center; flex-shrink:0; width:38px; height:38px; border-radius:11px; background:var(--md-sys-color-primary-container); color:var(--md-sys-color-primary); }
+.folio-brand-icon img { display:block; width:30px; height:30px; object-fit:contain; }
 .folio-brand-name { font-size:24px; font-weight:600; letter-spacing:-.5px; }
 .folio-brand-caption { display:block; font-size:8px; color:var(--folio-text-muted); letter-spacing:.14em; margin-top:2px; }
 .folio-nav-section { font-size:9px; letter-spacing:.13em; color:var(--folio-text-muted); font-weight:600; padding:20px 12px 9px; }
@@ -166,6 +167,17 @@ select { color:var(--folio-text-primary); background:var(--md-sys-color-surface)
 .folio-shelf-dialog .mud-dialog-actions { padding:8px 24px 24px; gap:8px; }
 .folio-shelf-dialog input { width:100%; }
 .folio-shelf-dialog .folio-error-text { min-height:18px; margin:8px 0 0; font-size:12px; }
+.folio-confirm-heading { display:flex; align-items:center; gap:12px; }
+.folio-confirm-heading h2 { margin:0; line-height:1.4; }
+.folio-confirm-icon { display:grid; place-items:center; flex-shrink:0; width:40px; height:40px; border-radius:10px; color:var(--md-sys-color-error); background:var(--md-sys-color-surface-container-high); }
+.folio-confirm-subject { margin:4px 0 16px; padding:12px 14px; border:1px solid var(--md-sys-color-outline-variant); border-radius:8px; background:var(--md-sys-color-surface-container-low); font-size:14px; font-weight:600; line-height:1.5; overflow-wrap:anywhere; }
+.folio-confirm-message { font-size:14px; line-height:1.65; margin:0 0 10px; }
+.folio-confirm-detail { font-size:12px; line-height:1.6; color:var(--folio-text-secondary); margin:0 0 12px; }
+.folio-confirm-dialog .mud-dialog-actions { flex-wrap:wrap; padding-top:12px; border-top:1px solid var(--md-sys-color-outline-variant); margin-top:8px; }
+.folio-confirm-dialog .mud-dialog-actions > button { min-height:40px; padding:9px 16px; font-size:13px; }
+.folio-danger-btn { display:inline-flex; align-items:center; justify-content:center; border:1px solid transparent; border-radius:8px; background:var(--md-sys-color-error); color:#290a0a; font:inherit; font-weight:600; }
+.folio-danger-btn:hover { filter:brightness(.94); }
+:root[data-theme="light"] .folio-danger-btn, [data-theme="light"] .folio-danger-btn { color:#fff; }
 .folio-book-details-dialog .mud-dialog-content { overflow-y:auto; }
 .folio-book-shelf-options { max-height:min(220px, 25vh); overflow-y:auto; overflow-x:hidden; border:1px solid var(--md-sys-color-outline-variant); border-radius:8px; padding:4px; scrollbar-gutter:stable; overscroll-behavior:contain; }
 .folio-book-shelf-option { display:flex; align-items:center; gap:12px; min-height:40px; padding:8px 10px; border-radius:5px; font-size:13px; cursor:pointer; }
@@ -183,7 +195,7 @@ select { color:var(--folio-text-primary); background:var(--md-sys-color-surface)
 .folio-action-menu .folio-menu-selected { background:var(--md-sys-color-primary-container); color:var(--md-sys-color-on-primary-container); }
 .folio-action-menu .folio-menu-danger, .folio-action-menu .folio-menu-danger .mud-menu-item-icon { color:var(--md-sys-color-error); }
 .folio-book-menu > .mud-menu > button { background:var(--md-sys-color-surface); border:1px solid var(--md-sys-color-outline-variant); color:var(--folio-text-secondary); }
-.folio-notification-center { position:fixed; bottom:20px; right:20px; width:min(380px, calc(100vw - 32px)); max-height:calc(100vh - 40px); overflow:auto; display:flex; flex-direction:column; gap:12px; z-index:1500; pointer-events:none; padding:4px; }
+.folio-notification-center { position:fixed; bottom:20px; right:20px; width:min(380px, calc(100vw - 32px)); max-height:calc(100vh - 40px); overflow:auto; display:flex; flex-direction:column; gap:12px; z-index:1200; pointer-events:none; padding:4px; }
 .folio-notification-card { flex-shrink:0; border:1px solid var(--md-sys-color-outline); background:var(--md-sys-color-surface); color:var(--folio-text-primary); border-radius:12px; padding:16px; box-shadow:0 8px 24px #0003; pointer-events:auto; overflow-wrap:anywhere; }
 .folio-notification-heading { display:flex; align-items:center; gap:9px; margin-bottom:8px; font-size:13px; }
 .folio-notification-heading strong { flex:1; }

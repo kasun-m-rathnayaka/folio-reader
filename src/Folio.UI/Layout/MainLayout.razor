@@ -8,6 +8,7 @@
 @inject IJSRuntime JS
 @inject NotificationService Notifications
 @inject IDialogService Dialogs
+@inject ImportInbox Inbox
 
 <MudThemeProvider Theme="_theme" IsDarkMode="@Preferences.Current.DarkMode" />
 <MudPopoverProvider />
@@ -16,7 +17,7 @@
     <div class="folio-library-shell @(Preferences.Current.SidebarCollapsed ? "sidebar-collapsed" : "")" style="display: @(_book == null ? "flex" : "none");">
         <aside class="folio-sidebar" aria-label="Main navigation">
             <button class="folio-brand" @onclick='() => Navigate("Library")' aria-label="Folio home" title="Folio home">
-                <span class="folio-brand-icon"><MudIcon Icon="@Icons.Material.Outlined.LocalLibrary" /></span>
+                <span class="folio-brand-icon"><img src="_content/Folio.UI/images/folio-logo.png" alt="" /></span>
                 <span class="folio-brand-name">Folio<span class="folio-brand-caption">YOUR READING SPACE</span></span>
             </button>
             <div class="folio-nav-section">WORKSPACE</div>
@@ -26,7 +27,7 @@
             <button class="folio-nav-link @FilterActive(ReadingStatus.Reading)" @onclick="() => Filter(ReadingStatus.Reading)" title="Currently reading"><MudIcon Icon="@Icons.Material.Outlined.AutoStories" /><span>Currently reading</span><small>@_counts.Reading</small></button>
             <button class="folio-nav-link @FilterActive(ReadingStatus.WantToRead)" @onclick="() => Filter(ReadingStatus.WantToRead)" title="Want to read"><MudIcon Icon="@Icons.Material.Outlined.BookmarkBorder" /><span>Want to read</span><small>@_counts.WantToRead</small></button>
             <button class="folio-nav-link @FilterActive(ReadingStatus.Finished)" @onclick="() => Filter(ReadingStatus.Finished)" title="Finished"><MudIcon Icon="@Icons.Material.Outlined.CheckCircle" /><span>Finished</span><small>@_counts.Finished</small></button>
-            <div class="folio-nav-section folio-shelves-heading"><span>SHELVES</span><button aria-label="Create shelf" title="Create shelf" @onclick="CreateShelf"><MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" /></button></div>
+            <div class="folio-nav-section folio-shelves-heading"><span>SHELVES</span><div class="folio-shelf-actions"><button aria-label="Manage shelves" title="Manage shelves" @onclick="ManageShelves"><MudIcon Icon="@Icons.Material.Outlined.Tune" Size="Size.Small" /></button><button aria-label="Create shelf" title="Create shelf" @onclick="CreateShelf"><MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" /></button></div></div>
             <div class="folio-shelves-list" role="region" aria-label="Shelves" tabindex="0">
                 @foreach (var shelf in _shelves)
                 {
@@ -46,17 +47,19 @@
                 @if (_nav != "Settings")
                 {
                 <label class="folio-global-search"><MudIcon Icon="@Icons.Material.Outlined.Search" Size="Size.Small" />
-                    <input id="folio-library-search" aria-label="@(_nav == "Notebook" ? "Search notebook" : "Search titles and authors")" placeholder="@(_nav == "Notebook" ? "Search notes and highlights…" : "Search titles and authors…")" @bind="_search" @bind:event="oninput" /><kbd>Ctrl K</kbd>
+                    <input id="folio-library-search" aria-label="@(_nav == "Notebook" ? "Search notebook" : "Search library")" placeholder="@(_nav == "Notebook" ? "Search notes and highlights…" : "Search library… Enter for PDF text")" @bind="_search" @bind:event="oninput" @onkeydown="SearchKey" /><kbd>Ctrl K</kbd>
                 </label>
                 }
                 else { <span class="folio-header-spacer"></span> }
                 <button class="folio-icon-button" @onclick="ToggleTheme" aria-label="Toggle light and dark theme"><MudIcon Icon="@(Preferences.Current.DarkMode ? Icons.Material.Outlined.LightMode : Icons.Material.Outlined.DarkMode)" Size="Size.Small" /></button>
                 <button class="folio-primary-btn" @onclick="ImportBooks" disabled="@_importing"><MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" />Add books</button>
+                <button class="folio-icon-button" title="Import folder" aria-label="Import folder" @onclick="ImportFolder" disabled="@_importing"><MudIcon Icon="@Icons.Material.Outlined.CreateNewFolder" /></button>
             </header>
             <main class="folio-page-body">
                 @if (_nav is "Library" or "Trash") { <LibraryView @ref="_libraryView" SearchQuery="@_search" StatusFilter="@_status" Shelf="@_shelf" Trash="@(_nav == "Trash")" OnOpenBook="OpenBook" OnImport="ImportBooks" OnChanged="RefreshNavigation" /> }
                 else if (_nav == "Notebook") { <LibraryNotebook Search="@_search" OnOpen="OpenNote" /> }
                 else if (_nav == "Settings") { <SettingsView OnPreferencesChanged="ApplyPreferences" /> }
+                else if (_nav == "Search") { <LibrarySearchView Query="@_search" OnOpen="OpenNote" /> }
             </main>
         </section>
     </div>
@@ -97,8 +100,9 @@
     private string HeaderTitle => _shelf?.Name ?? (_status?.ToString() switch { "WantToRead" => "Want to read", "Reading" => "Currently reading", "Finished" => "Finished", _ => _nav });
     private string Active(string nav) => _nav == nav && _status == null && _shelf == null ? "active" : "";
     private string FilterActive(ReadingStatus status) => _nav == "Library" && _status == status ? "active" : "";
-    protected override async Task OnInitializedAsync() => await RefreshNavigation();
-    protected override async Task OnAfterRenderAsync(bool firstRender) { if (firstRender) await ApplyPreferences(); }
+    protected override async Task OnInitializedAsync() { Inbox.Changed += ImportQueued; await RefreshNavigation(); }
+    protected override async Task OnAfterRenderAsync(bool firstRender) { if (firstRender) { await ApplyPreferences(); await DrainImports(); } }
+    private void SearchKey(KeyboardEventArgs e) { if (e.Key == "Enter" && _nav != "Notebook") { _nav = "Search"; _shelf = null; _status = null; } }
     private async Task RefreshNavigation() { _counts = await Library.GetCountsAsync(); _shelves = await Library.GetShelvesAsync(); }
     private void Navigate(string nav) { _nav = nav; _status = null; _shelf = null; _search = ""; }
     private void Filter(ReadingStatus status) { Navigate("Library"); _status = status; }
@@ -106,6 +110,16 @@
     private async Task ToggleTheme() { Preferences.Save(Preferences.Current with { DarkMode = !Preferences.Current.DarkMode }); await ApplyPreferences(); }
     private async Task ToggleSidebar() { Preferences.Save(Preferences.Current with { SidebarCollapsed = !Preferences.Current.SidebarCollapsed }); await ApplyPreferences(); }
     private async Task ApplyPreferences() { await JS.InvokeVoidAsync("folioShell.applyPreferences", Preferences.Current); StateHasChanged(); }
+    private async Task ManageShelves()
+    {
+        var dialog = await Dialogs.ShowAsync<ManageShelvesDialog>("Manage shelves", new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium });
+        await dialog.Result;
+        await RefreshNavigation();
+        if (_shelf != null) { _shelf = _shelves.FirstOrDefault(s => s.Id == _shelf.Id); if (_shelf == null) Navigate("Library"); }
+    }
+    private void ImportQueued() => _ = InvokeAsync(DrainImports);
+    private async Task DrainImports() { if (_importing) return; while (Inbox.TryTake(out var paths)) await ImportPaths(paths!); }
+    private async Task ImportFolder() { var folder = await FilePicker.PickFolderAsync(); if (folder != null) await ImportPaths([folder]); }
     private bool _creatingShelf;
     private async Task CreateShelf()
     {
@@ -129,10 +143,17 @@
     {
         if (_importing) return;
         var paths = await FilePicker.PickPdfFilesAsync();
-        if (paths.Count == 0) return;
+        await ImportPaths(paths);
+    }
+    private async Task ImportPaths(IReadOnlyList<string> sources)
+    {
+        if (sources.Count == 0) return;
+        if (_importing) { Inbox.Add(sources); return; }
         _importing = true; _importCancelled = false; _importProgress = 0; _importResults.Clear(); _importCancellation = new();
         try
         {
+            var paths = await Task.Run(() => ImportInbox.Expand(sources, _importCancellation.Token), _importCancellation.Token);
+            if (paths.Count == 0) { Notifications.Add("No PDF files were found in the selected files or folders.", Severity.Info); return; }
             await using var scope = Scopes.CreateAsyncScope();
             var importer = scope.ServiceProvider.GetRequiredService<IBookImportService>();
             for (var index = 0; index < paths.Count; index++)
@@ -145,7 +166,9 @@
             }
         }
         catch (OperationCanceledException) { _importCancelled = true; Notifications.Add("Import stopped. Books already added are kept.", Severity.Info); }
-        finally { _importing = false; _importCancellation.Dispose(); _importCancellation = null; await RefreshNavigation(); if (_libraryView != null) await _libraryView.RefreshAsync(); }
+        catch (Exception ex) { Notifications.Add(ex.Message, Severity.Error, "Import failed"); }
+        finally { _importing = false; _importCancellation.Dispose(); _importCancellation = null; await RefreshNavigation(); if (_libraryView != null) await _libraryView.RefreshAsync(); StateHasChanged(); }
+        await DrainImports();
     }
-    public void Dispose() { _importCancellation?.Cancel(); }
+    public void Dispose() { Inbox.Changed -= ImportQueued; _importCancellation?.Cancel(); }
 }

@@ -1,0 +1,54 @@
+@using Folio.Application.Search
+@using Microsoft.Extensions.DependencyInjection
+@implements IDisposable
+@inject IServiceScopeFactory Scopes
+@inject IDocumentTextService Text
+<section class="folio-notebook-page">
+    <div class="folio-eyebrow">ACROSS YOUR LIBRARY</div><h1>Search PDF contents</h1>
+    <p class="folio-muted">Find words inside PDFs, notes, bookmarks, and book details. Scanned pages use offline Windows OCR.</p>
+    @if (_busy) { <p role="status">@_status</p><MudProgressLinear Indeterminate="true" Color="Color.Primary" /><button class="folio-subtle-btn" @onclick="Cancel">Cancel search</button> }
+    @if (_error != null) { <p class="folio-error-text" role="alert">@_error</p> }
+    @if (_warnings.Count > 0) { <details class="folio-index-warnings"><summary>Some PDFs could not be indexed</summary>@foreach (var warning in _warnings) { <p>@warning</p> }</details> }
+    @if (!_busy && string.IsNullOrWhiteSpace(Query)) { <p>Enter a phrase in the search box.</p> }
+    @foreach (var result in _results)
+    {
+        <button class="folio-search-result" @onclick="() => OnOpen.InvokeAsync((result.BookId, result.PageIndex))">
+            <strong>@result.BookTitle</strong><small>@result.Author · Page @(result.PageIndex + 1) · @result.Type</small><span>@result.Snippet</span>
+        </button>
+    }
+    @if (!_busy && _ran && _results.Count == 0 && _error == null) { <p>No matches found.</p> }
+    @if (!_busy && !string.IsNullOrWhiteSpace(Query)) { <button class="folio-subtle-btn" @onclick="Retry">Search again</button> }
+</section>
+@code {
+    [Parameter] public string Query { get; set; } = "";
+    [Parameter] public EventCallback<(Guid BookId, int PageIndex)> OnOpen { get; set; }
+    private IReadOnlyList<SearchResultDto> _results = [];
+    private readonly List<string> _warnings = [];
+    private string? _last, _error; private string _status = "Preparing search…";
+    private bool _busy, _ran, _disposed;
+    private CancellationTokenSource? _cancellation;
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_last == Query) return;
+        _last = Query; _cancellation?.Cancel();
+        var cancellation = new CancellationTokenSource(); _cancellation = cancellation;
+        _results = []; _warnings.Clear(); _error = null; _ran = false; _busy = !string.IsNullOrWhiteSpace(Query);
+        if (!_busy) { _cancellation = null; cancellation.Dispose(); return; }
+        var query = Query;
+        try
+        {
+            await Task.Delay(500, cancellation.Token);
+            var progress = new Progress<TextIndexProgress>(p => { if (!_disposed && !cancellation.IsCancellationRequested) { if (p.Total == 0) _warnings.Add(p.BookTitle); else _status = $"Indexing {p.BookTitle}: page {p.Page} of {p.Total}"; _ = InvokeAsync(StateHasChanged); } });
+            await Text.IndexLibraryAsync(progress, cancellation.Token);
+            await using var scope = Scopes.CreateAsyncScope();
+            var results = await scope.ServiceProvider.GetRequiredService<ISearchService>().SearchLibraryAsync(query, cancellation.Token);
+            if (_cancellation == cancellation) { _results = results; _ran = true; }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { if (_cancellation == cancellation) _error = ex.Message; }
+        finally { if (_cancellation == cancellation) { _busy = false; _cancellation = null; } cancellation.Dispose(); }
+    }
+    private void Cancel() { _cancellation?.Cancel(); _busy = false; }
+    private async Task Retry() { _last = null; await OnParametersSetAsync(); }
+    public void Dispose() { _disposed = true; _cancellation?.Cancel(); }
+}

@@ -23,3 +23,19 @@ window.addEventListener('keydown', event => {
         if (search) { event.preventDefault(); search.focus(); search.select(); }
     }
 });
+
+// File objects cross the WebView boundary through WebView2's typed additionalObjects API.
+document.addEventListener('dragover', event => {
+    if (!event.dataTransfer?.types.includes('Files')) return;
+    event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; document.body.classList.add('folio-drop-active');
+});
+document.addEventListener('dragleave', event => { if (!event.relatedTarget) document.body.classList.remove('folio-drop-active'); });
+document.addEventListener('drop', async event => {
+    if (!event.dataTransfer?.types.includes('Files')) return;
+    event.preventDefault(); document.body.classList.remove('folio-drop-active');
+    const items = Array.from(event.dataTransfer.items), files = Array.from(event.dataTransfer.files);
+    try {
+        const handles = await Promise.all(items.map(item => item.getAsFileSystemHandle?.()));
+        window.chrome?.webview?.postMessageWithAdditionalObjects({kind:'import-drop'}, handles.every(Boolean) ? handles : files);
+    } catch { window.chrome?.webview?.postMessageWithAdditionalObjects({kind:'import-drop'}, files); }
+});

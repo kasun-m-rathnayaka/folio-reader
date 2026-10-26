@@ -29,7 +29,7 @@ public class LibrarySearchService : ISearchService
 
         // 1. Search Book Titles and Authors (Highest Rank)
         var matchedBooks = await _context.Books
-            .Where(b => EF.Functions.Like(b.Title, $"%{query}%") || (b.Author != null && EF.Functions.Like(b.Author, $"%{query}%")))
+            .Where(b => b.TrashedAt == null && (b.Title.ToLower().Contains(query.ToLower()) || (b.Author != null && b.Author.ToLower().Contains(query.ToLower()))))
             .Take(10)
             .ToListAsync(ct);
 
@@ -40,7 +40,7 @@ public class LibrarySearchService : ISearchService
                 BookTitle: book.Title,
                 Author: book.Author ?? "Unknown",
                 PageIndex: 0,
-                Snippet: $"Title match: **{book.Title}** by {book.Author ?? "Unknown"}",
+                Snippet: $"Title match: {book.Title} by {book.Author ?? "Unknown"}",
                 Type: SearchResultType.BookTitle,
                 Rank: 3.0
             ));
@@ -49,8 +49,8 @@ public class LibrarySearchService : ISearchService
         // 2. Search Annotations and Notes
         var matchedAnnotations = await _context.Annotations
             .Include(a => a.Book)
-            .Where(a => (a.SelectedText != null && EF.Functions.Like(a.SelectedText, $"%{query}%")) ||
-                        (a.Note != null && EF.Functions.Like(a.Note, $"%{query}%")))
+            .Where(a => a.Book != null && a.Book.TrashedAt == null && ((a.SelectedText != null && a.SelectedText.ToLower().Contains(query.ToLower())) ||
+                        (a.Note != null && a.Note.ToLower().Contains(query.ToLower()))))
             .Take(25)
             .ToListAsync(ct);
 
@@ -74,7 +74,7 @@ public class LibrarySearchService : ISearchService
         // 3. Search Bookmarks
         var matchedBookmarks = await _context.Bookmarks
             .Include(b => b.Book)
-            .Where(b => b.Label != null && EF.Functions.Like(b.Label, $"%{query}%"))
+            .Where(b => b.Book != null && b.Book.TrashedAt == null && b.Label != null && b.Label.ToLower().Contains(query.ToLower()))
             .Take(10)
             .ToListAsync(ct);
 
@@ -91,6 +91,15 @@ public class LibrarySearchService : ISearchService
             ));
         }
 
+        var pages = await _context.DocumentPages.AsNoTracking().Include(p => p.Book)
+            .Where(p => p.Book.TrashedAt == null && p.Text.ToLower().Contains(query.ToLower()))
+            .OrderBy(p => p.Book.Title).ThenBy(p => p.PageIndex).Take(100).ToListAsync(ct);
+        foreach (var page in pages)
+        {
+            var start = Math.Max(0, page.Text.IndexOf(query, StringComparison.OrdinalIgnoreCase) - 60);
+            var snippet = page.Text.Substring(start, Math.Min(240, page.Text.Length - start));
+            results.Add(new(page.BookId, page.Book.Title, page.Book.Author ?? "Unknown author", page.PageIndex, snippet, SearchResultType.PageText));
+        }
         return results.OrderByDescending(r => r.Rank).ToList();
     }
 }

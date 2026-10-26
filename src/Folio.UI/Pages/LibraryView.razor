@@ -9,7 +9,9 @@
 <section class="folio-library-page">
     <div class="folio-library-intro">
         <div><div class="folio-eyebrow">@(_isTrash ? "RECOVER YOUR BOOKS" : "A LITTLE SPACE TO READ")</div><h1>@Title</h1><p>@(_isTrash ? "Removed books keep their notes and reading position. Restore them whenever you need." : "Your books, your notes, your own pace.")</p></div>
-        <span class="folio-library-count">@_total @(_total == 1 ? "book" : "books")</span>
+        <div class="folio-controls-right"><span class="folio-library-count">@_total @(_total == 1 ? "book" : "books")</span>
+            @if (_isTrash && _total > 0) { <button class="folio-subtle-btn folio-error-text" @onclick="EmptyTrash">Empty Trash</button> }
+        </div>
     </div>
     @if (!_isTrash && StatusFilter == null && Shelf == null && string.IsNullOrWhiteSpace(SearchQuery) && _recent.Count > 0)
     {
@@ -37,7 +39,7 @@
     <div id="folio-library-grid" class="folio-books-scroll" style="display: @(_total > 0 && !_loading && _error == null ? "block" : "none");">
         <Virtualize @ref="_virtual" TItem="LibraryRow" ItemsProvider="LoadRows" ItemSize="@(_grid ? 340 : 88)" OverscanCount="2">
             <ItemContent Context="row"><div class="@(_grid ? "folio-book-row" : "folio-book-list-row")" style="@(_grid ? $"grid-template-columns: repeat({_columns}, minmax(0, 1fr));" : "")">
-                @foreach (var book in row.Books) { <BookCard @key="book.Id" Book="book" ListMode="@(!_grid)" Trash="@_isTrash" OnOpen="OnOpenBook" OnStatusChanged="StatusChanged" OnRemove="Remove" OnEdit="Edit" /> }
+                @foreach (var book in row.Books) { <BookCard @key="book.Id" Book="book" ListMode="@(!_grid)" Trash="@_isTrash" OnOpen="OnOpenBook" OnStatusChanged="StatusChanged" OnRemove="Remove" OnEdit="Edit" OnDelete="Delete" /> }
             </div></ItemContent>
             <Placeholder><div class="folio-row-placeholder" style="height: @(_grid ? "340px" : "88px");"><span>Loading books…</span></div></Placeholder>
         </Virtualize>
@@ -87,5 +89,17 @@
     private async Task StatusChanged((Book Book, ReadingStatus Status) change) { await Library.SetStatusAsync(change.Book.Id, change.Status); await RefreshAsync(); await OnChanged.InvokeAsync(); }
     private async Task Remove(Book book) { await Library.SetTrashAsync(book.Id, !_isTrash); Notifications.Add(_isTrash ? "Book restored with its notes and position." : "Moved to Trash. Your notes and position are kept.", Severity.Info); await RefreshAsync(); await OnChanged.InvokeAsync(); }
     private async Task Edit(Book book) { var dialog = await Dialogs.ShowAsync<EditBookDialog>("Book details", new DialogParameters<EditBookDialog> { { x => x.Book, book } }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small }); if (await dialog.Result is { Canceled: false }) { await RefreshAsync(); await OnChanged.InvokeAsync(); } }
+    private async Task Delete(Book book)
+    {
+        if (!await ConfirmActionDialog.ShowAsync(Dialogs, "Delete book permanently?", "This will remove this book and its saved notes from Folio.", "Delete permanently", book.Title, "This cannot be undone. Your original PDF is kept.")) return;
+        try { await Library.DeletePermanentlyAsync(book.Id); await RefreshAsync(); await OnChanged.InvokeAsync(); Notifications.Add("Book permanently deleted.", Severity.Success); }
+        catch (Exception ex) { Notifications.Add(ex.Message, Severity.Error); }
+    }
+    private async Task EmptyTrash()
+    {
+        if (!await ConfirmActionDialog.ShowAsync(Dialogs, "Empty Trash?", "Permanently delete every book in Trash and its saved notes?", "Empty Trash", detail: "This cannot be undone. Your original PDFs are kept.")) return;
+        try { await Library.EmptyTrashAsync(); await RefreshAsync(); await OnChanged.InvokeAsync(); Notifications.Add("Trash emptied.", Severity.Success); }
+        catch (Exception ex) { Notifications.Add(ex.Message, Severity.Error); }
+    }
     public async ValueTask DisposeAsync() { try { await JS.InvokeVoidAsync("folioShell.disconnectGrid"); } catch (JSDisconnectedException) { } _reference?.Dispose(); }
 }

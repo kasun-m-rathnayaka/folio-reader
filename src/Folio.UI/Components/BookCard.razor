@@ -7,7 +7,11 @@
         </div>
     </button>
     <div class="folio-book-menu"><MudMenu Icon="@Icons.Material.Filled.MoreHoriz" Size="Size.Small" PopoverClass="folio-action-menu" AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft" aria-label="@($"Actions for {Book.Title}")">
-        @if (Trash) { <MudMenuItem Icon="@Icons.Material.Outlined.Restore" OnClick="() => OnRemove.InvokeAsync(Book)">Restore book</MudMenuItem> }
+        @if (Trash)
+        {
+            <MudMenuItem Icon="@Icons.Material.Outlined.Restore" OnClick="() => OnRemove.InvokeAsync(Book)">Restore book</MudMenuItem>
+            <MudMenuItem Class="folio-menu-danger" Icon="@Icons.Material.Outlined.DeleteForever" OnClick="() => OnDelete.InvokeAsync(Book)">Delete permanently</MudMenuItem>
+        }
         else
         {
             <MudMenuItem Icon="@Icons.Material.Outlined.AutoStories" OnClick="() => OnOpen.InvokeAsync(Book)">Read book</MudMenuItem>
@@ -28,6 +32,7 @@
     [Parameter] public EventCallback<(Book, ReadingStatus)> OnStatusChanged { get; set; }
     [Parameter] public EventCallback<Book> OnRemove { get; set; }
     [Parameter] public EventCallback<Book> OnEdit { get; set; }
+    [Parameter] public EventCallback<Book> OnDelete { get; set; }
     private string StatusText => Book.Status switch { ReadingStatus.WantToRead => "Want to read", ReadingStatus.Reading => "Reading", _ => "Finished" };
     private int Progress => (int)Math.Clamp(100.0 * ((Book.ReadingPosition?.PageIndex ?? 0) + 1) / Math.Max(1, Book.PageCount), 0, 100);
 }

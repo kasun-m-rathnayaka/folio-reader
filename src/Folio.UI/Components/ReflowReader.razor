@@ -1,0 +1,35 @@
+@implements IDisposable
+@inject IDocumentTextService Text
+@inject IAppPreferencesService Preferences
+<section class="folio-reflow-view" aria-label="Reflow reading view">
+    <div class="folio-reflow-controls"><span>Text view · Page @(PageIndex + 1)</span>
+        <label>Text size <select aria-label="Text size" value="@_size" @onchange="ChangeSize"><option value="16">16</option><option value="20">20</option><option value="24">24</option><option value="28">28</option><option value="32">32</option></select></label>
+        <button class="folio-subtle-btn" @onclick="OnClose">Original page</button>
+    </div>
+    @if (_busy) { <p role="status">Preparing readable text…</p> }
+    else if (_error != null) { <p class="folio-error-text" role="alert">@_error</p> }
+    else if (string.IsNullOrWhiteSpace(_text)) { <p>No readable text was found on this page.</p> }
+    else { <article @key="PageIndex" class="folio-reflow-text" style="font-size:@(_size)px">@_text</article> }
+</section>
+@code {
+    [Parameter] public Guid BookId { get; set; }
+    [Parameter] public int PageIndex { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    private string? _text, _error; private bool _busy;
+    private int _size = 20, _lastPage = -1;
+    private CancellationTokenSource? _cancellation;
+    protected override void OnInitialized() => _size = Math.Clamp(Preferences.Current.ReflowFontSize, 16, 32);
+    protected override async Task OnParametersSetAsync()
+    {
+        if (PageIndex == _lastPage) return;
+        _lastPage = PageIndex; _cancellation?.Cancel();
+        var cancellation = new CancellationTokenSource(); _cancellation = cancellation;
+        _busy = true; _error = null;
+        try { var page = await Text.GetPageAsync(BookId, PageIndex, cancellation.Token); if (_cancellation == cancellation) _text = page.Text; }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { if (_cancellation == cancellation) _error = ex.Message; }
+        finally { if (_cancellation == cancellation) { _busy = false; _cancellation = null; } cancellation.Dispose(); }
+    }
+    private void ChangeSize(ChangeEventArgs e) { if (int.TryParse(e.Value?.ToString(), out var size)) { _size = Math.Clamp(size, 16, 32); Preferences.Save(Preferences.Current with { ReflowFontSize = _size }); } }
+    public void Dispose() => _cancellation?.Cancel();
+}

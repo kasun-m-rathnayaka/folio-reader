@@ -127,4 +127,56 @@ public class LibraryWorkflowTests : IDisposable
         Assert.Equal("A Reliable Reader", (await _library.QueryAsync(new())).Books.Single().Title);
     }
     public void Dispose() { SqliteConnection.ClearAllPools(); if (Directory.Exists(_root)) Directory.Delete(_root,true); }
+
+    [Fact]
+    public async Task Shelves_CanRenameReorderAndDeleteWithoutDeletingBooks()
+    {
+        var book = await Seed();
+        var first = await _library.CreateShelfAsync("First");
+        var second = await _library.CreateShelfAsync("Second");
+        await _library.SetShelfAsync(book.Id, first.Id, true);
+        await _library.MoveShelfAsync(second.Id, -1);
+        Assert.Equal(second.Id, (await _library.GetShelvesAsync())[0].Id);
+        await _library.RenameShelfAsync(first.Id, "Renamed");
+        await Assert.ThrowsAsync<ArgumentException>(() => _library.RenameShelfAsync(first.Id, " second "));
+        await _library.DeleteShelfAsync(first.Id);
+        Assert.NotNull(await _library.GetBookAsync(book.Id));
+        Assert.Empty((await _library.GetBookAsync(book.Id))!.BookShelves);
+        Assert.Equal("Important thought", (await _library.GetNotesAsync(null)).Single().Annotation.Note);
+    }
+
+    [Fact]
+    public async Task PermanentDeletion_RequiresTrash_CascadesNotesAndText_AndPreservesOriginal()
+    {
+        var book = await Seed();
+        var original = Path.Combine(_root, "original.pdf");
+        await File.WriteAllTextAsync(original, "original");
+        await File.WriteAllTextAsync(_files.GetBookPath(book.Sha256), "managed");
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _library.DeletePermanentlyAsync(book.Id));
+        await using (var db = new FolioDbContext(_options))
+        {
+            db.DocumentPages.Add(new() { BookId = book.Id, PageIndex = 0, Text = "indexed" });
+            await db.SaveChangesAsync();
+        }
+        await _library.SetTrashAsync(book.Id, true);
+        await _library.EmptyTrashAsync();
+        Assert.Equal("original", await File.ReadAllTextAsync(original));
+        Assert.False(File.Exists(_files.GetBookPath(book.Sha256)));
+        await using var check = new FolioDbContext(_options);
+        Assert.Empty(await check.Books.ToListAsync());
+        Assert.Empty(await check.Annotations.ToListAsync());
+        Assert.Empty(await check.DocumentPages.ToListAsync());
+    }
+
+    [Fact]
+    public async Task FolderImport_RecursesFiltersAndDeduplicates()
+    {
+        await Seed();
+        var nested = Path.Combine(_root, "incoming", "nested"); Directory.CreateDirectory(nested);
+        var pdf = Path.Combine(nested, "Book.PDF"); await File.WriteAllTextAsync(pdf, "sample");
+        await File.WriteAllTextAsync(Path.Combine(nested, "ignore.txt"), "ignore");
+        Assert.Equal(new[] { Path.GetFullPath(pdf) }, ImportInbox.Expand([Path.GetDirectoryName(nested)!, pdf]));
+        using var cancellation = new CancellationTokenSource(); cancellation.Cancel();
+        Assert.Throws<OperationCanceledException>(() => ImportInbox.Expand([nested], cancellation.Token));
+    }
 }

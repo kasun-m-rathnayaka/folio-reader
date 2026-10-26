@@ -1,6 +1,14 @@
 # Folio recovery release verification
 
-Date: 2026-10-11. Target: personal daily use on Windows; the full product specification remains the longer-term backlog.
+Original verification date: 2026-10-11. Feature update: 2026-10-26. Target: personal daily use on Windows; the full product specification remains the longer-term backlog.
+
+## October 26 feature update
+
+Shelf rename/reorder/delete, recursive folder and drag/drop import, permanent Trash deletion, PDF-content search, scanned-page OCR text overlays, adjustable page-based reflow, and actual offline Windows speech playback are now implemented. The read-aloud UI uses installed Windows voice models, with a link to Windows Speech settings for adding voices; it does not download or use the deferred neural AI model stack.
+
+Regression coverage includes shelf ordering and deletion without losing books, permanent deletion of managed data while preserving originals, recursive import filtering and deduplication, native/OCR text caching and search exclusion for Trash, drag/drop message routing, and OCR overlay search/rotation in the browser reader. A separate native smoke check recognized 29 words in the readable scanned fixture and verified muted speech playback, pause/resume, cancellation, and restart with three installed voices.
+
+The older archive backup/restore feature and weekly worker have been removed. Internal database migration recovery snapshots remain. Earlier evidence below describes the original recovery release, not the complete current feature set.
 
 ## Evidence
 
@@ -50,8 +58,9 @@ Desktop automation sometimes required the user to bring Folio to the foreground.
 | Library | PDF picker/file-argument import, de-duplication, per-file results, cancellation, grid/list, sorting, status filters, shelves, metadata edits, recoverable Trash. |
 | Reader | Continuous/single page, zoom/fit, rotation, text selection, find, contents, page previews, bookmarks, focus mode, persisted position. |
 | Notes | Highlights, underlines, typed comments, Notebook and page links, Markdown/JSON/CSV export. |
-| Recovery | Verified migration snapshots, staged restore, optional PDFs/covers in archives, weekly backups, matching-hash relink. |
-| Deferred features | OCR/reflow, narration, AI study/model-management UI, library-wide indexed PDF text search, recursive folder/drag-drop import, customizable shortcuts, automatic trash expiry/permanent-empty UI, richer reading statistics. |
+| Recovery | Internal migration snapshots and matching-hash relink. User archive backup/restore and weekly backups were removed. |
+| Added workflows | Shelf management; recursive folder/drag-drop import; permanent deletion/empty Trash; PDF-text search with a local extraction cache; OCR selection/search; page-based text reflow; Windows offline narration and voice setup. |
+| Deferred features | AI study/model-management UI, neural narration models and figure descriptions, customizable shortcuts, automatic Trash expiry, richer reading statistics, and continuous whole-book reflow. |
 | Qualification still required | Long-session soak testing, native 5,000-book/DPI benchmarks, forced-kill/power-cut stress, full accessibility audit, network-block verification, coverage measurement against the specification's 80% target, and public installer/licensing/upgrade qualification. |
 
 The release is a tested core reader recovery. It is **not a claim that every requirement in the original specification is production-qualified**.

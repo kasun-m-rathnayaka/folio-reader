@@ -23,6 +23,11 @@ public interface ILibraryService
     Task SetTrashAsync(Guid id, bool trash, CancellationToken ct = default);
     Task SaveMetadataAsync(Guid id, string title, string? author, CancellationToken ct = default);
     Task<Shelf> CreateShelfAsync(string name, CancellationToken ct = default);
+    Task RenameShelfAsync(Guid id, string name, CancellationToken ct = default);
+    Task DeleteShelfAsync(Guid id, CancellationToken ct = default);
+    Task MoveShelfAsync(Guid id, int direction, CancellationToken ct = default);
+    Task DeletePermanentlyAsync(Guid id, CancellationToken ct = default);
+    Task EmptyTrashAsync(CancellationToken ct = default);
     Task SetShelfAsync(Guid bookId, Guid shelfId, bool included, CancellationToken ct = default);
     Task<IReadOnlyList<LibraryNote>> GetNotesAsync(string? search, CancellationToken ct = default);
     Task RelinkAsync(Guid id, string sourcePath, CancellationToken ct = default);

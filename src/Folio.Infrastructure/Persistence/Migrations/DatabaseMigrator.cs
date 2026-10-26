@@ -12,7 +12,7 @@ public record MigrationStep(int Version, string Name, Func<DbConnection, DbTrans
 /// </summary>
 public class DatabaseMigrator : IDatabaseMigrator
 {
-    public const int LatestVersion = 4;
+    public const int LatestVersion = 5;
     private readonly FolioDbContext _context;
     private readonly IFileStore _fileStore;
     private readonly IReadOnlyList<MigrationStep> _migrations;
@@ -384,6 +384,19 @@ public class DatabaseMigrator : IDatabaseMigrator
                 cmd.CommandText = """
                     ALTER TABLE Books ADD COLUMN StatusIsManual INTEGER NOT NULL DEFAULT 0;
                     UPDATE Books SET StatusIsManual = 1;
+                    """;
+                await cmd.ExecuteNonQueryAsync();
+            }),
+            new MigrationStep(5, "005_DocumentText", async (connection, transaction) =>
+            {
+                await using var cmd = connection.CreateCommand();
+                cmd.Transaction = transaction;
+                cmd.CommandText = """
+                    CREATE TABLE IF NOT EXISTS DocumentPages (
+                        BookId TEXT NOT NULL, PageIndex INTEGER NOT NULL,
+                        Text TEXT NOT NULL, WordsJson TEXT NOT NULL, IsOcr INTEGER NOT NULL,
+                        PRIMARY KEY (BookId, PageIndex),
+                        FOREIGN KEY (BookId) REFERENCES Books(Id) ON DELETE CASCADE);
                     """;
                 await cmd.ExecuteNonQueryAsync();
             })

@@ -53,6 +53,16 @@ public partial class MainWindow : Window
                     try
                     {
                         using var payload = JsonDocument.Parse(message.WebMessageAsJson);
+                        if (Services.WebMessageKinds.Is(payload.RootElement, "import-drop"))
+                        {
+                            var paths = message.AdditionalObjects.Select(item => item switch
+                            {
+                                CoreWebView2File file => file.Path,
+                                CoreWebView2FileSystemHandle handle => handle.Path,
+                                _ => null
+                            }).Where(path => !string.IsNullOrWhiteSpace(path)).Cast<string>().ToArray();
+                            ((Folio.Application.Books.ImportInbox)services.GetService(typeof(Folio.Application.Books.ImportInbox))!).Add(paths);
+                        }
                         if (payload.RootElement.ValueKind == JsonValueKind.Object &&
                             payload.RootElement.TryGetProperty("kind", out var messageKind) && messageKind.GetString() == "theme-changed" &&
                             payload.RootElement.TryGetProperty("darkMode", out var darkMode) &&

@@ -115,7 +115,8 @@ public class LibraryService(IDbContextFactory<FolioDbContext> factory, IFileStor
                 if (await db.Shelves.AnyAsync(s => s.Name.ToLower() == name.ToLower(), ct))
                     throw new ArgumentException("A shelf with this name already exists.");
                 ct.ThrowIfCancellationRequested();
-                var shelf = new Shelf { Name = name };
+                var order = (await db.Shelves.Select(s => (int?)s.SortOrder).MaxAsync(ct) ?? -1) + 1;
+                var shelf = new Shelf { Name = name, SortOrder = order };
                 db.Shelves.Add(shelf);
                 await db.SaveChangesAsync(ct);
                 return shelf;
@@ -131,6 +132,73 @@ public class LibraryService(IDbContextFactory<FolioDbContext> factory, IFileStor
         if (included && entry == null) db.BookShelves.Add(new BookShelf { BookId = bookId, ShelfId = shelfId });
         if (!included && entry != null) db.BookShelves.Remove(entry);
         await db.SaveChangesAsync(ct);
+    }
+
+    public async Task RenameShelfAsync(Guid id, string name, CancellationToken ct = default)
+    {
+        name = name.Trim();
+        if (name.Length is 0 or > 100) throw new ArgumentException("Enter a shelf name of 1–100 characters.");
+        await _shelfCreation.WaitAsync(ct);
+        try
+        {
+            await using var db = await factory.CreateDbContextAsync(ct);
+            if (await db.Shelves.AnyAsync(s => s.Id != id && s.Name.ToLower() == name.ToLower(), ct)) throw new ArgumentException("A shelf with this name already exists.");
+            var shelf = await db.Shelves.SingleAsync(s => s.Id == id, ct);
+            shelf.Name = name; shelf.UpdatedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync(ct);
+        }
+        finally { _shelfCreation.Release(); }
+    }
+
+    public async Task DeleteShelfAsync(Guid id, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var shelf = await db.Shelves.FindAsync([id], ct);
+        if (shelf == null) return;
+        db.BookShelves.RemoveRange(db.BookShelves.Where(s => s.ShelfId == id));
+        db.Shelves.Remove(shelf);
+        await db.SaveChangesAsync(ct);
+    }
+
+    public async Task MoveShelfAsync(Guid id, int direction, CancellationToken ct = default)
+    {
+        await _shelfCreation.WaitAsync(ct);
+        try
+        {
+            await using var db = await factory.CreateDbContextAsync(ct);
+            var shelves = await db.Shelves.OrderBy(s => s.SortOrder).ThenBy(s => s.Name).ToListAsync(ct);
+            var index = shelves.FindIndex(s => s.Id == id);
+            if (index < 0) return;
+            var other = Math.Clamp(index + Math.Sign(direction), 0, shelves.Count - 1);
+            (shelves[index], shelves[other]) = (shelves[other], shelves[index]);
+            for (var i = 0; i < shelves.Count; i++) shelves[i].SortOrder = i;
+            await db.SaveChangesAsync(ct);
+        }
+        finally { _shelfCreation.Release(); }
+    }
+
+    public async Task DeletePermanentlyAsync(Guid id, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var book = await db.Books.SingleOrDefaultAsync(b => b.Id == id, ct);
+        if (book == null) return;
+        if (book.TrashedAt == null) throw new InvalidOperationException("Move the book to Trash before deleting it permanently.");
+        // Only app-managed files are removed. Imported originals are never deleted.
+        var managed = files.GetBookPath(book.Sha256);
+        var cover = files.GetCoverPath(book.Sha256);
+        db.ChapterSummaries.RemoveRange(db.ChapterSummaries.Where(s => s.BookId == id));
+        db.Flashcards.RemoveRange(db.Flashcards.Where(s => s.BookId == id));
+        db.VocabularyItems.RemoveRange(db.VocabularyItems.Where(s => s.BookId == id));
+        db.Books.Remove(book);
+        await db.SaveChangesAsync(ct);
+        if (Path.GetFullPath(managed).StartsWith(Path.GetFullPath(files.BooksDirectory) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) File.Delete(managed);
+        if (Path.GetFullPath(cover).StartsWith(Path.GetFullPath(files.CoversDirectory) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) File.Delete(cover);
+    }
+
+    public async Task EmptyTrashAsync(CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        foreach (var id in await db.Books.Where(b => b.TrashedAt != null).Select(b => b.Id).ToListAsync(ct)) await DeletePermanentlyAsync(id, ct);
     }
 
     public async Task<IReadOnlyList<LibraryNote>> GetNotesAsync(string? search, CancellationToken ct = default)

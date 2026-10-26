@@ -8,6 +8,11 @@ namespace Folio.Desktop.Services;
 /// </summary>
 public class WpfFilePickerService : IFilePickerService
 {
+    public Task<string?> PickFolderAsync()
+    {
+        var dialog = new OpenFolderDialog { Title = "Import PDFs from folder", Multiselect = false };
+        return Task.FromResult(dialog.ShowDialog(System.Windows.Application.Current.MainWindow) == true ? dialog.FolderName : null);
+    }
     public Task<string?> PickSavePathAsync(string suggestedName, string filter)
     {
         var dialog = new SaveFileDialog { FileName = suggestedName, Filter = filter, Title = "Save export", AddExtension = true };

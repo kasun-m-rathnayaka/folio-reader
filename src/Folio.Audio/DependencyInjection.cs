@@ -12,6 +12,7 @@ public static class DependencyInjection
         services.AddSingleton<ILayoutBlockClassifier, LayoutBlockClassifier>();
         services.AddSingleton<ISentenceSegmenter, SentenceSegmenter>();
         services.AddSingleton<IAudioPlaybackService, AudioPlaybackService>();
+        services.AddTransient<INarrationService, WindowsNarrationService>();
         return services;
     }
 }

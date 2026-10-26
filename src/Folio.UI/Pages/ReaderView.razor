@@ -17,6 +17,7 @@
 @inject NotificationService Notifications
 @inject IJSRuntime JS
 @inject ILogger<ReaderView> Logger
+@inject IDocumentTextService Text
 @implements IAsyncDisposable
 
 <div class="folio-reader @(_zen ? "folio-zen-active" : "")">
@@ -25,12 +26,13 @@
         OnBack="Back" OnToggleOutline="() => _contents = !_contents" OnToggleDogEar="() => ToggleBookmark(_page)" OnToggleNotes="() => _notes = !_notes"
         OnOpenNotebook="Notebook" OnPrevPage="() => GoTo(_page - 1)" OnNextPage="() => GoTo(_page + 1)" OnOpenGoToPage="GoToDialog"
         OnZoomIn="() => ZoomBy(.25)" OnZoomOut="() => ZoomBy(-.25)" OnFitWidth="FitWidth" OnFitPage="FitPage" OnToggleLayoutMode="ToggleLayout"
-        OnRotateClockwise="() => Reader.SetRotationAsync(90).AsTask()" OnToggleSearch="ToggleFind" OnToggleZenMode="() => _zen = !_zen" />
+        OnRotateClockwise="() => Reader.SetRotationAsync(90).AsTask()" OnToggleSearch="ToggleFind" OnToggleZenMode="() => _zen = !_zen" IsReflow="@_reflow" OnToggleReflow="() => _reflow = !_reflow" OnReadAloud="() => _narration = !_narration" />
     @if (_find) { <FindInBookBar Query="@_query" CurrentMatch="@_match" TotalMatches="@_matches" OnQueryChanged="q => Find(q)" OnFindNext="() => Find(_query)" OnFindPrevious="() => Find(_query, false)" OnClose="ToggleFind" /> }
     <div class="folio-reader-workspace">
         @if (_contents) { <ReaderSidebar Outline="@_outline" Bookmarks="@_bookmarks" CurrentPage="@_page" TotalPages="@_pages" OnSelectPage="GoTo" OnClose="() => _contents = false" OnAddBookmark="NamedBookmark" OnDeleteBookmark="DeleteBookmark" /> }
         <div class="folio-reader-viewport">
             <div id="folio-pdf-container"></div>
+            @if (_reflow && _loaded) { <ReflowReader @key="(Book.Id, _page)" BookId="@Book.Id" PageIndex="@_page" OnClose="() => _reflow = false" /> }
             @if (!_loaded || _error != null)
             {
                 <div class="folio-reader-state" aria-live="polite">
@@ -47,6 +49,7 @@
         @if (_notes) { <MarginaliaLane Annotations="@_annotations" ActiveAnnotationId="@_activeAnnotation" OnSelectAnnotation="SelectAnnotation" OnDeleteAnnotation="DeleteAnnotation" OnSaveNote="SaveNote" OnClose="() => _notes = false" /> }
     </div>
     <SelectionQuickBar IsVisible="@_selectionVisible" ClientX="@_selectionX" ClientY="@_selectionY" OnApplyHighlight="Highlight" OnAddNote="AddNote" OnCopyQuote="CopyQuote" OnDismiss="DismissSelection" />
+    @if (_narration && _loaded) { <NarrationPanel @key="Book.Id" BookId="@Book.Id" PageIndex="@_page" TotalPages="@_pages" OnGoToPage="GoTo" OnClose="() => _narration = false" /> }
     <footer class="folio-reader-status"><span>@(_loaded ? $"Page {_page + 1} of {_pages}" : "PDF reader")</span><div class="folio-reader-status-progress"><span style="width: @Progress%;"></span></div>
         @if (_saveError) { <button class="folio-subtle-btn folio-error-text" @onclick="() => Persist(true)">Position not saved · Retry</button> }
         else { <span class="folio-save-status">@(_loaded ? "Position saved automatically" : "Local PDF · Original preserved")</span> }
@@ -75,6 +78,7 @@
     private IReadOnlyList<BookmarkDto> _bookmarks = [];
     private List<OutlineNodeDto> _outline = [];
     private Guid? _activeAnnotation;
+    private bool _reflow, _narration;
     private int Progress => (int)Math.Clamp(100.0 * (_page + 1) / Math.Max(1, _pages), 0, 100);
     protected override void OnInitialized()
     {
@@ -155,7 +159,25 @@
         if (_loaded && previous != _page) { await LoadPage(_page); _bookmarked = _bookmarks.Any(b => b.PageIndex == _page && b.IsDogEar); }
         await InvokeAsync(StateHasChanged);
     }
-    [JSInvokable] public async Task OnPageRendered(int page) { if (_disposed) return; await LoadPage(page); }
+    [JSInvokable] public async Task OnPageRendered(int page)
+    {
+        if (_disposed) return;
+        await LoadPage(page);
+        var native = await Reader.GetPageTextAsync(page);
+        if (string.IsNullOrWhiteSpace(native?.Text)) await OnOcrPageRequested(page);
+    }
+    [JSInvokable] public async Task<string> OnOcrPageRequested(int page)
+    {
+        try
+        {
+            var result = await Text.GetPageAsync(Book.Id, page, _lifetime.Token);
+            if (_disposed) return "";
+            if (result.IsOcr) await JS.InvokeVoidAsync("folioReader.setOcrPage", page, result.Words, result.Text);
+            return result.Text;
+        }
+        catch (OperationCanceledException) { return ""; }
+        catch (Exception ex) { if (!_disposed) Notifications.Add("This page's text could not be recognized. " + ex.Message, Severity.Warning, "OCR unavailable"); return ""; }
+    }
     private async Task LoadPage(int page)
     {
         var annotations = await Use<IAnnotationService, IReadOnlyList<AnnotationDto>>(s => s.GetAnnotationsForPageAsync(Book.Id, page));

@@ -13,7 +13,6 @@
     <ProjectReference Include="..\..\src\Folio.Domain\Folio.Domain.csproj" />
     <ProjectReference Include="..\..\src\Folio.Application\Folio.Application.csproj" />
     <ProjectReference Include="..\..\src\Folio.Infrastructure\Folio.Infrastructure.csproj" />
-    <ProjectReference Include="..\..\src\Folio.AI\Folio.AI.csproj" />
   </ItemGroup>
 
   <ItemGroup>

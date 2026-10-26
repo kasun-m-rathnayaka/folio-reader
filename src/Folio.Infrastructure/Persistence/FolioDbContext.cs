@@ -31,6 +31,7 @@ public class FolioDbContext : DbContext
     public DbSet<Annotation> Annotations => Set<Annotation>();
     public DbSet<Bookmark> Bookmarks => Set<Bookmark>();
     public DbSet<Shelf> Shelves => Set<Shelf>();
+    public DbSet<DocumentPage> DocumentPages => Set<DocumentPage>();
     public DbSet<Tag> Tags => Set<Tag>();
     public DbSet<BookShelf> BookShelves => Set<BookShelf>();
     public DbSet<BookTag> BookTags => Set<BookTag>();
@@ -49,6 +50,11 @@ public class FolioDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+        modelBuilder.Entity<DocumentPage>(entity =>
+        {
+            entity.HasKey(p => new { p.BookId, p.PageIndex });
+            entity.HasOne(p => p.Book).WithMany().HasForeignKey(p => p.BookId).OnDelete(DeleteBehavior.Cascade);
+        });
 
         // Book
         modelBuilder.Entity<Book>(entity =>

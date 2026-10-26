@@ -41,6 +41,7 @@ public class WindowsOcrService : IOcrService
 
     public async Task<OcrPageResult> RecognizePageAsync(string pdfPath, int pageIndex, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         if (!File.Exists(pdfPath))
         {
             throw new FileNotFoundException($"PDF file not found at {pdfPath}");
@@ -59,6 +60,7 @@ public class WindowsOcrService : IOcrService
 
         // 300 DPI rasterization
         double dpiScale = 300.0 / 72.0;
+        dpiScale = Math.Min(dpiScale, OcrEngine.MaxImageDimension / Math.Max(page.Size.Width, page.Size.Height));
         uint targetW = (uint)Math.Max(1, Math.Round(page.Size.Width * dpiScale));
         uint targetH = (uint)Math.Max(1, Math.Round(page.Size.Height * dpiScale));
 
@@ -69,7 +71,7 @@ public class WindowsOcrService : IOcrService
             DestinationHeight = targetH
         };
 
-        await page.RenderToStreamAsync(memoryStream, renderOptions);
+        await page.RenderToStreamAsync(memoryStream, renderOptions).AsTask(ct);
 
         // Decode into SoftwareBitmap for OCR
         memoryStream.Seek(0);
@@ -84,7 +86,7 @@ public class WindowsOcrService : IOcrService
             throw new InvalidOperationException("Windows OCR engine could not be instantiated.");
         }
 
-        var ocrResult = await ocrEngine.RecognizeAsync(softwareBitmap);
+        var ocrResult = await ocrEngine.RecognizeAsync(softwareBitmap).AsTask(ct);
 
         var words = new List<Folio.Domain.OCR.OcrWord>();
         double imgWidth = softwareBitmap.PixelWidth;
