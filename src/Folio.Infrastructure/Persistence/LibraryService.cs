@@ -8,6 +8,7 @@ namespace Folio.Infrastructure.Persistence;
 
 public class LibraryService(IDbContextFactory<FolioDbContext> factory, IFileStore files) : ILibraryService
 {
+    private readonly SemaphoreSlim _shelfCreation = new(1, 1);
     public async Task<LibraryPage> QueryAsync(LibraryQuery query, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
@@ -103,9 +104,24 @@ public class LibraryService(IDbContextFactory<FolioDbContext> factory, IFileStor
     {
         name = name.Trim();
         if (name.Length is 0 or > 100) throw new ArgumentException("Enter a shelf name of 1–100 characters.");
-        await using var db = await factory.CreateDbContextAsync(ct);
-        if (await db.Shelves.AnyAsync(s => s.Name.ToLower() == name.ToLower(), ct)) throw new ArgumentException("A shelf with this name already exists.");
-        var shelf = new Shelf { Name = name }; db.Shelves.Add(shelf); await db.SaveChangesAsync(ct); return shelf;
+        await _shelfCreation.WaitAsync(ct);
+        try
+        {
+            // SQLite executes synchronously even through its async APIs. Keep lock waits off the UI thread.
+            return await Task.Run(async () =>
+            {
+                await using var db = await factory.CreateDbContextAsync(ct);
+                db.Database.SetCommandTimeout(5);
+                if (await db.Shelves.AnyAsync(s => s.Name.ToLower() == name.ToLower(), ct))
+                    throw new ArgumentException("A shelf with this name already exists.");
+                ct.ThrowIfCancellationRequested();
+                var shelf = new Shelf { Name = name };
+                db.Shelves.Add(shelf);
+                await db.SaveChangesAsync(ct);
+                return shelf;
+            }, ct);
+        }
+        finally { _shelfCreation.Release(); }
     }
 
     public async Task SetShelfAsync(Guid bookId, Guid shelfId, bool included, CancellationToken ct = default)

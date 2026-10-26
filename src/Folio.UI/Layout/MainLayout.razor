@@ -6,18 +6,17 @@
 @inject IAppPreferencesService Preferences
 @inject IFilePickerService FilePicker
 @inject IJSRuntime JS
-@inject ISnackbar Snackbar
+@inject NotificationService Notifications
 @inject IDialogService Dialogs
 
 <MudThemeProvider Theme="_theme" IsDarkMode="@Preferences.Current.DarkMode" />
 <MudPopoverProvider />
 <MudDialogProvider />
-<MudSnackbarProvider />
 <div class="folio-app" data-theme="@(Preferences.Current.DarkMode ? "dark" : "light")">
     <div class="folio-library-shell @(Preferences.Current.SidebarCollapsed ? "sidebar-collapsed" : "")" style="display: @(_book == null ? "flex" : "none");">
         <aside class="folio-sidebar" aria-label="Main navigation">
-            <button class="folio-brand" @onclick='() => Navigate("Library")'>
-                <span class="folio-brand-icon"><MudIcon Icon="@Icons.Material.Filled.AutoStories" /></span>
+            <button class="folio-brand" @onclick='() => Navigate("Library")' aria-label="Folio home" title="Folio home">
+                <span class="folio-brand-icon"><MudIcon Icon="@Icons.Material.Outlined.LocalLibrary" /></span>
                 <span class="folio-brand-name">Folio<span class="folio-brand-caption">YOUR READING SPACE</span></span>
             </button>
             <div class="folio-nav-section">WORKSPACE</div>
@@ -28,7 +27,7 @@
             <button class="folio-nav-link @FilterActive(ReadingStatus.WantToRead)" @onclick="() => Filter(ReadingStatus.WantToRead)" title="Want to read"><MudIcon Icon="@Icons.Material.Outlined.BookmarkBorder" /><span>Want to read</span><small>@_counts.WantToRead</small></button>
             <button class="folio-nav-link @FilterActive(ReadingStatus.Finished)" @onclick="() => Filter(ReadingStatus.Finished)" title="Finished"><MudIcon Icon="@Icons.Material.Outlined.CheckCircle" /><span>Finished</span><small>@_counts.Finished</small></button>
             <div class="folio-nav-section folio-shelves-heading"><span>SHELVES</span><button aria-label="Create shelf" title="Create shelf" @onclick="CreateShelf"><MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" /></button></div>
-            <div class="folio-shelves-list">
+            <div class="folio-shelves-list" role="region" aria-label="Shelves" tabindex="0">
                 @foreach (var shelf in _shelves)
                 {
                     <button class="folio-nav-link @(_shelf?.Id == shelf.Id ? "active" : "")" @onclick="() => SelectShelf(shelf)" title="@shelf.Name"><MudIcon Icon="@Icons.Material.Outlined.Folder" /><span>@shelf.Name</span></button>
@@ -38,16 +37,19 @@
             <div class="folio-sidebar-bottom">
                 <button class="folio-nav-link @Active("Trash")" @onclick='() => Navigate("Trash")' title="Trash"><MudIcon Icon="@Icons.Material.Outlined.Delete" /><span>Trash</span><small>@_counts.Trash</small></button>
                 <button class="folio-nav-link @Active("Settings")" @onclick='() => Navigate("Settings")' title="Settings"><MudIcon Icon="@Icons.Material.Outlined.Settings" /><span>Settings</span></button>
-                <div class="folio-local-status"><span></span>Local library · Private by design</div>
             </div>
         </aside>
         <section class="folio-shell-main">
             <header class="folio-app-header">
                 <button class="folio-icon-button" @onclick="ToggleSidebar" aria-label="Toggle sidebar"><MudIcon Icon="@Icons.Material.Outlined.Menu" /></button>
                 <span class="folio-header-context">@HeaderTitle</span>
+                @if (_nav != "Settings")
+                {
                 <label class="folio-global-search"><MudIcon Icon="@Icons.Material.Outlined.Search" Size="Size.Small" />
                     <input id="folio-library-search" aria-label="@(_nav == "Notebook" ? "Search notebook" : "Search titles and authors")" placeholder="@(_nav == "Notebook" ? "Search notes and highlights…" : "Search titles and authors…")" @bind="_search" @bind:event="oninput" /><kbd>Ctrl K</kbd>
                 </label>
+                }
+                else { <span class="folio-header-spacer"></span> }
                 <button class="folio-icon-button" @onclick="ToggleTheme" aria-label="Toggle light and dark theme"><MudIcon Icon="@(Preferences.Current.DarkMode ? Icons.Material.Outlined.LightMode : Icons.Material.Outlined.DarkMode)" Size="Size.Small" /></button>
                 <button class="folio-primary-btn" @onclick="ImportBooks" disabled="@_importing"><MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" />Add books</button>
             </header>
@@ -59,17 +61,20 @@
         </section>
     </div>
     @if (_book != null) { <ReaderView @key="_book.Id" Book="@_book" InitialPageIndex="@_requestedPage" OnBackToLibrary="CloseBook" /> }
+    <NotificationCenter>
     @if (_importing || _importResults.Count > 0)
     {
-        <section class="folio-import-panel" aria-live="polite">
-            <div class="folio-section-heading"><strong>@(_importing ? "Importing books" : "Import complete")</strong>
+        <section class="folio-notification-card folio-import-panel" aria-live="polite">
+            <div class="folio-notification-heading"><MudIcon Icon="@(_importResults.Any(r => r.Error != null) ? Icons.Material.Outlined.ErrorOutline : Icons.Material.Outlined.Info)" Size="Size.Small" /><strong>@(_importing ? "Importing books" : _importCancelled ? "Import stopped" : _importResults.Any(r => r.Error != null) ? "Import finished with issues" : "Import complete")</strong>
                 @if (_importing) { <button class="folio-subtle-btn" @onclick="() => _importCancellation?.Cancel()">Cancel</button> }
                 else { <button class="folio-icon-button" aria-label="Dismiss import results" @onclick="() => _importResults.Clear()"><MudIcon Icon="@Icons.Material.Filled.Close" Size="Size.Small" /></button> }
             </div>
             @if (_importing) { <MudProgressLinear Color="Color.Primary" Value="@(_importProgress * 100)" /> }
+            else { <p>@_importResults.Count(r => r.Error == null && r.IsNew) added · @_importResults.Count(r => r.Error != null) failed</p> }
             @foreach (var result in _importResults) { <div class="folio-import-result"><span>@result.Book.Title</span><small class="@(result.Error != null ? "folio-error-text" : "")">@(result.Error ?? (result.IsNew ? "Added to library" : "Already in library"))</small></div> }
         </section>
     }
+    </NotificationCenter>
 </div>
 @code {
     private string _nav = "Library", _search = "";
@@ -80,13 +85,13 @@
     private LibraryView? _libraryView;
     private LibraryCounts _counts = new(0, 0, 0, 0, 0);
     private IReadOnlyList<Shelf> _shelves = [];
-    private bool _importing;
+    private bool _importing, _importCancelled;
     private double _importProgress;
     private CancellationTokenSource? _importCancellation;
     private readonly List<ImportResult> _importResults = [];
     private readonly MudTheme _theme = new()
     {
-        PaletteDark = new() { Primary = "#56A8E8", Secondary = "#A7B4C4", Background = "#101720", Surface = "#18222E", TextPrimary = "#EEF2F6", TextSecondary = "#A7B4C4", DrawerBackground = "#131C26", LinesDefault = "#2B3A4B", ActionDefault = "#B5C2D2" },
+        PaletteDark = new() { Primary = "#D4D4D4", PrimaryContrastText = "#171717", Secondary = "#B5B5B5", SecondaryContrastText = "#171717", Background = "#121212", Surface = "#1C1C1C", TextPrimary = "#EEEEEE", TextSecondary = "#B5B5B5", DrawerBackground = "#171717", LinesDefault = "#333333", ActionDefault = "#C2C2C2" },
         PaletteLight = new() { Primary = "#246B9F", Secondary = "#526477", Background = "#F3F5F7", Surface = "#FFFFFF", TextPrimary = "#1B2938", TextSecondary = "#526477", LinesDefault = "#DCE3EA", ActionDefault = "#526477" }
     };
     private string HeaderTitle => _shelf?.Name ?? (_status?.ToString() switch { "WantToRead" => "Want to read", "Reading" => "Currently reading", "Finished" => "Finished", _ => _nav });
@@ -101,7 +106,22 @@
     private async Task ToggleTheme() { Preferences.Save(Preferences.Current with { DarkMode = !Preferences.Current.DarkMode }); await ApplyPreferences(); }
     private async Task ToggleSidebar() { Preferences.Save(Preferences.Current with { SidebarCollapsed = !Preferences.Current.SidebarCollapsed }); await ApplyPreferences(); }
     private async Task ApplyPreferences() { await JS.InvokeVoidAsync("folioShell.applyPreferences", Preferences.Current); StateHasChanged(); }
-    private async Task CreateShelf() { var dialog = await Dialogs.ShowAsync<CreateShelfDialog>("Create shelf"); if (await dialog.Result is { Canceled: false }) await RefreshNavigation(); }
+    private bool _creatingShelf;
+    private async Task CreateShelf()
+    {
+        if (_creatingShelf) return;
+        _creatingShelf = true;
+        try
+        {
+            var dialog = await Dialogs.ShowAsync<CreateShelfDialog>("Create a shelf", new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small });
+            if (await dialog.Result is { Canceled: false, Data: Shelf shelf })
+            {
+                await RefreshNavigation();
+                Notifications.Add($"{shelf.Name} is ready. Add books from their menu.", Severity.Success, "Shelf created");
+            }
+        }
+        finally { _creatingShelf = false; }
+    }
     private async Task OpenBook(Book book) { _book = await Library.GetBookAsync(book.Id); _requestedPage = null; }
     private async Task OpenNote((Guid BookId, int PageIndex) note) { _book = await Library.GetBookAsync(note.BookId); _requestedPage = note.PageIndex; }
     private async Task CloseBook() { _book = null; _requestedPage = null; if (_libraryView != null) await _libraryView.RefreshAsync(); await RefreshNavigation(); }
@@ -110,7 +130,7 @@
         if (_importing) return;
         var paths = await FilePicker.PickPdfFilesAsync();
         if (paths.Count == 0) return;
-        _importing = true; _importProgress = 0; _importResults.Clear(); _importCancellation = new();
+        _importing = true; _importCancelled = false; _importProgress = 0; _importResults.Clear(); _importCancellation = new();
         try
         {
             await using var scope = Scopes.CreateAsyncScope();
@@ -124,7 +144,7 @@
                 _importProgress = (double)(index + 1) / paths.Count; StateHasChanged();
             }
         }
-        catch (OperationCanceledException) { Snackbar.Add("Import stopped. Books already added are kept.", Severity.Info); }
+        catch (OperationCanceledException) { _importCancelled = true; Notifications.Add("Import stopped. Books already added are kept.", Severity.Info); }
         finally { _importing = false; _importCancellation.Dispose(); _importCancellation = null; await RefreshNavigation(); if (_libraryView != null) await _libraryView.RefreshAsync(); }
     }
     public void Dispose() { _importCancellation?.Cancel(); }

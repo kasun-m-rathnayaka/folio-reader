@@ -1,6 +1,6 @@
 @using Folio.Application.AI
 @inject ILocalAiService AiService
-@inject ISnackbar Snackbar
+@inject NotificationService Notifications
 
 <MudDialog Style="background: #1E1E1E; color: #FFFFFF; border: 1px solid #333333; border-radius: 8px; min-width: 360px; max-width: 520px;">
     <TitleContent>
@@ -71,7 +71,7 @@
 
     private void AddToVocabulary()
     {
-        Snackbar.Add($"\"{Term}\" saved to your Vocabulary list.", Severity.Success);
+        Notifications.Add($"\"{Term}\" saved to your Vocabulary list.", Severity.Success);
         MudDialog.Close(DialogResult.Ok(true));
     }
 

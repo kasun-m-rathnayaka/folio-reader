@@ -1,12 +1,44 @@
+@implements IDisposable
 @inject ILibraryService Library
-<MudDialog>
-    <DialogContent><MudTextField @bind-Value="_name" Label="Shelf name" MaxLength="100" AutoFocus="true" />
-        @if (_error != null) { <p class="folio-error-text">@_error</p> }
+
+<MudDialog Class="folio-shelf-dialog">
+    <TitleContent><h2>Create a shelf</h2></TitleContent>
+    <DialogContent>
+        <p class="folio-muted">Keep related books together. You can add books from their menu.</p>
+        <form id="folio-create-shelf" @onsubmit="Save" @onsubmit:preventDefault>
+            <label class="folio-field-label" for="folio-shelf-name">Shelf name</label>
+            <input @ref="_nameInput" id="folio-shelf-name" class="folio-input-field" placeholder="e.g. Design research" maxlength="100" @bind="_name" @bind:event="oninput" aria-describedby="folio-shelf-error" aria-invalid="@(_error != null)" disabled="@_saving" />
+            <p id="folio-shelf-error" class="folio-error-text" role="alert">@_error</p>
+        </form>
     </DialogContent>
-    <DialogActions><MudButton OnClick="() => Dialog.Cancel()">Cancel</MudButton><MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save">Create shelf</MudButton></DialogActions>
+    <DialogActions>
+        <button class="folio-subtle-btn" @onclick="Cancel">Cancel</button>
+        <button class="folio-primary-btn" type="submit" form="folio-create-shelf" disabled="@(_saving || string.IsNullOrWhiteSpace(_name))">@(_saving ? "Creating…" : "Create shelf")</button>
+    </DialogActions>
 </MudDialog>
 @code {
     [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
-    private string _name = ""; private string? _error;
-    private async Task Save() { try { await Library.CreateShelfAsync(_name); Dialog.Close(DialogResult.Ok(true)); } catch (Exception ex) { _error = ex.Message; } }
+    private string _name = "";
+    private ElementReference _nameInput;
+    private string? _error;
+    private bool _saving, _disposed;
+    private CancellationTokenSource? _saveCancellation;
+    protected override async Task OnAfterRenderAsync(bool firstRender) { if (firstRender) await _nameInput.FocusAsync(); }
+    private void Cancel() { _saveCancellation?.Cancel(); Dialog.Cancel(); }
+    private async Task Save()
+    {
+        if (_saving || string.IsNullOrWhiteSpace(_name)) return;
+        _saving = true; _error = null;
+        _saveCancellation = new(TimeSpan.FromSeconds(10));
+        try
+        {
+            var shelf = await Library.CreateShelfAsync(_name.Trim(), _saveCancellation.Token);
+            if (!_disposed) Dialog.Close(DialogResult.Ok(shelf));
+        }
+        catch (OperationCanceledException) { if (!_disposed) _error = "Creation timed out. Please try again."; }
+        catch (ArgumentException ex) { if (!_disposed) _error = ex.Message; }
+        catch (Exception) { if (!_disposed) _error = "The shelf could not be saved. Please try again."; }
+        finally { _saving = false; _saveCancellation?.Dispose(); _saveCancellation = null; }
+    }
+    public void Dispose() { _disposed = true; _saveCancellation?.Cancel(); }
 }

@@ -4,7 +4,7 @@
 @inject IAnnotationService AnnotationService
 @inject IBookmarkService BookmarkService
 @inject IDialogService DialogService
-@inject ISnackbar Snackbar
+@inject NotificationService Notifications
 
 <MudDialog>
     <TitleContent>
@@ -177,7 +177,7 @@
     {
         await AnnotationService.DeleteAnnotationAsync(id);
         await LoadAnnotationsAsync();
-        Snackbar.Add("Annotation deleted", Severity.Info);
+        Notifications.Add("Annotation deleted", Severity.Info);
     }
 
     private async Task JumpToPage(int pageIndex)

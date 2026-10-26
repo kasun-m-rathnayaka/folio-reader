@@ -3,7 +3,7 @@
 @inject ILibraryService Library
 @inject IAppPreferencesService Preferences
 @inject IDialogService Dialogs
-@inject ISnackbar Snackbar
+@inject NotificationService Notifications
 @inject IJSRuntime JS
 
 <section class="folio-library-page">
@@ -28,7 +28,7 @@
     else if (_loading) { <div class="folio-empty-state"><MudProgressCircular Indeterminate="true" Size="Size.Small" /><p>Loading your books…</p></div> }
     else if (_total == 0)
     {
-        <div class="folio-empty-state"><div class="folio-empty-icon"><MudIcon Icon="@Icons.Material.Outlined.AutoStories" /></div>
+        <div class="folio-empty-state"><div class="folio-empty-icon"><MudIcon Icon="@Icons.Material.Outlined.LocalLibrary" /></div>
             <h2>@(_isTrash ? "Nothing in Trash" : string.IsNullOrWhiteSpace(SearchQuery) && StatusFilter == null && Shelf == null ? "Make room for a good book" : "No books match this view")</h2>
             <p>@(_isTrash ? "Books you remove from your library will appear here." : string.IsNullOrWhiteSpace(SearchQuery) && StatusFilter == null && Shelf == null ? "Add a PDF to start a library that feels like yours." : "Try another search, reading status, or shelf.")</p>
             @if (!_isTrash) { <button class="folio-primary-btn" @onclick="OnImport"><MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" />Add books</button> }
@@ -85,7 +85,7 @@
     [JSInvokable] public async Task OnColumnsChanged(int columns) { columns = Math.Clamp(columns, 1, 8); if (_columns == columns) return; _columns = columns; if (_virtual != null) await _virtual.RefreshDataAsync(); await InvokeAsync(StateHasChanged); }
     private async Task SetGrid(bool grid) { _grid = grid; Preferences.Save(Preferences.Current with { GridView = grid }); await RefreshAsync(); }
     private async Task StatusChanged((Book Book, ReadingStatus Status) change) { await Library.SetStatusAsync(change.Book.Id, change.Status); await RefreshAsync(); await OnChanged.InvokeAsync(); }
-    private async Task Remove(Book book) { await Library.SetTrashAsync(book.Id, !_isTrash); Snackbar.Add(_isTrash ? "Book restored with its notes and position." : "Moved to Trash. Your notes and position are kept.", Severity.Info); await RefreshAsync(); await OnChanged.InvokeAsync(); }
-    private async Task Edit(Book book) { var dialog = await Dialogs.ShowAsync<EditBookDialog>("Book details", new DialogParameters<EditBookDialog> { { x => x.Book, book } }); if (await dialog.Result is { Canceled: false }) { await RefreshAsync(); await OnChanged.InvokeAsync(); } }
+    private async Task Remove(Book book) { await Library.SetTrashAsync(book.Id, !_isTrash); Notifications.Add(_isTrash ? "Book restored with its notes and position." : "Moved to Trash. Your notes and position are kept.", Severity.Info); await RefreshAsync(); await OnChanged.InvokeAsync(); }
+    private async Task Edit(Book book) { var dialog = await Dialogs.ShowAsync<EditBookDialog>("Book details", new DialogParameters<EditBookDialog> { { x => x.Book, book } }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small }); if (await dialog.Result is { Canceled: false }) { await RefreshAsync(); await OnChanged.InvokeAsync(); } }
     public async ValueTask DisposeAsync() { try { await JS.InvokeVoidAsync("folioShell.disconnectGrid"); } catch (JSDisconnectedException) { } _reference?.Dispose(); }
 }

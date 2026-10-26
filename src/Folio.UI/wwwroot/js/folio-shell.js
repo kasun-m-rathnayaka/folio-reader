@@ -2,8 +2,8 @@ window.folioShell = {
     applyPreferences(preferences) {
         const root = document.documentElement;
         root.dataset.theme = preferences.darkMode ? 'dark' : 'light';
-        root.dataset.reducedMotion = preferences.reducedMotion ? 'true' : 'false';
         root.style.setProperty('--folio-font-scale', preferences.fontScale || 1);
+        window.chrome?.webview?.postMessage({ kind: 'theme-changed', darkMode: !!preferences.darkMode });
     },
     observeGrid(helper) {
         this.disconnectGrid();

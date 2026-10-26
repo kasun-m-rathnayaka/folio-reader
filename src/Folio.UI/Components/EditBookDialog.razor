@@ -1,26 +1,73 @@
 @inject ILibraryService Library
-<MudDialog>
+<MudDialog Class="folio-shelf-dialog folio-book-details-dialog">
+    <TitleContent><h2>Book details</h2></TitleContent>
     <DialogContent>
-        <MudTextField @bind-Value="_title" Label="Title" MaxLength="500" AutoFocus="true" />
-        <MudTextField @bind-Value="_author" Label="Author" MaxLength="250" />
-        <h3 class="mt-4 mb-2">Shelves</h3>
-        @if (_shelves.Count == 0) { <p class="folio-muted">Create a shelf from the sidebar to organize this book.</p> }
-        @foreach (var shelf in _shelves) { <MudCheckBox T="bool" Value="@_selected.Contains(shelf.Id)" ValueChanged="v => SetSelected(shelf.Id, v)" Label="@shelf.Name" /> }
-        @if (_error != null) { <p class="folio-error-text">@_error</p> }
+        <p class="folio-muted">Update this book's details and choose where it belongs.</p>
+        <form id="folio-edit-book" @onsubmit="Save" @onsubmit:preventDefault>
+            <label class="folio-field-label" for="folio-book-title">Title</label>
+            <input @ref="_titleInput" id="folio-book-title" class="folio-input-field" maxlength="500" @bind="_title" @bind:event="oninput" disabled="@(_saving || _loading)" required />
+            <label class="folio-field-label" for="folio-book-author">Author</label>
+            <input id="folio-book-author" class="folio-input-field" maxlength="250" @bind="_author" @bind:event="oninput" disabled="@(_saving || _loading)" placeholder="Unknown author" />
+            <h3 class="folio-field-label" id="folio-book-shelves-label">Shelves</h3>
+            @if (_loading) { <p class="folio-muted" role="status">Loading shelves…</p> }
+            else if (_shelves.Count == 0) { <p class="folio-muted">Create a shelf from the sidebar to organize this book.</p> }
+            else
+            {
+                <div class="folio-book-shelf-options" role="group" aria-labelledby="folio-book-shelves-label" tabindex="0">
+                    @foreach (var shelf in _shelves)
+                    {
+                        <label class="folio-book-shelf-option" @key="shelf.Id">
+                            <input type="checkbox" checked="@_selected.Contains(shelf.Id)" @onchange="e => SetSelected(shelf.Id, e.Value is true)" disabled="@_saving" />
+                            <span>@shelf.Name</span>
+                        </label>
+                    }
+                </div>
+            }
+            <p class="folio-error-text" role="alert">@_error</p>
+        </form>
     </DialogContent>
-    <DialogActions><MudButton OnClick="() => Dialog.Cancel()">Cancel</MudButton><MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save" Disabled="@_saving">Save changes</MudButton></DialogActions>
+    <DialogActions>
+        <button class="folio-subtle-btn" @onclick="() => Dialog.Cancel()" disabled="@_saving">Cancel</button>
+        <button class="folio-primary-btn" type="submit" form="folio-edit-book" disabled="@(_saving || _loading || _loadFailed || string.IsNullOrWhiteSpace(_title))">@(_saving ? "Saving…" : "Save changes")</button>
+    </DialogActions>
 </MudDialog>
 @code {
     [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
     [Parameter] public Book Book { get; set; } = default!;
-    private string _title = ""; private string? _author, _error; private bool _saving;
+    private string _title = ""; private string? _author, _error; private bool _saving, _loadFailed, _focused, _loading = true;
+    private ElementReference _titleInput;
     private IReadOnlyList<Shelf> _shelves = []; private readonly HashSet<Guid> _selected = [];
-    protected override async Task OnInitializedAsync() { _title = Book.Title; _author = Book.Author; _shelves = await Library.GetShelvesAsync(); var book = await Library.GetBookAsync(Book.Id); foreach (var shelf in book?.BookShelves ?? []) _selected.Add(shelf.ShelfId); }
+    private readonly HashSet<Guid> _original = [];
+    protected override async Task OnInitializedAsync()
+    {
+        _title = Book.Title; _author = Book.Author;
+        try
+        {
+            _shelves = await Library.GetShelvesAsync();
+            var book = await Library.GetBookAsync(Book.Id);
+            foreach (var shelf in book?.BookShelves ?? []) _selected.Add(shelf.ShelfId);
+            _original.UnionWith(_selected);
+        }
+        catch (Exception) { _loadFailed = true; _error = "Book details could not be loaded. Close this panel and try again."; }
+        finally { _loading = false; }
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender) { if (!_focused && !_loading && !_loadFailed) { _focused = true; await _titleInput.FocusAsync(); } }
     private void SetSelected(Guid id, bool included) { if (included) _selected.Add(id); else _selected.Remove(id); }
     private async Task Save()
     {
-        _saving = true;
-        try { await Library.SaveMetadataAsync(Book.Id, _title, _author); foreach (var shelf in _shelves) await Library.SetShelfAsync(Book.Id, shelf.Id, _selected.Contains(shelf.Id)); Dialog.Close(DialogResult.Ok(true)); }
+        if (_saving || _loading || _loadFailed || string.IsNullOrWhiteSpace(_title)) return;
+        _saving = true; _error = null;
+        try
+        {
+            await Library.SaveMetadataAsync(Book.Id, _title.Trim(), _author);
+            foreach (var shelf in _shelves.Where(s => _selected.Contains(s.Id) != _original.Contains(s.Id)))
+            {
+                var included = _selected.Contains(shelf.Id);
+                await Library.SetShelfAsync(Book.Id, shelf.Id, included);
+                if (included) _original.Add(shelf.Id); else _original.Remove(shelf.Id);
+            }
+            Dialog.Close(DialogResult.Ok(true));
+        }
         catch (Exception ex) { _error = ex.Message; }
         finally { _saving = false; }
     }

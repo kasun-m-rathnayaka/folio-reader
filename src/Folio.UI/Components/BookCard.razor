@@ -6,17 +6,17 @@
             @if (Book.Status == ReadingStatus.Reading) { <div class="folio-progress-track"><span style="width: @Progress%;"></span></div> }
         </div>
     </button>
-    <div class="folio-book-menu"><MudMenu Icon="@Icons.Material.Filled.MoreHoriz" Dense="true" Size="Size.Small" aria-label="@($"Actions for {Book.Title}")">
+    <div class="folio-book-menu"><MudMenu Icon="@Icons.Material.Filled.MoreHoriz" Size="Size.Small" PopoverClass="folio-action-menu" AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft" aria-label="@($"Actions for {Book.Title}")">
         @if (Trash) { <MudMenuItem Icon="@Icons.Material.Outlined.Restore" OnClick="() => OnRemove.InvokeAsync(Book)">Restore book</MudMenuItem> }
         else
         {
-            <MudMenuItem Icon="@Icons.Material.Outlined.AutoStories" OnClick="() => OnOpen.InvokeAsync(Book)">Read</MudMenuItem>
+            <MudMenuItem Icon="@Icons.Material.Outlined.AutoStories" OnClick="() => OnOpen.InvokeAsync(Book)">Read book</MudMenuItem>
             <MudMenuItem Icon="@Icons.Material.Outlined.Edit" OnClick="() => OnEdit.InvokeAsync(Book)">Edit details &amp; shelves</MudMenuItem>
             <MudDivider />
-            <MudMenuItem OnClick="() => OnStatusChanged.InvokeAsync((Book, ReadingStatus.WantToRead))">Want to read</MudMenuItem>
-            <MudMenuItem OnClick="() => OnStatusChanged.InvokeAsync((Book, ReadingStatus.Reading))">Reading</MudMenuItem>
-            <MudMenuItem OnClick="() => OnStatusChanged.InvokeAsync((Book, ReadingStatus.Finished))">Finished</MudMenuItem>
-            <MudDivider /><MudMenuItem Icon="@Icons.Material.Outlined.Delete" OnClick="() => OnRemove.InvokeAsync(Book)">Move to Trash</MudMenuItem>
+            <MudMenuItem Icon="@Icons.Material.Outlined.BookmarkBorder" Class="@(Book.Status == ReadingStatus.WantToRead ? "folio-menu-selected" : "")" OnClick="() => OnStatusChanged.InvokeAsync((Book, ReadingStatus.WantToRead))">Want to read</MudMenuItem>
+            <MudMenuItem Icon="@Icons.Material.Outlined.AutoStories" Class="@(Book.Status == ReadingStatus.Reading ? "folio-menu-selected" : "")" OnClick="() => OnStatusChanged.InvokeAsync((Book, ReadingStatus.Reading))">Reading</MudMenuItem>
+            <MudMenuItem Icon="@Icons.Material.Outlined.CheckCircle" Class="@(Book.Status == ReadingStatus.Finished ? "folio-menu-selected" : "")" OnClick="() => OnStatusChanged.InvokeAsync((Book, ReadingStatus.Finished))">Finished</MudMenuItem>
+            <MudDivider /><MudMenuItem Class="folio-menu-danger" Icon="@Icons.Material.Outlined.Delete" OnClick="() => OnRemove.InvokeAsync(Book)">Move to Trash</MudMenuItem>
         }
     </MudMenu></div>
 </article>

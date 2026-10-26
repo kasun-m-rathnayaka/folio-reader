@@ -13,9 +13,10 @@ namespace Folio.Desktop;
 public partial class MainWindow : Window
 {
     private readonly Services.WindowCloseCoordinator _close;
-    public MainWindow(IServiceProvider services, IFileStore fileStore)
+    public MainWindow(IServiceProvider services, IFileStore fileStore, IAppPreferencesService preferences)
     {
         InitializeComponent();
+        SourceInitialized += (_, _) => Services.WindowTheme.Apply(this, preferences.Current.DarkMode);
 
         blazorWebView.Services = services;
         _close = new Services.WindowCloseCoordinator(this, async () =>
@@ -52,6 +53,13 @@ public partial class MainWindow : Window
                     try
                     {
                         using var payload = JsonDocument.Parse(message.WebMessageAsJson);
+                        if (payload.RootElement.ValueKind == JsonValueKind.Object &&
+                            payload.RootElement.TryGetProperty("kind", out var messageKind) && messageKind.GetString() == "theme-changed" &&
+                            payload.RootElement.TryGetProperty("darkMode", out var darkMode) &&
+                            darkMode.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                        {
+                            Services.WindowTheme.Apply(this, darkMode.GetBoolean());
+                        }
                         if (payload.RootElement.ValueKind == JsonValueKind.Object &&
                             payload.RootElement.TryGetProperty("kind", out var kind) && kind.GetString() == "reader-error")
                         {

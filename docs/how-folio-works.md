@@ -73,9 +73,9 @@ Position events are throttled so continuous scrolling still reports movement. A 
 
 An entity property describes the schema the code expects. A **migration** changes an existing database to that schema. The original missing-column bug occurred because the entity gained `CharacterOffset` while the startup migration did not create it. Tests using `EnsureCreated()` bypassed that history. The new compatibility tests start from the historical schema and exercise the real migration path.
 
-Backups use SQLite's online snapshot API so committed WAL changes are included. Restore checks and upgrades a staged database first, excludes writers during replacement, keeps a rollback snapshot, and invalidates contexts that existed before the restore.
+Library archive backup and restore are no longer offered. Database upgrades still keep an internal recovery snapshot before a schema migration.
 
-Exercise: run `StartupCompatibilityTests`, then `BackupSafetyTests`. Read the assertions as descriptions of behavior the application must preserve.
+Exercise: run `StartupCompatibilityTests`. Read the assertions as descriptions of behavior the application must preserve.
 
 ## Where to change things
 
@@ -87,7 +87,7 @@ Exercise: run `StartupCompatibilityTests`, then `BackupSafetyTests`. Read the as
 | Reader toolbar and panels | `ReaderToolbar`, `ReaderSidebar`, `ReaderView` |
 | PDF selection, rendering, and coordinates | `folio-reader.js`, `reader-geometry.mjs` |
 | Business rules and stored entities | `Folio.Domain`, `Folio.Application` |
-| SQL schema upgrades, storage, and backups | `Folio.Infrastructure` |
+| SQL schema upgrades and storage | `Folio.Infrastructure` |
 | Windows-specific behavior | `Folio.Desktop` |
 
 The reader's JavaScript and CSS have one authoritative copy under `Folio.UI/wwwroot`. The desktop host consumes those static assets. The disconnected TypeScript scaffold and duplicated desktop asset tree were removed.

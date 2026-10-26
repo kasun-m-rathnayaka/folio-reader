@@ -1,0 +1,34 @@
+@implements IDisposable
+@inject NotificationService Notifications
+
+<aside class="folio-notification-center" aria-label="Notifications">
+    @ChildContent
+    @if (Notifications.Items.Count > 1)
+    {
+        <button class="folio-notification-clear" @onclick="Notifications.Clear">Dismiss notifications</button>
+    }
+    @foreach (var item in Notifications.Items.Reverse())
+    {
+        <section @key="item.Id" class="folio-notification-card severity-@item.Severity.ToString().ToLowerInvariant()" role="@(item.Severity == Severity.Error ? "alert" : "status")">
+            <div class="folio-notification-heading">
+                <MudIcon Icon="@Icon(item.Severity)" Size="Size.Small" />
+                <strong>@item.Title</strong>
+                <button class="folio-icon-button" aria-label="Dismiss notification" @onclick="() => Notifications.Dismiss(item.Id)"><MudIcon Icon="@Icons.Material.Filled.Close" Size="Size.Small" /></button>
+            </div>
+            <p>@item.Message</p>
+        </section>
+    }
+</aside>
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    protected override void OnInitialized() => Notifications.Changed += Refresh;
+    private void Refresh() => _ = InvokeAsync(StateHasChanged);
+    private static string Icon(Severity severity) => severity switch
+    {
+        Severity.Error => Icons.Material.Outlined.ErrorOutline,
+        Severity.Warning => Icons.Material.Outlined.WarningAmber,
+        Severity.Success => Icons.Material.Outlined.CheckCircle,
+        _ => Icons.Material.Outlined.Info
+    };
+    public void Dispose() => Notifications.Changed -= Refresh;
+}

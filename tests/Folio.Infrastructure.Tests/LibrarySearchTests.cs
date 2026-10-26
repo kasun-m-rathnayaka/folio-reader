@@ -1,9 +1,6 @@
-using System.IO.Compression;
-using Folio.Application.Backup;
 using Folio.Application.Search;
 using Folio.Domain.Entities;
 using Folio.Domain.Enums;
-using Folio.Infrastructure.Backup;
 using Folio.Infrastructure.Persistence;
 using Folio.Infrastructure.Persistence.Repositories;
 using Folio.Infrastructure.Search;
@@ -13,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Folio.Infrastructure.Tests;
 
-public class SearchAndBackupTests : IDisposable
+public class LibrarySearchTests : IDisposable
 {
     private readonly string _tempDir;
     private readonly FileStore _fileStore;
@@ -21,7 +18,7 @@ public class SearchAndBackupTests : IDisposable
     private readonly FolioDbContext _context;
     private readonly LibrarySearchService _searchService;
 
-    public SearchAndBackupTests()
+    public LibrarySearchTests()
     {
         _tempDir = Path.Combine(Path.GetTempPath(), "FolioTests_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_tempDir);
@@ -128,80 +125,4 @@ public class SearchAndBackupTests : IDisposable
         Assert.Empty(emptyResults);
     }
 
-    [Fact]
-    public async Task BackupService_CreatesValidArchive_AndInspectsSuccessfully()
-    {
-        // Arrange
-        var book = new Book
-        {
-            Sha256 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            Title = "Backup Architecture",
-            Author = "Folio Arch",
-            PageCount = 50,
-            FileSizeBytes = 2000,
-            FilePath = "books/backup.pdf"
-        };
-        _context.Books.Add(book);
-        await _context.SaveChangesAsync();
-
-        var backupService = new BackupService(_context, _fileStore);
-        string zipPath = Path.Combine(_tempDir, "backups", "test_backup.zip");
-
-        // Act - Create backup
-        var createdPath = await backupService.CreateBackupAsync(zipPath);
-        Assert.True(File.Exists(createdPath));
-
-        // Act - Inspect backup
-        var metadata = await backupService.InspectBackupAsync(createdPath);
-
-        // Assert
-        Assert.NotNull(metadata);
-        Assert.Equal("0.2.0", metadata.AppVersion);
-        Assert.Equal(1, metadata.BooksCount);
-        Assert.Equal(0, metadata.AnnotationsCount);
-
-        using var archive = ZipFile.OpenRead(createdPath);
-        Assert.NotNull(archive.GetEntry("folio.db"));
-        Assert.NotNull(archive.GetEntry("metadata.json"));
-    }
-
-    [Fact]
-    public async Task BackupService_RestoreBackup_RestoresDataCorrectly()
-    {
-        // Arrange
-        var book = new Book
-        {
-            Sha256 = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-            Title = "Pre-Backup Book",
-            Author = "Author B",
-            PageCount = 80,
-            FileSizeBytes = 4000,
-            FilePath = "books/prebackup.pdf"
-        };
-        _context.Books.Add(book);
-        await _context.SaveChangesAsync();
-
-        var backupService = new BackupService(_context, _fileStore);
-        string zipPath = Path.Combine(_tempDir, "backups", "restore_test.zip");
-        await backupService.CreateBackupAsync(zipPath);
-
-        // Close current connection so file is not locked on disk during restore
-        _connection.Close();
-        SqliteConnection.ClearAllPools();
-
-        // Act - Restore
-        bool restored = await backupService.RestoreBackupAsync(zipPath);
-        Assert.True(restored);
-
-        // Reconnect and verify data
-        using var verifyConn = new SqliteConnection(_connection.ConnectionString);
-        verifyConn.Open();
-        var verifyOptions = new DbContextOptionsBuilder<FolioDbContext>()
-            .UseSqlite(verifyConn)
-            .Options;
-        using var verifyContext = new FolioDbContext(verifyOptions);
-        var reloadedBooks = await verifyContext.Books.ToListAsync();
-        Assert.Single(reloadedBooks);
-        Assert.Equal("Pre-Backup Book", reloadedBooks[0].Title);
-    }
 }

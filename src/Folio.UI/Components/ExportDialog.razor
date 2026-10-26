@@ -1,7 +1,7 @@
 @using Folio.Application.Annotations
 @using Folio.Application.Annotations.DTOs
 @inject IAnnotationExportService ExportService
-@inject ISnackbar Snackbar
+@inject NotificationService Notifications
 @inject IJSRuntime JS
 @inject IFilePickerService FilePicker
 
@@ -77,7 +77,7 @@
     private async Task CopyToClipboard()
     {
         await JS.InvokeVoidAsync("navigator.clipboard.writeText", _previewContent);
-        Snackbar.Add("Export content copied to clipboard!", Severity.Success);
+        Notifications.Add("Export content copied to clipboard!", Severity.Success);
         MudDialog.Close(DialogResult.Ok(true));
     }
 
@@ -86,8 +86,8 @@
         var extension = _exportFormat == "markdown" ? "md" : _exportFormat;
         var path = await FilePicker.PickSavePathAsync($"Folio-notes.{extension}", $"Notes (*.{extension})|*.{extension}");
         if (path == null) return;
-        try { await File.WriteAllTextAsync(path, _previewContent); Snackbar.Add("Notes exported.", Severity.Success); }
-        catch (IOException) { Snackbar.Add("The export could not be written. Choose another location.", Severity.Error); }
+        try { await File.WriteAllTextAsync(path, _previewContent); Notifications.Add("Notes exported.", Severity.Success); }
+        catch (IOException) { Notifications.Add("The export could not be written. Choose another location.", Severity.Error); }
     }
 
     private void Close() => MudDialog.Cancel();

@@ -1,7 +1,7 @@
 .folio-reader { height:100%; width:100%; display:flex; flex-direction:column; position:relative; overflow:hidden; }
 .folio-reader-toolbar { height:60px; flex-shrink:0; display:flex; align-items:center; gap:8px; padding:0 18px; border-bottom:1px solid var(--md-sys-color-outline-variant); background:var(--md-sys-color-surface-container-low); z-index:30; }
 .folio-reader-toolbar .active { color:var(--md-sys-color-primary); background:var(--md-sys-color-primary-container); }
-.folio-reader-title { font-size:12px; font-weight:600; max-width:320px; min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; flex:1; padding:0 8px; }
+.folio-reader-title { background:transparent; border:0; border-radius:6px; color:var(--folio-text-primary); text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; height:36px; font-size:12px; font-weight:600; max-width:320px; min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; flex:1; padding:0 8px; }
 .folio-reader-page-controls, .folio-reader-zoom { display:flex; align-items:center; gap:3px; }
 .folio-page-indicator { background:transparent; border:0; color:var(--folio-text-primary); padding:7px; font-size:12px; font-weight:600; white-space:nowrap; }
 .folio-page-indicator span { font-weight:400; color:var(--folio-text-secondary); }
@@ -75,3 +75,5 @@
 @keyframes annotation-pulse { 50% { opacity:.7; } }
 @media (max-width:1000px) { .folio-reader-title { max-width:200px; } .folio-reader-zoom { margin-left:5px; } .folio-reader-toolbar { gap:4px; padding:0 8px; } .folio-marginalia-lane { width:250px; } }
 @media (max-width:800px) { .folio-reader-sidebar, .folio-marginalia-lane { position:absolute; top:60px; bottom:42px; z-index:25; } .folio-marginalia-lane { right:0; } .folio-reader-zoom { display:none; } .folio-reader-status-progress { display:none; } }
+
+.folio-reader-title:hover { background:var(--md-sys-color-surface-container-high); }

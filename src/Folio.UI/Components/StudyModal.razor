@@ -1,7 +1,7 @@
 @using Folio.Application.Study
 @using Folio.Domain.Study
 @inject IStudyService StudyService
-@inject ISnackbar Snackbar
+@inject NotificationService Notifications
 
 <MudDialog Style="background: #1E1E1E; color: #FFFFFF; border: 1px solid #333333; border-radius: 8px; min-width: 600px; max-width: 750px; min-height: 480px;">
     <TitleContent>
@@ -220,7 +220,7 @@
             await StudyService.ReviewFlashcardAsync(card.Id, quality);
             _currentCardIndex++;
             _isAnswerRevealed = false;
-            Snackbar.Add(quality >= 3 ? "Review recorded!" : "Scheduled for re-test tomorrow.", Severity.Info);
+            Notifications.Add(quality >= 3 ? "Review recorded!" : "Scheduled for re-test tomorrow.", Severity.Info);
         }
     }
 

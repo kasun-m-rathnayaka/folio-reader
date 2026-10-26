@@ -35,6 +35,33 @@ public class LibraryWorkflowTests : IDisposable
         await db.SaveChangesAsync(); return book;
     }
     [Fact]
+    public async Task ShelfCreation_RejectsConcurrentDuplicates_ThenAllowsRetry()
+    {
+        await Seed();
+        var results = await Task.WhenAll(Enumerable.Range(0, 6).Select(async i =>
+        {
+            try { await _library.CreateShelfAsync(i % 2 == 0 ? " Research " : "research"); return true; }
+            catch (ArgumentException) { return false; }
+        }));
+        Assert.Single(results, created => created);
+        Assert.Single(await _library.GetShelvesAsync());
+        var second = await _library.CreateShelfAsync("Reference");
+        Assert.Equal("Reference", second.Name);
+    }
+
+    [Fact]
+    public async Task ShelfCreation_CancelledRequestDoesNotWrite_OrBlockNextRequest()
+    {
+        await Seed();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => _library.CreateShelfAsync("Cancelled", cancellation.Token));
+        Assert.Empty(await _library.GetShelvesAsync());
+        await _library.CreateShelfAsync("Saved");
+        Assert.Equal("Saved", (await _library.GetShelvesAsync()).Single().Name);
+    }
+
+    [Fact]
     public async Task TrashRestore_PreservesNotesAndReadingPosition()
     {
         var book = await Seed();

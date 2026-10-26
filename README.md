@@ -2,7 +2,7 @@
 
 A local Windows PDF library and reader built with .NET 10, WPF, Blazor Hybrid, PDF.js, and SQLite.
 
-The current recovery release focuses on the library, comfortable reading, position memory, bookmarks, annotations, Notebook, and safe backup/restore. OCR, reflow, narration, and AI study tools remain later milestones.
+The current recovery release focuses on the library, comfortable reading, position memory, bookmarks, annotations, and Notebook. OCR, reflow, narration, and AI study tools remain later milestones.
 
 ## Run
 

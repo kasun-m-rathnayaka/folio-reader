@@ -14,7 +14,7 @@
 @inject IExternalLinkService Links
 @inject IAppPreferencesService Preferences
 @inject IDialogService Dialogs
-@inject ISnackbar Snackbar
+@inject NotificationService Notifications
 @inject IJSRuntime JS
 @inject ILogger<ReaderView> Logger
 @implements IAsyncDisposable
@@ -113,7 +113,7 @@
     {
         var paths = await FilePicker.PickPdfFilesAsync(); if (paths.Count == 0) return;
         try { await Library.RelinkAsync(Book.Id, paths[0]); Book = (await Library.GetBookAsync(Book.Id))!; await Retry(); }
-        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+        catch (Exception ex) { Notifications.Add(ex.Message, Severity.Error); }
     }
     private async Task SaveLoop()
     {
@@ -174,7 +174,7 @@
         _activity = DateTimeOffset.UtcNow; _selectionPage = selection.PageIndex; _selectionText = selection.SelectedText; _selectionRects = selection.Rects;
         _selectionX = selection.ClientX / Preferences.Current.FontScale; _selectionY = selection.ClientY / Preferences.Current.FontScale; _selectionVisible = true; return InvokeAsync(StateHasChanged);
     }
-    [JSInvokable] public Task OnSelectionUnavailable() { Snackbar.Add("Select text on one page at a time.", Severity.Info); return Task.CompletedTask; }
+    [JSInvokable] public Task OnSelectionUnavailable() { Notifications.Add("Select text on one page at a time.", Severity.Info); return Task.CompletedTask; }
     private async Task Highlight((HighlightColor Color, AnnotationType Type) choice) => await CreateAnnotation(choice.Type, choice.Color, null);
     private async Task AddNote() { await CreateAnnotation(AnnotationType.MarginNote, HighlightColor.Yellow, ""); _notes = true; }
     private async Task CreateAnnotation(AnnotationType type, HighlightColor color, string? note)
@@ -185,10 +185,10 @@
             var annotation = await Use<IAnnotationService, AnnotationDto>(s => s.CreateAnnotationAsync(new(Book.Id, _selectionPage, type, color, _selectionRects, _selectionText, Note: note)));
             _activeAnnotation = annotation.Id; await LoadPage(_selectionPage); await DismissSelection();
         }
-        catch (Exception ex) { Logger.LogError(ex, "Could not save annotation for {BookId}", Book.Id); Snackbar.Add("The annotation could not be saved. Please try again.", Severity.Error); }
+        catch (Exception ex) { Logger.LogError(ex, "Could not save annotation for {BookId}", Book.Id); Notifications.Add("The annotation could not be saved. Please try again.", Severity.Error); }
     }
     private async Task DismissSelection() { _selectionVisible = false; _selectionText = ""; _selectionRects = []; await Reader.ClearSelectionBoxAsync(); }
-    private async Task CopyQuote() { await Use<IAnnotationExportService, bool>(async s => { await JS.InvokeVoidAsync("navigator.clipboard.writeText", s.FormatQuoteCitation(_selectionText, Book.Title, Book.Author, _selectionPage)); return true; }); await DismissSelection(); Snackbar.Add("Quote copied.", Severity.Info); }
+    private async Task CopyQuote() { await Use<IAnnotationExportService, bool>(async s => { await JS.InvokeVoidAsync("navigator.clipboard.writeText", s.FormatQuoteCitation(_selectionText, Book.Title, Book.Author, _selectionPage)); return true; }); await DismissSelection(); Notifications.Add("Quote copied.", Severity.Info); }
     [JSInvokable] public async Task OnAnnotationClicked(string id) { if (Guid.TryParse(id, out var value)) { _activeAnnotation = value; _notes = true; await InvokeAsync(StateHasChanged); } }
     private async Task SelectAnnotation(Guid id) { _activeAnnotation = id; await Reader.PulseAnnotationAsync(id); }
     private async Task DeleteAnnotation(Guid id) { await Use<IAnnotationService, bool>(s => s.DeleteAnnotationAsync(id)); await LoadPage(_page); }
@@ -234,7 +234,7 @@
         var dialog = await Dialogs.ShowAsync<CommandPalette>("Reader commands");
         if (await dialog.Result is { Canceled: false, Data: string command }) switch (command) { case "goto": await GoToDialog(); break; case "find": await ToggleFind(); break; case "fitwidth": await FitWidth(); break; case "fitpage": await FitPage(); break; case "zoomin": await ZoomBy(.25); break; case "zoomout": await ZoomBy(-.25); break; case "rotate": await Reader.SetRotationAsync(90); break; case "layout": await ToggleLayout(); break; case "toc": _contents = !_contents; break; case "notebook": await Notebook(); break; case "zen": _zen = !_zen; break; case "back": await Back(); break; }
     }
-    private async Task Back() { try { await Persist(true); await OnBackToLibrary.InvokeAsync(); } catch { Snackbar.Add("Position could not be saved. Retry before leaving the book.", Severity.Error); } }
+    private async Task Back() { try { await Persist(true); await OnBackToLibrary.InvokeAsync(); } catch { Notifications.Add("Position could not be saved. Retry before leaving the book.", Severity.Error); } }
     public async ValueTask DisposeAsync()
     {
         _disposed = true; _lifetime.Cancel();
