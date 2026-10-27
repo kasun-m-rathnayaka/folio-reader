@@ -22,7 +22,7 @@
 .folio-pdf-link { position:absolute; border:0; padding:0; background:transparent; pointer-events:auto; }
 .folio-pdf-link:hover { outline:1px solid var(--md-sys-color-primary); background:#56a8e819; }
 .folio-overlay-layer { z-index:1; pointer-events:none; }
-.folio-annotation-item, .folio-highlight-overlay { position:absolute; pointer-events:none; }
+.folio-annotation-item { position:absolute; pointer-events:none; }
 .folio-search-hit { background:#ffce5888; }
 .folio-dog-ear { position:absolute; right:0; top:0; width:36px; height:36px; border:0; background:transparent; z-index:5; opacity:.2; padding:0; }
 .folio-dog-ear:hover, .folio-dog-ear.active { opacity:1; }

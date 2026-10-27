@@ -2,7 +2,9 @@
 
 A local Windows PDF library and reader built with .NET 10, WPF, Blazor Hybrid, PDF.js, and SQLite.
 
-Folio includes a personal PDF library, bookmarks, annotations, Notebook, shelf management, recursive folder/drag-and-drop import, permanent Trash deletion, and search inside PDFs. Scanned pages use Windows OCR for selectable text and search. The reader also offers adjustable reflow text and offline read-aloud using installed Windows voices. AI study tools remain a later milestone.
+Folio includes a personal PDF library, bookmarks, annotations, Notebook, shelf management, recursive folder/drag-and-drop import, permanent Trash deletion, and search inside PDFs. Scanned pages use Windows OCR for selectable text and search.
+
+Reflow, read-aloud, notebook export, and AI study tools are not included. Existing library data and notes remain compatible.
 
 ## Library and reading tools
 
@@ -10,7 +12,7 @@ Folio includes a personal PDF library, bookmarks, annotations, Notebook, shelf m
 - Use **Import folder**, drop PDFs/folders onto Folio, or select **Add books**. Folder imports include nested folders and skip duplicate PDFs.
 - Type in library search and press **Enter** to search PDF contents, titles, notes, and bookmarks. The first search builds a local text cache with progress and cancellation; later searches reuse it. PDFs that cannot be indexed are listed separately.
 - In **Trash**, use a book's menu to delete it permanently, or **Empty Trash** to delete all trashed books. Both actions ask for confirmation. Imported source files are kept.
-- Open the reader's **…** menu for **Reflow text** or **Read aloud**. Reflow follows the current page and remembers text size. Read-aloud includes pause/resume, page navigation, voice and speed selection, and voice setup through Windows Speech settings.
+- Open the reader's **…** menu for the **Notebook**, PDF layout controls, and focus mode. Notes and highlights stay local; selected quotes can be copied with a citation.
 - OCR runs locally when a scanned page is opened or indexed. Recognition quality depends on scan quality and installed Windows OCR language support. Original PDFs are never rewritten.
 
 ## Run

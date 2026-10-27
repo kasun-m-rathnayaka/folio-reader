@@ -21,7 +21,6 @@ public class AnnotationAndBookmarkTests : IDisposable
     private readonly UnitOfWork _unitOfWork;
     private readonly BookmarkService _bookmarkService;
     private readonly AnnotationService _annotationService;
-    private readonly AnnotationExportService _exportService;
 
     public AnnotationAndBookmarkTests()
     {
@@ -41,7 +40,6 @@ public class AnnotationAndBookmarkTests : IDisposable
 
         _bookmarkService = new BookmarkService(_bookmarkRepo, _unitOfWork);
         _annotationService = new AnnotationService(_annotationRepo, _unitOfWork);
-        _exportService = new AnnotationExportService();
     }
 
     public void Dispose()
@@ -177,45 +175,6 @@ public class AnnotationAndBookmarkTests : IDisposable
         // Query by Search Text
         var searchResults = await _annotationService.QueryAnnotationsAsync(new AnnotationFilterDto(BookId: book.Id, SearchText: "machine"));
         Assert.Single(searchResults);
-    }
-
-    [Fact]
-    public async Task ExportService_ExportsMarkdownJsonAndCsvCleanly()
-    {
-        var book = await CreateTestBookAsync();
-        var ann = await _annotationService.CreateAnnotationAsync(new CreateAnnotationDto(
-            BookId: book.Id,
-            PageIndex: 0,
-            Type: AnnotationType.Highlight,
-            Color: HighlightColor.Yellow,
-            Rects: new[] { new NormalizedRect(0.1, 0.1, 0.8, 0.05) },
-            SelectedText: "Computer Science is no more about computers than astronomy is about telescopes.",
-            Note: "Famous Edsger W. Dijkstra quote",
-            Tags: "quotes,wisdom"
-        ));
-
-        var list = new[] { ann };
-
-        // Markdown
-        string md = _exportService.ExportToMarkdown(book.Id, book.Title, book.Author, list);
-        Assert.Contains("# Annotations & Notes — Testing Systems in Depth", md);
-        Assert.Contains("Computer Science is no more about computers", md);
-        Assert.Contains("Famous Edsger W. Dijkstra quote", md);
-        Assert.Contains($"folio://book/{book.Id}?page=0&ann={ann.Id}", md);
-
-        // JSON
-        string json = _exportService.ExportToJson(book.Id, book.Title, book.Author, list);
-        Assert.Contains(book.Title, json);
-        Assert.Contains("Computer Science", json);
-
-        // CSV
-        string csv = _exportService.ExportToCsv(book.Id, book.Title, list);
-        Assert.Contains("Computer Science is no more about computers", csv);
-        Assert.Contains("Highlight", csv);
-
-        // Quote Citation
-        string citation = _exportService.FormatQuoteCitation(ann.SelectedText!, book.Title, book.Author, ann.PageIndex);
-        Assert.Equal("\"Computer Science is no more about computers than astronomy is about telescopes.\" — Dr. Alan Turing, Testing Systems in Depth (p. 1)", citation);
     }
 
     [Fact]

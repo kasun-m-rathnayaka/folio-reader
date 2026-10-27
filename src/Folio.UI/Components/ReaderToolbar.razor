@@ -11,17 +11,11 @@
     <MudMenu Icon="@Icons.Material.Filled.MoreHoriz" aria-label="Reader options" PopoverClass="folio-action-menu" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
         <MudMenuItem Icon="@Icons.Material.Outlined.FitScreen" OnClick="OnFitWidth">Fit width</MudMenuItem><MudMenuItem Icon="@Icons.Material.Outlined.CropFree" OnClick="OnFitPage">Fit page</MudMenuItem>
         <MudMenuItem Icon="@Icons.Material.Outlined.RotateRight" OnClick="OnRotateClockwise">Rotate clockwise</MudMenuItem><MudMenuItem Icon="@Icons.Material.Outlined.ViewStream" OnClick="OnToggleLayoutMode">@(LayoutMode == ReaderViewMode.Continuous ? "Single page" : "Continuous scroll")</MudMenuItem>
-        <MudDivider /><MudMenuItem Icon="@Icons.Material.Outlined.Notes" OnClick="OnOpenNotebook">Notebook &amp; export</MudMenuItem><MudMenuItem Icon="@Icons.Material.Outlined.Fullscreen" OnClick="OnToggleZenMode">@(IsZenMode ? "Exit focus mode" : "Focus mode (F11)")</MudMenuItem>
-        <MudDivider />
-        <MudMenuItem Icon="@Icons.Material.Outlined.TextFields" OnClick="OnToggleReflow">@(IsReflow ? "Original PDF" : "Reflow text")</MudMenuItem>
-        <MudMenuItem Icon="@Icons.Material.Outlined.VolumeUp" OnClick="OnReadAloud">Read aloud</MudMenuItem>
+        <MudDivider /><MudMenuItem Icon="@Icons.Material.Outlined.Notes" OnClick="OnOpenNotebook">Notebook</MudMenuItem><MudMenuItem Icon="@Icons.Material.Outlined.Fullscreen" OnClick="OnToggleZenMode">@(IsZenMode ? "Exit focus mode" : "Focus mode (F11)")</MudMenuItem>
     </MudMenu>
 </header>
 @code {
     [Parameter] public string Title { get; set; } = "";
-    [Parameter] public bool IsReflow { get; set; }
-    [Parameter] public EventCallback OnToggleReflow { get; set; }
-    [Parameter] public EventCallback OnReadAloud { get; set; }
     [Parameter] public int CurrentPage { get; set; }
     [Parameter] public int TotalPages { get; set; }
     [Parameter] public double Zoom { get; set; }

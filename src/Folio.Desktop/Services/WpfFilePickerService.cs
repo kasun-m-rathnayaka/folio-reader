@@ -13,11 +13,6 @@ public class WpfFilePickerService : IFilePickerService
         var dialog = new OpenFolderDialog { Title = "Import PDFs from folder", Multiselect = false };
         return Task.FromResult(dialog.ShowDialog(System.Windows.Application.Current.MainWindow) == true ? dialog.FolderName : null);
     }
-    public Task<string?> PickSavePathAsync(string suggestedName, string filter)
-    {
-        var dialog = new SaveFileDialog { FileName = suggestedName, Filter = filter, Title = "Save export", AddExtension = true };
-        return Task.FromResult(dialog.ShowDialog() == true ? dialog.FileName : null);
-    }
     public Task<IReadOnlyList<string>> PickPdfFilesAsync()
     {
         var dialog = new OpenFileDialog

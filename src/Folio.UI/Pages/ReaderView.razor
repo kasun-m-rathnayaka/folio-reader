@@ -26,13 +26,12 @@
         OnBack="Back" OnToggleOutline="() => _contents = !_contents" OnToggleDogEar="() => ToggleBookmark(_page)" OnToggleNotes="() => _notes = !_notes"
         OnOpenNotebook="Notebook" OnPrevPage="() => GoTo(_page - 1)" OnNextPage="() => GoTo(_page + 1)" OnOpenGoToPage="GoToDialog"
         OnZoomIn="() => ZoomBy(.25)" OnZoomOut="() => ZoomBy(-.25)" OnFitWidth="FitWidth" OnFitPage="FitPage" OnToggleLayoutMode="ToggleLayout"
-        OnRotateClockwise="() => Reader.SetRotationAsync(90).AsTask()" OnToggleSearch="ToggleFind" OnToggleZenMode="() => _zen = !_zen" IsReflow="@_reflow" OnToggleReflow="() => _reflow = !_reflow" OnReadAloud="() => _narration = !_narration" />
+        OnRotateClockwise="() => Reader.SetRotationAsync(90).AsTask()" OnToggleSearch="ToggleFind" OnToggleZenMode="() => _zen = !_zen" />
     @if (_find) { <FindInBookBar Query="@_query" CurrentMatch="@_match" TotalMatches="@_matches" OnQueryChanged="q => Find(q)" OnFindNext="() => Find(_query)" OnFindPrevious="() => Find(_query, false)" OnClose="ToggleFind" /> }
     <div class="folio-reader-workspace">
         @if (_contents) { <ReaderSidebar Outline="@_outline" Bookmarks="@_bookmarks" CurrentPage="@_page" TotalPages="@_pages" OnSelectPage="GoTo" OnClose="() => _contents = false" OnAddBookmark="NamedBookmark" OnDeleteBookmark="DeleteBookmark" /> }
         <div class="folio-reader-viewport">
             <div id="folio-pdf-container"></div>
-            @if (_reflow && _loaded) { <ReflowReader @key="(Book.Id, _page)" BookId="@Book.Id" PageIndex="@_page" OnClose="() => _reflow = false" /> }
             @if (!_loaded || _error != null)
             {
                 <div class="folio-reader-state" aria-live="polite">
@@ -49,7 +48,6 @@
         @if (_notes) { <MarginaliaLane Annotations="@_annotations" ActiveAnnotationId="@_activeAnnotation" OnSelectAnnotation="SelectAnnotation" OnDeleteAnnotation="DeleteAnnotation" OnSaveNote="SaveNote" OnClose="() => _notes = false" /> }
     </div>
     <SelectionQuickBar IsVisible="@_selectionVisible" ClientX="@_selectionX" ClientY="@_selectionY" OnApplyHighlight="Highlight" OnAddNote="AddNote" OnCopyQuote="CopyQuote" OnDismiss="DismissSelection" />
-    @if (_narration && _loaded) { <NarrationPanel @key="Book.Id" BookId="@Book.Id" PageIndex="@_page" TotalPages="@_pages" OnGoToPage="GoTo" OnClose="() => _narration = false" /> }
     <footer class="folio-reader-status"><span>@(_loaded ? $"Page {_page + 1} of {_pages}" : "PDF reader")</span><div class="folio-reader-status-progress"><span style="width: @Progress%;"></span></div>
         @if (_saveError) { <button class="folio-subtle-btn folio-error-text" @onclick="() => Persist(true)">Position not saved · Retry</button> }
         else { <span class="folio-save-status">@(_loaded ? "Position saved automatically" : "Local PDF · Original preserved")</span> }
@@ -78,7 +76,6 @@
     private IReadOnlyList<BookmarkDto> _bookmarks = [];
     private List<OutlineNodeDto> _outline = [];
     private Guid? _activeAnnotation;
-    private bool _reflow, _narration;
     private int Progress => (int)Math.Clamp(100.0 * (_page + 1) / Math.Max(1, _pages), 0, 100);
     protected override void OnInitialized()
     {
@@ -210,7 +207,7 @@
         catch (Exception ex) { Logger.LogError(ex, "Could not save annotation for {BookId}", Book.Id); Notifications.Add("The annotation could not be saved. Please try again.", Severity.Error); }
     }
     private async Task DismissSelection() { _selectionVisible = false; _selectionText = ""; _selectionRects = []; await Reader.ClearSelectionBoxAsync(); }
-    private async Task CopyQuote() { await Use<IAnnotationExportService, bool>(async s => { await JS.InvokeVoidAsync("navigator.clipboard.writeText", s.FormatQuoteCitation(_selectionText, Book.Title, Book.Author, _selectionPage)); return true; }); await DismissSelection(); Notifications.Add("Quote copied.", Severity.Info); }
+    private async Task CopyQuote() { await JS.InvokeVoidAsync("navigator.clipboard.writeText", QuoteCitationFormatter.Format(_selectionText, Book.Title, Book.Author, _selectionPage)); await DismissSelection(); Notifications.Add("Quote copied.", Severity.Info); }
     [JSInvokable] public async Task OnAnnotationClicked(string id) { if (Guid.TryParse(id, out var value)) { _activeAnnotation = value; _notes = true; await InvokeAsync(StateHasChanged); } }
     private async Task SelectAnnotation(Guid id) { _activeAnnotation = id; await Reader.PulseAnnotationAsync(id); }
     private async Task DeleteAnnotation(Guid id) { await Use<IAnnotationService, bool>(s => s.DeleteAnnotationAsync(id)); await LoadPage(_page); }
@@ -232,7 +229,7 @@
     private async Task ApplyLighting() => await Reader.ApplyThemeAsync(new { cssFilter = _lighting == "warm" ? "sepia(0.16)" : "none" });
     private async Task Notebook()
     {
-        var dialog = await Dialogs.ShowAsync<NotebookView>("Notebook", new DialogParameters<NotebookView> { { x => x.BookId, Book.Id }, { x => x.BookTitle, Book.Title }, { x => x.Author, Book.Author }, { x => x.OnJumpToPage, EventCallback.Factory.Create<int>(this, GoTo) } }, new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Large });
+        var dialog = await Dialogs.ShowAsync<NotebookView>("Notebook", new DialogParameters<NotebookView> { { x => x.BookId, Book.Id }, { x => x.BookTitle, Book.Title }, { x => x.OnJumpToPage, EventCallback.Factory.Create<int>(this, GoTo) } }, new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Large });
         await dialog.Result; await LoadPage(_page);
     }
     [JSInvokable] public Task OnReaderError(ErrorPayload error) { _loaded = false; _passwordRequired = error.Code == "password"; _error = _passwordRequired ? "Enter the document password. It is used only for this session." : "The PDF may be missing, damaged, or unavailable. Your notes and bookmarks are preserved."; return InvokeAsync(StateHasChanged); }

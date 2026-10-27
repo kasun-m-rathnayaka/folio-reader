@@ -160,7 +160,7 @@ select { color:var(--folio-text-primary); background:var(--md-sys-color-surface)
 
 .folio-header-spacer { margin-left:auto; }
 .folio-field-label { display:block; margin:18px 0 8px; font-size:12px; font-weight:600; }
-.folio-shelf-dialog { border:1px solid var(--md-sys-color-outline-variant); border-radius:14px; background:var(--md-sys-color-surface); color:var(--folio-text-primary); }
+.folio-shelf-dialog, .folio-notebook-dialog { border:1px solid var(--md-sys-color-outline-variant); border-radius:14px; background:var(--md-sys-color-surface); color:var(--folio-text-primary); }
 .folio-shelf-dialog .mud-dialog-title { padding:24px 24px 0; }
 .folio-shelf-dialog .mud-dialog-title h2 { font-size:20px; }
 .folio-shelf-dialog .mud-dialog-content { padding:16px 24px 8px; }

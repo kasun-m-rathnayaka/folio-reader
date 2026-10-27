@@ -1,7 +1,6 @@
 using System.Windows;
 using Folio.Application;
 using Folio.Application.Common.Interfaces;
-using Folio.Audio;
 using Folio.Infrastructure;
 using Folio.Infrastructure.Persistence.Migrations;
 using Folio.UI;
@@ -60,7 +59,6 @@ public partial class App : System.Windows.Application
                 services.AddMudServices();
                 services.AddFolioInfrastructure(options => options.RootDirectory = dataRoot);
                 services.AddFolioApplication();
-                services.AddFolioAudio();
                 services.AddFolioUI();
                 services.AddSingleton<IFilePickerService, Folio.Desktop.Services.WpfFilePickerService>();
                 services.AddSingleton<IExternalLinkService, Folio.Desktop.Services.ExternalLinkService>();

@@ -1,7 +1,7 @@
 namespace Folio.Application.Common.Interfaces;
 
 /// <summary>
-/// Manages physical storage under %LocalAppData%\Folio\ (books, covers, cache, models, backups, logs).
+/// Manages physical storage under %LocalAppData%\Folio\ (books, covers, cache, backups, logs).
 /// </summary>
 public interface IFileStore
 {
@@ -10,7 +10,6 @@ public interface IFileStore
     string BooksDirectory { get; }
     string CoversDirectory { get; }
     string CacheDirectory { get; }
-    string ModelsDirectory { get; }
     string BackupsDirectory { get; }
     string LogsDirectory { get; }
 

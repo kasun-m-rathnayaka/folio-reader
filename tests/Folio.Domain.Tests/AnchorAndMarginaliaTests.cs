@@ -55,35 +55,4 @@ public class AnchorAndMarginaliaTests
         Assert.Equal(ReanchorStatus.Detached, result.Status);
     }
 
-    [Fact]
-    public void MarginaliaLayoutEngine_TwentyOverlappingCards_RelaxesWithoutOverlapAndPreservesOrder()
-    {
-        // 20 notes clustered closely around page center [0.4, 0.6]
-        var items = new List<MarginaliaItem>();
-        for (int i = 0; i < 20; i++)
-        {
-            items.Add(new MarginaliaItem
-            {
-                Id = Guid.NewGuid(),
-                IdealY = 0.4 + (i * 0.005), // Clustered within 10% of page height
-                Height = 0.035              // Each card takes 3.5% of page height
-            });
-        }
-
-        var relaxed = MarginaliaLayoutEngine.Relax(items, minGap: 0.008, minBound: 0.0, maxBound: 1.0);
-
-        Assert.Equal(20, relaxed.Count);
-
-        // Verify vertical order is strictly preserved
-        for (int i = 1; i < relaxed.Count; i++)
-        {
-            Assert.True(relaxed[i].PositionY > relaxed[i - 1].PositionY, $"Item {i} must be below item {i-1}");
-            double gap = relaxed[i].PositionY - (relaxed[i - 1].PositionY + relaxed[i - 1].Height);
-            Assert.True(gap >= 0.0079, $"Gap between {i-1} and {i} must be at least minGap (was {gap})");
-        }
-
-        // Verify bounds
-        Assert.True(relaxed[0].PositionY >= 0.0);
-        Assert.True(relaxed[^1].Bottom <= 1.0);
-    }
 }

@@ -31,7 +31,6 @@ public class FileStoreTests : IDisposable
         Assert.True(Directory.Exists(_fileStore.BooksDirectory));
         Assert.True(Directory.Exists(_fileStore.CoversDirectory));
         Assert.True(Directory.Exists(_fileStore.CacheDirectory));
-        Assert.True(Directory.Exists(_fileStore.ModelsDirectory));
         Assert.True(Directory.Exists(_fileStore.BackupsDirectory));
         Assert.True(Directory.Exists(_fileStore.LogsDirectory));
     }

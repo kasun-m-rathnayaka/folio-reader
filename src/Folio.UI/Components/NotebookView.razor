@@ -2,11 +2,9 @@
 @using Folio.Application.Annotations.DTOs
 @using Folio.Domain.Enums
 @inject IAnnotationService AnnotationService
-@inject IBookmarkService BookmarkService
-@inject IDialogService DialogService
 @inject NotificationService Notifications
 
-<MudDialog>
+<MudDialog Class="folio-notebook-dialog">
     <TitleContent>
         <div class="d-flex justify-space-between align-center" style="color: var(--folio-text-primary); width: 100%;">
             <div class="d-flex align-center gap-2">
@@ -14,10 +12,6 @@
                 <span style="font-weight: 700; font-size: 16px;">Notebook — @BookTitle</span>
                 <span style="color: var(--folio-text-muted); font-size: 13px;">(@_filteredAnnotations.Count items)</span>
             </div>
-            <button class="folio-primary-btn" @onclick="OpenExportModal">
-                <MudIcon Icon="@Icons.Material.Filled.FileUpload" Size="Size.Small" Class="mr-1" />
-                Export Notes
-            </button>
         </div>
     </TitleContent>
     <DialogContent>
@@ -126,7 +120,6 @@
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
     [Parameter] public Guid BookId { get; set; }
     [Parameter] public string BookTitle { get; set; } = string.Empty;
-    [Parameter] public string? Author { get; set; }
     [Parameter] public EventCallback<int> OnJumpToPage { get; set; }
 
     private List<AnnotationDto> _allAnnotations = new();
@@ -184,20 +177,6 @@
     {
         MudDialog.Close(DialogResult.Ok(true));
         await OnJumpToPage.InvokeAsync(pageIndex);
-    }
-
-    private async Task OpenExportModal()
-    {
-        var parameters = new DialogParameters<ExportDialog>
-        {
-            { x => x.BookId, BookId },
-            { x => x.BookTitle, BookTitle },
-            { x => x.Author, Author },
-            { x => x.Annotations, _allAnnotations }
-        };
-
-        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Medium };
-        await DialogService.ShowAsync<ExportDialog>("Export Annotations", parameters, options);
     }
 
     private void Close() => MudDialog.Cancel();

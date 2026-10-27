@@ -288,11 +288,8 @@ class FolioReaderEngine {
             page.overlayLayer.append(el);
         }
     }
-    drawOverlays(index, rects, color = '#FFE082') { const page = this.pages[index]; if (!page) return; for (const rect of rects) { const r = rotateRect(rect, this.rotation), el = document.createElement('div'); el.className = 'folio-highlight-overlay'; Object.assign(el.style, { left:`${r.x*100}%`, top:`${r.y*100}%`, width:`${r.width*100}%`, height:`${r.height*100}%`, backgroundColor:color }); page.overlayLayer.append(el); } }
-    clearOverlays(index) { this.pages[index]?.overlayLayer.querySelectorAll('.folio-highlight-overlay').forEach(el => el.remove()); }
     pulseAnnotation(id) { document.querySelectorAll(`[data-annotation-id="${id}"]`).forEach(el => { el.classList.add('folio-annotation-pulsing'); setTimeout(() => el.classList.remove('folio-annotation-pulsing'), 1000); }); }
     setDogEar(index, folded) { const ear = this.pages[index]?.dogEar; ear?.classList.toggle('active', folded); ear?.setAttribute('aria-pressed', folded ? 'true' : 'false'); }
-    setSnipMode() { /* Area annotations are deferred; the core selection workflow is supported. */ }
     async getPageText(index) {
         if (!this.pdfDoc) return null;
         const page = await this.pdfDoc.getPage(index + 1), content = await page.getTextContent();
@@ -370,7 +367,6 @@ class FolioReaderEngine {
         else if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); this.goToPage(e.key === 'Home' ? 0 : this.totalPages - 1); }
     }
     applyTheme(theme) { this.theme = theme; this.pages.forEach(p => p.canvasWrap.style.filter = theme.cssFilter || 'none'); }
-    setFocusRuler() { }
     async dispose() {
         this.disposed = true; this.searchVersion++; clearTimeout(this.positionTimer); clearTimeout(this.chromeTimer); clearTimeout(this.selectionTimer); this.events?.abort(); this.resizeObserver?.disconnect();
         this.pages.forEach(p => this.recyclePage(p)); this.pages = []; this.dotNetHelper = null;
@@ -378,7 +374,7 @@ class FolioReaderEngine {
         this.container?.replaceChildren();
     }
 }
-const methods = ['loadDocument','goToPage','setZoom','setFitWidth','setFitPage','setLayoutMode','setRotation','search','clearSearch','drawOverlays','clearOverlays','getPageText','getThumbnail','drawAnnotations','pulseAnnotation','setDogEar','setSnipMode','clearSelectionBox','applyTheme','setFocusRuler','setOcrPage'];
+const methods = ['loadDocument','goToPage','setZoom','setFitWidth','setFitPage','setLayoutMode','setRotation','search','clearSearch','getPageText','getThumbnail','drawAnnotations','pulseAnnotation','setDogEar','clearSelectionBox','applyTheme','setOcrPage'];
 window.folioReader = {
     engine: null,
     get pdfDoc() { return this.engine?.pdfDoc; },

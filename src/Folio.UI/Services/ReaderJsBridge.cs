@@ -20,11 +20,6 @@ public class ReaderJsBridge : IAsyncDisposable
         await _jsRuntime.InvokeVoidAsync("folioReader.init", containerId, dotNetHelper);
     }
 
-    public async ValueTask LoadDocumentAsync(string url, int pageIndex, double offsetPercent, double zoom, string layoutMode)
-    {
-        await _jsRuntime.InvokeVoidAsync("folioReader.loadDocument", url, pageIndex, offsetPercent, zoom, layoutMode);
-    }
-
     public async ValueTask GoToPageAsync(int pageIndex, double offsetPercent = 0.0)
     {
         await _jsRuntime.InvokeVoidAsync("folioReader.goToPage", pageIndex, offsetPercent);
@@ -65,16 +60,6 @@ public class ReaderJsBridge : IAsyncDisposable
         await _jsRuntime.InvokeVoidAsync("folioReader.clearSearch");
     }
 
-    public async ValueTask DrawOverlaysAsync(int pageIndex, IEnumerable<NormalizedRect> rects, string colorHex = "#FFE082")
-    {
-        await _jsRuntime.InvokeVoidAsync("folioReader.drawOverlays", pageIndex, rects, colorHex);
-    }
-
-    public async ValueTask ClearOverlaysAsync(int pageIndex)
-    {
-        await _jsRuntime.InvokeVoidAsync("folioReader.clearOverlays", pageIndex);
-    }
-
     public async ValueTask<PageTextPayload?> GetPageTextAsync(int pageIndex)
     {
         return await _jsRuntime.InvokeAsync<PageTextPayload?>("folioReader.getPageText", pageIndex);
@@ -95,11 +80,6 @@ public class ReaderJsBridge : IAsyncDisposable
         await _jsRuntime.InvokeVoidAsync("folioReader.setDogEar", pageIndex, isFolded);
     }
 
-    public async ValueTask SetSnipModeAsync(bool enabled)
-    {
-        await _jsRuntime.InvokeVoidAsync("folioReader.setSnipMode", enabled);
-    }
-
     public async ValueTask ClearSelectionBoxAsync()
     {
         await _jsRuntime.InvokeVoidAsync("folioReader.clearSelectionBox");
@@ -108,11 +88,6 @@ public class ReaderJsBridge : IAsyncDisposable
     public async ValueTask ApplyThemeAsync(object themeConfig)
     {
         await _jsRuntime.InvokeVoidAsync("folioReader.applyTheme", themeConfig);
-    }
-
-    public async ValueTask SetFocusRulerAsync(bool enabled, int lines = 1)
-    {
-        await _jsRuntime.InvokeVoidAsync("folioReader.setFocusRuler", enabled, lines);
     }
 
     public async ValueTask DisposeAsync()

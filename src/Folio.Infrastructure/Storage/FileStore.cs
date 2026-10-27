@@ -14,7 +14,6 @@ public class FileStore : IFileStore
     public string BooksDirectory => Path.Combine(RootDirectory, "library", "books");
     public string CoversDirectory => Path.Combine(RootDirectory, "library", "covers");
     public string CacheDirectory => Path.Combine(RootDirectory, "cache");
-    public string ModelsDirectory => Path.Combine(RootDirectory, "models");
     public string BackupsDirectory => Path.Combine(RootDirectory, "backups");
     public string LogsDirectory => Path.Combine(RootDirectory, "logs");
 
@@ -32,7 +31,6 @@ public class FileStore : IFileStore
         Directory.CreateDirectory(BooksDirectory);
         Directory.CreateDirectory(CoversDirectory);
         Directory.CreateDirectory(CacheDirectory);
-        Directory.CreateDirectory(ModelsDirectory);
         Directory.CreateDirectory(BackupsDirectory);
         Directory.CreateDirectory(LogsDirectory);
     }
