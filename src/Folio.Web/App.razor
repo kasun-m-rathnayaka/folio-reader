@@ -30,14 +30,18 @@ else
         if (!firstRender) return;
         try
         {
-            await Database.InitializeAsync();
+            // A storage engine that never answers must not leave a spinner forever (DECISIONS D-021).
+            var start = Database.InitializeAsync();
+            if (await Task.WhenAny(start, Task.Delay(TimeSpan.FromSeconds(30))) != start)
+                throw new TimeoutException("OPFS: storage did not start in time.");
+            await start;
             await Picker.RegisterDropTargetAsync();
             _ready = true;
         }
         catch (Exception ex)
         {
             // SqliteWasmBlazor needs private file storage with sync access handles in workers (OPFS).
-            _error = ex.Message.Contains("SqliteWasm", StringComparison.Ordinal) || ex.Message.Contains("OPFS", StringComparison.Ordinal)
+            _error = ex.Message.Contains("SqliteWasm", StringComparison.Ordinal) || ex.Message.Contains("OPFS", StringComparison.Ordinal) || ex is TimeoutException
                 ? "This browser does not offer the private file storage Folio keeps your library in. Use a current Chrome, Edge, Firefox or Safari, outside private browsing."
                 : ex.Message;
         }

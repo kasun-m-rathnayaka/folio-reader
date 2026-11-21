@@ -164,8 +164,9 @@ bundle differs (line endings normalised). three 0.187.0 and esbuild 0.28.2 are p
 ## D-021 · Firefox and WebKit in CI lack OPFS sync access handles (M2–M6)
 
 Playwright's headless Firefox and WebKit builds fail SqliteWasmBlazor's start-up with "Missing required OPFS APIs", so
-the web app cannot open a library there, while current Firefox (111+) and Safari support them. CI tries enabling
-Firefox's `dom.fs.*` prefs; the app now shows a plain explanation when storage is missing. Until those engines pass in CI,
+the web app cannot open a library there, while current Firefox (111+) and Safari support them. Enabling Firefox's
+`dom.fs.*` prefs in CI made start-up hang instead, so it was dropped; the app shows a plain explanation when storage is
+missing, and after 30 s if storage never starts. Until those engines pass in CI,
 the cross-browser gates for M2 are proven on Chromium only and need a manual check on real Firefox and Safari (M8).
 
 ## D-022 · Backup format and battery saver (M7)

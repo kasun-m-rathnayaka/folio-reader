@@ -9,13 +9,13 @@ test.skip(({ browserName }) => browserName !== 'chromium', 'Visual baselines are
 
 // In CI, a mismatch prints the actual image (base64) so it can be reviewed and committed as the approved baseline
 // without artifact downloads (DECISIONS D-016).
+// Soft: every snapshot in the test is compared (and printed) even when an earlier one differs.
 async function snapshot(target, name, testInfo, options) {
-    try { await expect(target).toHaveScreenshot(name, options); }
-    catch (error) {
-        const actual = testInfo.outputPath(name.replace('.png', '-actual.png'));
-        if (process.env.CI && existsSync(actual)) console.log(`[visual-actual] ${name} ${(await readFile(actual)).toString('base64')}`);
-        throw error;
-    }
+    const failuresBefore = testInfo.errors.length;
+    await expect.soft(target).toHaveScreenshot(name, options);
+    const actual = testInfo.outputPath(name.replace('.png', '-actual.png'));
+    if (testInfo.errors.length > failuresBefore && process.env.CI && existsSync(actual))
+        console.log(`[visual-actual] ${name} ${(await readFile(actual)).toString('base64')}`);
 }
 
 for (const theme of ['dark', 'light']) {

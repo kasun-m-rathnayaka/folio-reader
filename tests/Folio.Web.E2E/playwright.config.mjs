@@ -10,8 +10,7 @@ const chromiumLaunch = process.env.FOLIO_CHROMIUM_PATH ? { launchOptions: { exec
 const crossEngine = /browsers\.spec\.mjs$/;
 const projects = [
     { name: 'chromium', use: { ...devices['Desktop Chrome'], ...chromiumLaunch } },
-    // Playwright's Firefox may ship with the Origin Private File System off; the app needs it (DECISIONS D-021).
-    { name: 'firefox', testMatch: crossEngine, use: { ...devices['Desktop Firefox'], launchOptions: { firefoxUserPrefs: { 'dom.fs.enabled': true, 'dom.fs.writable_file_stream.enabled': true } } } },
+    { name: 'firefox', testMatch: crossEngine, use: { ...devices['Desktop Firefox'] } },
     { name: 'webkit', testMatch: crossEngine, use: { ...devices['Desktop Safari'] } },
 ].filter(p => wanted.includes(p.name));
 
