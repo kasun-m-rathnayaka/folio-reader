@@ -11,7 +11,7 @@ public enum StageQuality { Auto, High, Low }
 
 public record AppPreferences(bool DarkMode = true, bool GridView = true, bool SidebarCollapsed = false,
     double FontScale = 1, MotionPreference Motion = MotionPreference.System, LibraryStyle LibraryStyle = LibraryStyle.ThreeD,
-    StageQuality Quality = StageQuality.Auto);
+    StageQuality Quality = StageQuality.Auto, DateTimeOffset? BackupReminderAt = null);
 
 public interface IAppPreferencesService
 {

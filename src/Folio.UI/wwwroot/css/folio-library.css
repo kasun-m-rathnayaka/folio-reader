@@ -217,3 +217,7 @@ select { border-radius:2px; background:var(--folio-surface); border-color:var(--
 /* ---- 3D details (DET-1): the stage draws the book and the tint; the panel floats on it ------------------------------ */
 .folio-details.is-3d { background:transparent; }
 .folio-details.is-3d .folio-details-stage { visibility:hidden; }
+
+/* ---- backup (WEB-4) ---------------------------------------------------------------------------------------------------- */
+.folio-settings-actions { display:flex; flex-wrap:wrap; gap:8px 18px; margin:6px 0 10px; }
+.folio-storage-status { color:var(--folio-text-muted); margin:4px 0 10px; }

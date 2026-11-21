@@ -1,4 +1,9 @@
 @inject IAppPreferencesService Preferences
+@inject IPlatformCapabilities Platform
+@inject IServiceProvider Services
+@inject IDialogService Dialogs
+@inject NotificationService Notifications
+@inject NavigationManager Navigation
 <section class="folio-settings-page">
     <div class="folio-eyebrow">[ SETTINGS ]</div><h1 class="folio-display">Settings</h1><p class="folio-muted">A comfortable reading space, saved on this device.</p>
     <div class="folio-settings-group"><h2 class="folio-eyebrow">[ APPEARANCE ]</h2>
@@ -23,6 +28,21 @@
             }
         </fieldset>
     </div>
+    @if (Platform.SupportsLibraryBackup && Backup != null)
+    {
+        <div class="folio-settings-group"><h2 class="folio-eyebrow">[ LIBRARY BACKUP ]</h2>
+            <p class="folio-muted">Your books live in this browser's private storage. Browsers can clear it, so keep a backup: one file with your books, highlights, bookmarks and reading positions.</p>
+            @if (_storage != null)
+            {
+                <p class="folio-mono folio-storage-status">@FormatBytes(_storage.UsedBytes) USED · @(_storage.Persistent ? "PROTECTED FROM CLEARING" : "MAY BE CLEARED BY THE BROWSER")</p>
+            }
+            <div class="folio-settings-actions">
+                <BracketButton Label="EXPORT BACKUP" Disabled="@_busy" OnClick="ExportBackup" />
+                <BracketButton Label="RESTORE FROM BACKUP" Plus="false" Disabled="@_busy" OnClick="ImportBackup" />
+            </div>
+            @if (_busy) { <MudProgressLinear Color="Color.Primary" Value="@(_progress * 100)" aria-label="Backup progress" /> }
+        </div>
+    }
     <div class="folio-settings-group"><h2 class="folio-eyebrow">[ SHORTCUTS ]</h2><dl class="folio-shortcuts">
         <dt>Open focused book</dt><dd>Enter</dd><dt>Book details</dt><dd>D</dd><dt>Shelf 1–9</dt><dd>1 – 9</dd><dt>Back</dt><dd>Esc</dd>
         <dt>Find in book</dt><dd>Ctrl F</dd><dt>Go to page</dt><dd>Ctrl G</dd><dt>Bookmark page</dt><dd>Ctrl D</dd><dt>Reader commands</dt><dd>Ctrl K</dd><dt>Focus mode</dt><dd>F11</dd></dl></div>
@@ -42,6 +62,42 @@
         (StageQuality.High, "High", "Sharpest books and soft shadows."),
         (StageQuality.Low, "Low", "Lower resolution, no shadows."),
     ];
+    private ILibraryBackupService? Backup => Services.GetService(typeof(ILibraryBackupService)) as ILibraryBackupService;
+    private StorageStatus? _storage;
+    private bool _busy;
+    private double _progress;
+    protected override async Task OnInitializedAsync() { if (Platform.SupportsLibraryBackup && Backup != null) _storage = await Backup.GetStorageStatusAsync(); }
+    private static string FormatBytes(long bytes) => bytes >= 1 << 30 ? $"{bytes / (double)(1 << 30):0.0} GB" : bytes >= 1 << 20 ? $"{bytes / (double)(1 << 20):0.0} MB" : $"{bytes / 1024.0:0} KB";
+    private Progress<double> Reporter() => new(p => { _progress = p; StateHasChanged(); });
+
+    private async Task ExportBackup()
+    {
+        _busy = true; _progress = 0;
+        try
+        {
+            var result = await Backup!.ExportAsync(Reporter());
+            Preferences.Save(Preferences.Current with { BackupReminderAt = DateTimeOffset.UtcNow });
+            Notifications.Add($"Saved {result.FileName} with {result.Books} {(result.Books == 1 ? "book" : "books")}.", Severity.Success, "Backup exported");
+        }
+        catch (Exception ex) { Notifications.Add(ex.Message, Severity.Error, "Backup failed"); }
+        finally { _busy = false; }
+    }
+
+    private async Task ImportBackup()
+    {
+        if (!await ConfirmActionDialog.ShowAsync(Dialogs, "Restore from a backup?", "Your current library in this browser will be replaced by the backup's books, highlights, bookmarks and positions.", "Choose backup", detail: "Export a backup first if you want to keep what is here now.")) return;
+        _busy = true; _progress = 0;
+        try
+        {
+            var result = await Backup!.ImportAsync(Reporter());
+            if (!result.Completed) { if (result.Message != "No backup chosen.") Notifications.Add(result.Message ?? "The backup could not be restored.", Severity.Error, "Restore failed"); return; }
+            // Every view and cache starts again from the restored library.
+            Navigation.NavigateTo("/", forceLoad: true);
+        }
+        catch (Exception ex) { Notifications.Add(ex.Message, Severity.Error, "Restore failed"); }
+        finally { _busy = false; }
+    }
+
     private async Task Save(AppPreferences preferences) { Preferences.Save(preferences); await OnPreferencesChanged.InvokeAsync(); }
     private Task ToggleDark(bool value) => Save(Preferences.Current with { DarkMode = value });
     private async Task SetScale(ChangeEventArgs e) { if (double.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var scale)) await Save(Preferences.Current with { FontScale = scale }); }

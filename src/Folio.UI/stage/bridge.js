@@ -81,6 +81,7 @@ export const setMotion = level => stage?.setMotion(LEVELS.has(level) ? level : '
 export const setQuality = level => stage?.setQuality(QUALITIES.has(level) ? level : 'auto');
 export const setTheme = theme => stage?.setTheme(theme === 'light' ? 'light' : 'dark');
 export const setPaused = paused => stage?.setPaused(!!paused);
+export const setPowerSaver = on => stage?.setPowerSaver(!!on);
 
 export function dispose() {
     stage?.dispose(); stage = null; dotnet = null;

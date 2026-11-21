@@ -454,9 +454,13 @@ export class Stage {
 
     touch() { this.lastInputAt = performance.now(); }
 
+    /** DSK-2: on battery the stage draws at most 30 frames per second and the hero does not idle-turn. */
+    setPowerSaver(on) { this.powerSaver = !!on; this.invalidate(); }
+
     tick(now) {
         this.raf = 0;
         if (this.disposed || this.paused) return;
+        if (this.powerSaver && this.lastTick && now - this.lastTick < 32) { this.raf = requestAnimationFrame(t => this.tick(t)); return; }
         const realDt = this.lastTick ? Math.min(0.1, (now - this.lastTick) / 1000) : 1 / 60;
         const dt = this.testMode ? 1 / 60 : realDt;
         this.lastTick = now;
@@ -471,7 +475,7 @@ export class Stage {
 
     update(dt, now) {
         let remaining = 0;
-        const idle = this.motion.idle && !this.testMode && this.scene.kind === 'hero' && now - this.lastInputAt < IDLE_STOP_MS;
+        const idle = this.motion.idle && !this.testMode && !this.powerSaver && this.scene.kind === 'hero' && now - this.lastInputAt < IDLE_STOP_MS;
         if (idle) this.idleClock += dt;
         const ctx = { rowIndex: this.rowIndex, rows: this.rows, focusId: this.focusId, halfViewWidth: this.halfViewWidth() };
 
@@ -552,7 +556,7 @@ export class Stage {
                 return { frames: s.frames, lastFrameAt: s.lastFrameAt, drawCalls: s.drawCalls, textures: s.textures,
                     p95FrameMs: percentile(s.frameTimes, 0.95), p95CpuMs: percentile(s.cpuTimes || [], 0.95),
                     quality: stage.quality.current, scene: stage.scene.kind, renderer: s.renderer, books: stage.books.length,
-                    looks: stage.looks.size, paused: stage.paused, contextLosses: stage.contextLosses, handoff: stage.lastHandoff };
+                    looks: stage.looks.size, paused: stage.paused, powerSaver: !!stage.powerSaver, contextLosses: stage.contextLosses, handoff: stage.lastHandoff };
             },
             get settled() { return stage.raf === 0 && stage.settledKind === stage.scene.kind; },
             resetFrameTimes() { stage.stats.frameTimes = []; stage.stats.cpuTimes = []; },

@@ -26,6 +26,9 @@ public static class BrowserPlatformServiceCollectionExtensions
         services.AddSingleton<IFilePickerService>(sp => sp.GetRequiredService<BrowserFilePickerService>());
         services.AddSingleton<IPlatformCapabilities, BrowserPlatformCapabilities>();
         services.AddSingleton<IDatabaseSetup, BrowserDatabaseSetup>();
+        services.AddSingleton<ILibraryBackupService, BrowserLibraryBackupService>();
+        services.AddSingleton<BrowserBatteryMonitor>();
+        services.AddSingleton<IBatteryMonitor>(sp => sp.GetRequiredService<BrowserBatteryMonitor>());
 
         services.AddSqliteWasm(options => options.BaseHref = baseHref);
         services.AddSingleton<BrowserSqliteConnectionInterceptor>();
@@ -33,7 +36,7 @@ public static class BrowserPlatformServiceCollectionExtensions
             options.UseSqliteWasm($"Data Source={DatabaseName}")
                    .AddInterceptors(sp.GetRequiredService<BrowserSqliteConnectionInterceptor>()));
 
-        services.AddFolioInfrastructureCore();
+        services.AddFolioInfrastructureCore(); // TryAdd: the browser battery monitor above wins
         return services;
     }
 }

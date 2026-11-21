@@ -286,3 +286,48 @@ export async function closeText(path) {
     const entry = textDocs.get(path);
     if (entry) { textDocs.delete(path); await entry.task.destroy(); }
 }
+
+// ---- backup (WEB-4) ---------------------------------------------------------------------------------------------
+
+/** Picks one file of any type (a backup archive). */
+export function pickFile(accept) {
+    return new Promise(resolve => {
+        const input = document.createElement('input');
+        input.type = 'file'; input.accept = accept || ''; input.style.display = 'none';
+        let done = false;
+        const finish = files => { if (done) return; done = true; input.remove(); resolve(files.map(f => remember(f))); };
+        input.addEventListener('change', () => finish(Array.from(input.files || []).slice(0, 1)));
+        input.addEventListener('cancel', () => finish([]));
+        document.body.append(input);
+        input.click();
+    });
+}
+
+/** Saves a stream from .NET as a download (the backup archive). */
+export async function downloadStream(fileName, contentType, streamRef) {
+    const blob = new Blob([await streamRef.arrayBuffer()], { type: contentType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url; link.download = fileName; link.style.display = 'none';
+    document.body.append(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+/** Removes every file in a directory (used before restoring a backup). */
+export async function clearDirectory(directory) {
+    for (const name of await listFiles(directory)) await deleteFile(`${directory}/${name}`);
+}
+
+// ---- power (DSK-2 on the web where the Battery Status API exists; otherwise "unknown") ---------------------------
+
+export async function watchBattery(helper) {
+    try {
+        const battery = await navigator.getBattery?.();
+        if (!battery) return false;
+        const send = () => helper.invokeMethodAsync('OnBattery', !battery.charging, Math.round(battery.level * 100)).catch(() => {});
+        battery.addEventListener('chargingchange', send);
+        battery.addEventListener('levelchange', send);
+        send();
+        return true;
+    } catch { return false; }
+}

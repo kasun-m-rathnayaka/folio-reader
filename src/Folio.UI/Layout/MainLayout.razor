@@ -259,8 +259,17 @@
         }
         catch (OperationCanceledException) { _importCancelled = true; Notifications.Add("Import stopped. Books already added are kept.", Severity.Info); }
         catch (Exception ex) { Notifications.Add(ex.Message, Severity.Error, "Import failed"); }
-        finally { _importing = false; _importCancellation.Dispose(); _importCancellation = null; await NotifyLibraryChangedAsync(); StateHasChanged(); }
+        finally { _importing = false; _importCancellation.Dispose(); _importCancellation = null; await NotifyLibraryChangedAsync(); RemindToBackUp(); StateHasChanged(); }
         await DrainImports();
+    }
+    /// <summary>Browser libraries can be evicted: suggest a backup after the first import and then every 30 days.</summary>
+    private void RemindToBackUp()
+    {
+        if (!Platform.SupportsLibraryBackup || !_importResults.Any(r => r.IsNew && r.Error == null)) return;
+        var last = Preferences.Current.BackupReminderAt;
+        if (last != null && DateTimeOffset.UtcNow - last < TimeSpan.FromDays(30)) return;
+        Preferences.Save(Preferences.Current with { BackupReminderAt = DateTimeOffset.UtcNow });
+        Notifications.Add("Your books are stored in this browser, which can clear its storage. Export a backup from Settings to keep them safe.", Severity.Info, "Back up your library");
     }
     public void Dispose() { Inbox.Changed -= ImportQueued; Navigation.LocationChanged -= LocationChanged; Stage.Changed -= StageChanged; _importCancellation?.Cancel(); }
     private void StageChanged() => _ = InvokeAsync(StateHasChanged);

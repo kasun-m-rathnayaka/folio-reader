@@ -9,7 +9,7 @@ namespace Folio.Platform.Browser;
 /// Starts the SQLite worker on OPFS (SqliteWasmBlazor), then runs Folio's own versioned migrations — the same steps the
 /// desktop runs on its database file. Must run after the first render (a SqliteWasmBlazor requirement).
 /// </summary>
-public sealed class BrowserDatabaseSetup(ISqliteWasmInitializer sqlite, OpfsFileStore files, BrowserJs js, IServiceScopeFactory scopes) : IDatabaseSetup
+public sealed class BrowserDatabaseSetup(ISqliteWasmInitializer sqlite, OpfsFileStore files, BrowserJs js, IServiceScopeFactory scopes, BrowserBatteryMonitor battery) : IDatabaseSetup
 {
     private Task? _initialization;
 
@@ -22,6 +22,7 @@ public sealed class BrowserDatabaseSetup(ISqliteWasmInitializer sqlite, OpfsFile
         await new MigratingDatabaseSetup(scopes).InitializeAsync(cancellationToken);
         // Ask the browser not to evict the library under storage pressure (WEB-4). Best effort.
         await js.InvokeAsync<bool>("requestPersistence");
+        await battery.StartAsync();
     }
 }
 

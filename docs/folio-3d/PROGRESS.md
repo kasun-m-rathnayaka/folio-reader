@@ -97,3 +97,13 @@ Done when:
 - [x] At handoff the 3D page and reader page differ by ≤ 2 px at the corners — measured ≈ 1e-13 px (`open.spec.mjs`)
 - [x] Open completes in ≤ 900 ms (stage clock: 817–867 ms); reader accepts input after the crossfade — absolute ≤ 300 ms
       to confirm on hardware at M8 (D-020)
+
+## M7 — Web parity and desktop polish
+
+- [x] 1. `navigator.storage.persist()` at start-up; storage status in Settings; backup export and restore (WEB-4, D-022);
+      offline service worker caches every published asset and serves `index.html` for in-app addresses (WEB-1)
+- [x] 2. Battery saver (DSK-2) and 3D quality setting (SET-3)
+
+Done when:
+- [x] Offline: after the first visit the app loads and opens a stored book with the network disabled (`offline.spec.mjs`)
+- [x] Backup round trip restores books, highlights, bookmarks and positions into an empty profile (`backup.spec.mjs`)

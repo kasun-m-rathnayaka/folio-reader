@@ -167,3 +167,16 @@ Playwright's headless Firefox and WebKit builds fail SqliteWasmBlazor's start-up
 the web app cannot open a library there, while current Firefox (111+) and Safari support them. CI tries enabling
 Firefox's `dom.fs.*` prefs; the app now shows a plain explanation when storage is missing. Until those engines pass in CI,
 the cross-browser gates for M2 are proven on Chromium only and need a manual check on real Firefox and Safari (M8).
+
+## D-022 · Backup format and battery saver (M7)
+
+- Backup: one `.zip` with `manifest.json` (`{ App: "Folio", Format: 1, Created, Books }`), `folio.db` (SqliteWasmBlazor's
+  export) and `library/books/*.pdf`, `library/covers/*` stored uncompressed. Restore validates the manifest, replaces the
+  database first (the current library is untouched if that fails), re-runs Folio's migrations, replaces the files, then
+  reloads the app. The archive is built in memory: fine for typical libraries; a streaming writer is a later improvement.
+- Reminder: after the first successful import, and then at most every 30 days, a notification suggests a backup
+  (`AppPreferences.BackupReminderAt`). Export also resets it.
+- Desktop has no backup UI (`SupportsLibraryBackup = false`): its library is a folder the user can copy.
+- Battery saver (DSK-2): `StageHost` reads `IBatteryMonitor` every 30 s (Win32 power status on desktop; the Battery Status
+  API in browsers that have it, else "unknown"). On battery the stage skips frames to stay ≤ 30 fps and turns idle motion
+  off. Quality (SET-3) was wired in M4.

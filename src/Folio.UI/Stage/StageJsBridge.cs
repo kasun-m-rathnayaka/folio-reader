@@ -37,6 +37,7 @@ public sealed class StageJsBridge(IJSRuntime js) : IAsyncDisposable
     public async ValueTask SetMotionAsync(string level) => await (await Module()).InvokeVoidAsync("setMotion", level);
     public async ValueTask SetQualityAsync(string level) => await (await Module()).InvokeVoidAsync("setQuality", level);
     public async ValueTask SetThemeAsync(string theme) => await (await Module()).InvokeVoidAsync("setTheme", theme);
+    public async ValueTask SetPowerSaverAsync(bool on) => await (await Module()).InvokeVoidAsync("setPowerSaver", on);
     public async ValueTask SetPausedAsync(bool paused) => await (await Module()).InvokeVoidAsync("setPaused", paused);
 
     public async ValueTask DisposeAsync()

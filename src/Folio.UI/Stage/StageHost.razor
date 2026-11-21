@@ -7,6 +7,7 @@
 @inject LibraryEvents Events
 @inject NotificationService Notifications
 @inject IJSRuntime JS
+@inject IBatteryMonitor Battery
 @* One persistent WebGL canvas behind the library chrome (LIB-1). aria-hidden: everything it shows is also in the HTML
    layer the pages render on top (SPEC: accessibility). *@
 <div class="folio-stage @(Visible ? "is-visible" : "")" aria-hidden="true">
@@ -58,6 +59,7 @@
             State.BeginCloseHandler = async (id, rect, scene) => { _appliedScene = scene; await SyncAsync(force: true); await Bridge.BeginCloseAsync(id, rect, scene); };
             await LoadLibraryAsync();
             State.SetAvailable(true, null);
+            _ = WatchPowerAsync();
         }
         catch (Exception ex) when (ex is JSException or InvalidOperationException) { State.SetAvailable(false, "init-failed"); }
         finally { _starting = false; }
@@ -77,6 +79,25 @@
         await Bridge.SetMotionAsync(State.Motion);
         await Bridge.SetQualityAsync(Preferences.Current.Quality.ToString().ToLowerInvariant());
         await Bridge.SetThemeAsync(Preferences.Current.DarkMode ? "dark" : "light");
+    }
+
+    private readonly CancellationTokenSource _lifetime = new();
+    private bool? _powerSaver;
+
+    /// <summary>DSK-2: checks the power source every 30 s and tells the stage to save energy on battery.</summary>
+    private async Task WatchPowerAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(30));
+        try
+        {
+            do
+            {
+                var saver = Battery.IsRunningOnBattery;
+                if (_started && saver != _powerSaver) { _powerSaver = saver; await InvokeAsync(async () => await Bridge.SetPowerSaverAsync(saver)); }
+            }
+            while (await timer.WaitForNextTickAsync(_lifetime.Token));
+        }
+        catch (OperationCanceledException) { }
     }
 
     private async Task LoadLibraryAsync()
@@ -131,6 +152,7 @@
     public async ValueTask DisposeAsync()
     {
         _disposed = true;
+        _lifetime.Cancel();
         State.Changed -= StateChanged;
         State.FilterChanged -= FilterChanged;
         Events.Changed -= ReloadLibrary;
