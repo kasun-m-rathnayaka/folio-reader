@@ -24,7 +24,7 @@ public class FileStore : IFileStore
             : Path.GetFullPath(options.RootDirectory);
     }
 
-    public void EnsureDirectories()
+    public virtual void EnsureDirectories()
     {
         Directory.CreateDirectory(RootDirectory);
         Directory.CreateDirectory(DatabaseDirectory);
@@ -54,7 +54,7 @@ public class FileStore : IFileStore
         return Convert.ToHexStringLower(hash);
     }
 
-    public async Task<string> StoreBookAsync(
+    public virtual async Task<string> StoreBookAsync(
         string sourceFilePath,
         string sha256,
         CancellationToken cancellationToken = default)
@@ -110,10 +110,22 @@ public class FileStore : IFileStore
         return Path.Combine(CoversDirectory, $"{sha256.ToLowerInvariant()}.webp");
     }
 
-    public bool BookExists(string sha256)
+    public virtual bool BookExists(string sha256)
     {
         string path = GetBookPath(sha256);
         return File.Exists(path) && new FileInfo(path).Length > 0;
     }
-}
 
+    public virtual Task DeleteManagedFilesAsync(string sha256, CancellationToken cancellationToken = default)
+    {
+        DeleteInside(GetBookPath(sha256), BooksDirectory);
+        DeleteInside(GetCoverPath(sha256), CoversDirectory);
+        return Task.CompletedTask;
+    }
+
+    private static void DeleteInside(string path, string directory)
+    {
+        if (Path.GetFullPath(path).StartsWith(Path.GetFullPath(directory) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            File.Delete(path);
+    }
+}

@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Version>0.3.0</Version>
+    <ServiceWorkerAssetsManifest>service-worker-assets.js</ServiceWorkerAssetsManifest>
+    <!-- The SQLite native stub from SqliteWasmBlazor requires a native relink (wasm-tools workload). -->
+    <WasmBuildNative>true</WasmBuildNative>
+    <BlazorWebAssemblyLoadAllGlobalizationData>false</BlazorWebAssemblyLoadAllGlobalizationData>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- SQLitePCLRaw declares varargs P/Invokes (sqlite3_config, sqlite3_db_config) that SqliteWasmBlazor never calls: its
+         SQLite runs in a worker. The relink reports them as WASM0001; see DECISIONS D-007. -->
+    <NoWarn>$(NoWarn);WASM0001</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Folio.Domain\Folio.Domain.csproj" />
+    <ProjectReference Include="..\Folio.Application\Folio.Application.csproj" />
+    <ProjectReference Include="..\Folio.UI\Folio.UI.csproj" />
+    <ProjectReference Include="..\Folio.Platform.Browser\Folio.Platform.Browser.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.12" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.12" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ServiceWorker Include="wwwroot\service-worker.js" PublishedContent="wwwroot\service-worker.published.js" />
+  </ItemGroup>
+
+</Project>

@@ -12,7 +12,7 @@ Resume from the first unchecked step. Gates marked *(CI)* are proven by GitHub A
 
 Done when:
 - [x] Linux build succeeds with zero warnings under `-warnaserror`
-- [ ] Windows CI job green *(CI)*
+- [x] Windows CI job green *(CI)* — run 44950422834
 
 ## M1 — Platform split
 
@@ -24,6 +24,19 @@ Done when:
 
 Done when:
 - [x] `Folio.Infrastructure.Tests` pass on Linux — 43/43
-- [ ] Full Windows CI green, including `test:reader` *(CI)*
+- [x] Full Windows CI green, including `test:reader` *(CI)* — run 44950422834
 - [x] No `net10.0-windows` reference from any shared project
 - [x] No marginalia, Notebook, OCR or quote-with-citation code or UI remains; highlights and bookmarks still work (reader test 7/7 on Chromium)
+
+## M2 — Web host (2D, today's look)
+
+- [x] 1. `Folio.Web` (Blazor WebAssembly standalone, PWA manifest and service workers) on `Folio.UI` + `Folio.Platform.Browser`
+- [x] 2. `OpfsFileStore`, SqliteWasmBlazor `IDatabaseSetup` with the existing migrations, `PdfJsCoverRenderer`, blob-URL
+      `IBookUrlResolver`, file/folder pickers and drag-and-drop import, `localStorage` preferences (D-007, D-009)
+- [x] 3. Search speed on the 300-page fixture: PdfPig 17.9 s → switched web extraction to PDF.js: 6.0 s (D-008)
+- [x] 4. `tests/Folio.Web.E2E` (Playwright) with the fixture PDFs; `web` CI job on Chromium, Firefox, WebKit
+
+Done when:
+- [x] Import, open, highlight, reload — book and highlight persist: Chromium (local); Firefox and WebKit *(CI)*
+- [x] Library search returns "Paragraph 15.1" from `01_single_column_book_300p.pdf` on page 15
+- [x] `dotnet publish src/Folio.Web` produces a static site that runs from a plain file server (`tests/Folio.Web.E2E/serve.mjs`)

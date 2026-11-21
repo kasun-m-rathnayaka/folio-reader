@@ -27,6 +27,7 @@ public class LibraryWorkflowTests : IDisposable
         _options = new DbContextOptionsBuilder<FolioDbContext>().UseSqlite($"Data Source={Path.Combine(_files.DatabaseDirectory, "folio.db")};Pooling=False").Options;
         _library = new(new Factory(_options), _files);
     }
+    private async Task<List<Annotation>> AnnotationsAsync() { await using var db = new FolioDbContext(_options); return await db.Annotations.AsNoTracking().ToListAsync(); }
     private async Task<Book> Seed()
     {
         await using var db = new FolioDbContext(_options); await new DatabaseMigrator(db, _files).MigrateAsync();
@@ -62,16 +63,15 @@ public class LibraryWorkflowTests : IDisposable
     }
 
     [Fact]
-    public async Task TrashRestore_PreservesNotesAndReadingPosition()
+    public async Task TrashRestore_PreservesHighlightsAndReadingPosition()
     {
         var book = await Seed();
         await _library.SetTrashAsync(book.Id, true);
         Assert.Equal(0, (await _library.QueryAsync(new())).Total);
         Assert.Equal(1, (await _library.QueryAsync(new(Trash:true))).Total);
-        Assert.Empty(await _library.GetNotesAsync(null));
         await _library.SetTrashAsync(book.Id, false);
         Assert.Equal(1, (await _library.QueryAsync(new())).Total);
-        Assert.Equal("Important thought", (await _library.GetNotesAsync(null)).Single().Annotation.Note);
+        Assert.Equal("Important thought", (await AnnotationsAsync()).Single().Note);
     }
     [Fact]
     public async Task PagedQueries_FilterByAuthorStatusAndShelf_WithStableBoundaries()
@@ -142,7 +142,7 @@ public class LibraryWorkflowTests : IDisposable
         await _library.DeleteShelfAsync(first.Id);
         Assert.NotNull(await _library.GetBookAsync(book.Id));
         Assert.Empty((await _library.GetBookAsync(book.Id))!.BookShelves);
-        Assert.Equal("Important thought", (await _library.GetNotesAsync(null)).Single().Annotation.Note);
+        Assert.Equal("Important thought", (await AnnotationsAsync()).Single().Note);
     }
 
     [Fact]

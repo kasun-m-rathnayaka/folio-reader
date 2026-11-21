@@ -31,6 +31,18 @@ dotnet run --project src/Folio.Desktop -- --data-root "D:\Folio-Test-Library"
 
 PDF paths passed as file arguments are imported. A published executable can also read an adjacent `folio-profile.json` containing `{"DataRoot":"D:/Folio-Test-Library"}`. Command-line configuration takes precedence. Keep that file out of a normal release package to use the default personal library.
 
+## Run in a browser
+
+Folio Web is a Blazor WebAssembly app with no server: PDFs, covers and the SQLite library stay in the browser's private
+storage (OPFS). Building it needs the WebAssembly tools once: `dotnet workload install wasm-tools`.
+
+```bash
+dotnet publish src/Folio.Web -c Release -o .artifacts/web
+node tests/Folio.Web.E2E/serve.mjs .artifacts/web/wwwroot 5080
+```
+
+Then open http://127.0.0.1:5080. Any static file server works if it falls back to `index.html` for unknown paths.
+
 ## Verify
 
 ```powershell
@@ -42,6 +54,7 @@ npm --prefix src/Folio.UI ci --ignore-scripts
 npm --prefix src/Folio.UI run check
 npm --prefix src/Folio.UI test
 npm --prefix src/Folio.UI run test:reader
+cd tests/Folio.Web.E2E && npm ci && npx playwright test   # after publishing Folio.Web
 ```
 
 Reader integration tests use installed Microsoft Edge in headless mode, an HTTP server bound only to loopback, and repository fixtures. They write results and engine screenshots into `.artifacts/reader-tests`. Development browser tests require Node 24; normal application use does not require Node.

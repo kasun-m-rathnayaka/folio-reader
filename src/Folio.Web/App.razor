@@ -1,0 +1,40 @@
+@using Folio.Platform.Browser
+@using Folio.UI.Layout
+@inject IDatabaseSetup Database
+@inject BrowserFilePickerService Picker
+
+@if (_error != null)
+{
+    <div class="folio-empty-state" role="alert">
+        <h2>Folio could not open your library</h2>
+        <p>@_error</p>
+        <p>Your PDFs and highlights are stored in this browser and have not been changed.</p>
+    </div>
+}
+else if (!_ready)
+{
+    <div class="folio-empty-state" role="status">Opening your library…</div>
+}
+else
+{
+    <MainLayout />
+}
+
+@code {
+    private bool _ready;
+    private string? _error;
+
+    // SqliteWasmBlazor starts its worker after the first render, so the library waits for it here.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            await Database.InitializeAsync();
+            await Picker.RegisterDropTargetAsync();
+            _ready = true;
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        StateHasChanged();
+    }
+}
