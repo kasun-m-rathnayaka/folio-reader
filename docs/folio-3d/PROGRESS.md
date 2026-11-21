@@ -53,7 +53,7 @@ Done when:
 - [x] 5. Settings: Motion (SET-1), Library style (SET-2) and 3D quality (SET-3, used from M4)
 
 Done when:
-- [x] Visual snapshots for library, details and reader toolbar in light and dark (`visual.spec.mjs`; D-016)
+- [x] Visual snapshots for library, details and reader toolbar in light and dark (`visual.spec.mjs`; baselines rendered and approved from CI, D-016)
 - [x] Axe: no serious or critical issues on library, details, reader and settings in both themes; reduced-motion check passes
 - [x] Back and Forward work across all routes on the web (`routes.spec.mjs`), deep link `?page=12` opens page 12
 
@@ -119,7 +119,7 @@ Done when:
       for compatibility; the 2D library remains the fallback
 
 Done when:
-- [ ] All quality gates pass on the release commit *(CI)* — Chromium visual baselines need the CI-rendered images (D-016)
+- [ ] All quality gates pass on the release commit *(CI)* — pending the run on the commit that approves CI's visual baselines (D-016)
 - [ ] A human has used the Windows build on real hardware and signed off here *(human)*. Please also check: 60 fps with
       300 books on an integrated GPU, open ≤ 900 ms and reader input ≤ 300 ms in real time, WebView2 3D (not falling
       back), battery saver, and the web app on real Firefox and Safari (D-021)

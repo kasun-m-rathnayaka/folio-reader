@@ -109,8 +109,9 @@ wrapper); loading spinners had no name. MudBlazor 8 menu items are not exposed a
 
 ## D-016 · Visual baselines come from the container's Chromium (M3)
 
-Baselines were recorded locally on Chromium build 1243; CI installs Playwright 1.62.1's build 1255. If CI reports pixel
-differences above 0.1%, the CI images are reviewed from the `web-e2e` artifact and committed as the approved update.
+Baselines were first recorded locally on Chromium build 1243; CI installs Playwright 1.62.1's build 1255, which renders
+about 1% of pixels differently. The approved baselines are therefore CI's: on a mismatch in CI, the visual spec prints the
+actual image (base64) in the log, which was reviewed and committed. Local runs on another Chromium build will differ.
 
 ## D-017 · Stage sources live outside wwwroot; the bundle is committed and verified (M4)
 
