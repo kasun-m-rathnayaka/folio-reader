@@ -1,0 +1,65 @@
+@page "/"
+@page "/shelf"
+@page "/shelf/{ShelfId:guid}"
+@page "/trash"
+@implements IAsyncDisposable
+@inject ILibraryService Library
+@inject FolioNavigator Navigator
+@inject NavigationManager Navigation
+@inject LibraryEvents Events
+@inject SceneKeys Keys
+
+<PageTitle>@PageName · Folio</PageTitle>
+<LibraryView @ref="_view" SearchQuery="@Q" StatusFilter="@_status" Shelf="@_shelf" Trash="@_trash" ShowHero="@_home"
+    OnOpenBook="Open" OnDetails="Details" OnImport="Import" OnChanged="Changed" />
+
+@code {
+    [Parameter] public Guid? ShelfId { get; set; }
+    [SupplyParameterFromQuery(Name = "q")] public string? Q { get; set; }
+    [SupplyParameterFromQuery(Name = "status")] public string? Status { get; set; }
+    [CascadingParameter] public Layout.MainLayout? Layout { get; set; }
+    private LibraryView? _view;
+    private Shelf? _shelf;
+    private ReadingStatus? _status;
+    private bool _trash, _home;
+    private string PageName => _trash ? "Trash" : _shelf?.Name ?? (_status != null ? _status.ToString()! : "Library");
+
+    private IAsyncDisposable? _keys;
+    protected override void OnInitialized() => Events.Changed += Reload;
+    protected override async Task OnAfterRenderAsync(bool firstRender) { if (firstRender) _keys = await Keys.AttachAsync(Key); }
+
+    private async Task Key(string key, bool shift)
+    {
+        var book = _view?.FocusedBook;
+        switch (key)
+        {
+            case "Enter" when book != null: await Open(book); break;
+            case "d" or "D" or " " when book != null: Details(book); break;
+            case "ArrowLeft" or "ArrowRight": _view?.StepHero(key == "ArrowLeft" ? -1 : 1); break;
+            case "Escape" when !_home: Navigator.Go(FolioRoutes.Home); break;
+            case [var digit] when char.IsAsciiDigit(digit) && digit != '0' && Layout?.Shelves is { } shelves && digit - '1' < shelves.Count:
+                Navigator.Go(FolioRoutes.Shelf(shelves[digit - '1'].Id)); break;
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var path = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Trim('/');
+        _trash = path == "trash";
+        _home = path.Length == 0;
+        _status = Enum.TryParse<ReadingStatus>(Status, true, out var status) ? status : null;
+        _shelf = null;
+        if (ShelfId is { } id)
+        {
+            _shelf = (await Library.GetShelvesAsync()).FirstOrDefault(s => s.Id == id);
+            if (_shelf == null) Navigator.Go(FolioRoutes.Home, replace: true);
+        }
+    }
+
+    private Task Open(Book book) => Navigator.OpenBookAsync(book.Id, null, $"[data-book-id=\"{book.Id}\"] .folio-cssbook");
+    private void Details(Book book) => Navigator.Go(FolioRoutes.Book(book.Id));
+    private Task Import() => Layout?.ImportBooks() ?? Task.CompletedTask;
+    private Task Changed() => Layout?.RefreshNavigation() ?? Task.CompletedTask;
+    private Task Reload() => _view?.RefreshAsync() ?? Task.CompletedTask;
+    public async ValueTask DisposeAsync() { Events.Changed -= Reload; if (_keys != null) await _keys.DisposeAsync(); }
+}

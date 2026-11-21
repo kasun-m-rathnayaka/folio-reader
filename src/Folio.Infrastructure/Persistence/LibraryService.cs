@@ -48,8 +48,8 @@ public class LibraryService(IDbContextFactory<FolioDbContext> factory, IFileStor
     {
         await using var db = await factory.CreateDbContextAsync(ct);
         return await db.Books.AsNoTracking().Include(b => b.ReadingPosition)
-            .Where(b => b.TrashedAt == null && b.LastReadAt != null && b.Status == ReadingStatus.Reading)
-            .OrderByDescending(b => b.LastReadAt).Take(4).ToListAsync(ct);
+            .Where(b => b.TrashedAt == null && b.LastReadAt != null)
+            .OrderByDescending(b => b.LastReadAt).Take(8).ToListAsync(ct);
     }
 
     public async Task<IReadOnlyList<Shelf>> GetShelvesAsync(CancellationToken ct = default)

@@ -1,5 +1,5 @@
 @using Folio.Platform.Browser
-@using Folio.UI.Layout
+@using Folio.UI
 @inject IDatabaseSetup Database
 @inject BrowserFilePickerService Picker
 
@@ -17,7 +17,7 @@ else if (!_ready)
 }
 else
 {
-    <MainLayout />
+    <Routes />
 }
 
 @code {

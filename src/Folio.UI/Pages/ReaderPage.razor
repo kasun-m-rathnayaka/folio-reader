@@ -1,0 +1,34 @@
+@page "/book/{BookId:guid}/read"
+@inject ILibraryService Library
+@inject FolioNavigator Navigator
+
+<PageTitle>@(_book?.Title ?? "Reader") · Folio</PageTitle>
+@if (_book != null)
+{
+    <ReaderView @key="_book.Id" Book="@_book" InitialPageIndex="@_pageIndex" OnBackToLibrary="Close" />
+}
+else if (_missing)
+{
+    <div class="folio-empty-state" role="alert"><h1 class="folio-display">This book is not in your library</h1>
+        <BracketButton Label="BACK TO LIBRARY" Plus="false" OnClick="() => Navigator.Go(FolioRoutes.Home)" /></div>
+}
+
+@code {
+    [Parameter] public Guid BookId { get; set; }
+    /// <summary>One-based page in the address (<c>?page=12</c>); absent means the saved reading position.</summary>
+    [SupplyParameterFromQuery(Name = "page")] public int? Page { get; set; }
+    private Book? _book;
+    private int? _pageIndex;
+    private bool _missing;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var pageIndex = Page is > 0 ? Page - 1 : null;
+        if (_book?.Id == BookId && _pageIndex == pageIndex) return;
+        _pageIndex = pageIndex;
+        _book = await Library.GetBookAsync(BookId);
+        _missing = _book == null;
+    }
+
+    private Task Close() => Navigator.CloseBookAsync(BookId);
+}

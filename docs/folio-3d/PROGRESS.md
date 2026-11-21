@@ -40,3 +40,18 @@ Done when:
 - [x] Import, open, highlight, reload — book and highlight persist: Chromium (local); Firefox and WebKit *(CI)*
 - [x] Library search returns "Paragraph 15.1" from `01_single_column_book_300p.pdf` on page 15
 - [x] `dotnet publish src/Folio.Web` produces a static site that runs from a plain file server (`tests/Folio.Web.E2E/serve.mjs`)
+
+## M3 — Design system, routes and 2D books
+
+- [x] 1. Tokens (`--folio-*`, mapped onto the md-sys names so MudBlazor dialogs restyle), self-hosted OFL fonts (Instrument
+      Serif, Inter, JetBrains Mono), `BracketButton`, restyled header, sidebar, bottom bar, dialogs (`folio-library.css`)
+- [x] 2. Blazor Router: `/`, `/shelf/{id?}`, `/book/{id}`, `/book/{id}/read?page=`, `/search?q=`, `/trash`, `/settings` (D-013)
+- [x] 3. `CssBook.razor` (CSS 3D cover, spine, page block, ribbon) and the 2D library with hero, marquee and bottom bar;
+      details page with contrast-checked tint (DET-1) and highlight/bookmark counts (DET-2)
+- [x] 4. View Transition from book to reader and back (OPN-3), feature-detected; reduced = 150 ms crossfade, off = cut
+- [x] 5. Settings: Motion (SET-1), Library style (SET-2) and 3D quality (SET-3, used from M4)
+
+Done when:
+- [x] Visual snapshots for library, details and reader toolbar in light and dark (`visual.spec.mjs`; D-016)
+- [x] Axe: no serious or critical issues on library, details, reader and settings in both themes; reduced-motion check passes
+- [x] Back and Forward work across all routes on the web (`routes.spec.mjs`), deep link `?page=12` opens page 12

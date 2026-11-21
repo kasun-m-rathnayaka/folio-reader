@@ -76,3 +76,38 @@ Chromium, this container), so `BrowserPdfTextExtractor` reads text content and m
 
 Playwright's Firefox and WebKit builds cannot be downloaded in this container. Local runs use the preinstalled Chromium
 (`FOLIO_E2E_BROWSERS=chromium FOLIO_CHROMIUM_PATH=...`); the `web` CI job runs all three engines.
+
+## D-011 · HTML chrome uses the CSS spring curve, not the Motion library (M3)
+
+The spec offers `cubic-bezier(0.22, 1, 0.36, 1)` over 240 ms as the CSS fallback for HTML springs. Hover tilt, labels and
+panels only ever move between two states, so the curve gives the same feel without a runtime dependency; `motion` is not
+installed. The 3D stage uses exponential damping as specified.
+
+## D-012 · Covers are served with CORS on desktop (M3)
+
+The details tint and the stage's cover textures read cover pixels. The desktop `folio.covers` virtual host changes from
+`DenyCors` to `Allow` so canvases are not tainted. Covers are local, app-generated images.
+
+## D-013 · Route details beyond the spec's table (M3)
+
+- Reading-status filters are `/shelf?status=Reading|WantToRead|Finished`; typing in the library search filters the current
+  view through `?q=` (replace, not push), and Enter goes to `/search?q=`.
+- Unknown addresses render `/not-found` with a way back.
+- The hero is the most recently read book of any status (`GetRecentAsync` no longer requires "Reading").
+- Closing the reader returns to the address the book was opened from (deep links return to `/`).
+
+## D-014 · One window listener for scene keys (M3)
+
+Enter, D/Space, Esc, arrows, 1–9 and ? go through one listener in `folio-shell.js` that ignores text fields, dialogs,
+menus, the reader, and Enter/Space on a focused control (so its own activation runs once). Pages attach a handler with
+`SceneKeys.AttachAsync`.
+
+## D-015 · Accessibility fixes found by axe (M3)
+
+Pre-existing issues fixed: the book card and reader "…" menus had unnamed buttons (MudBlazor put the label on the
+wrapper); loading spinners had no name. MudBlazor 8 menu items are not exposed as `menuitem`; tests drive the bottom bar.
+
+## D-016 · Visual baselines come from the container's Chromium (M3)
+
+Baselines were recorded locally on Chromium build 1243; CI installs Playwright 1.62.1's build 1255. If CI reports pixel
+differences above 0.1%, the CI images are reviewed from the `web-e2e` artifact and committed as the approved update.

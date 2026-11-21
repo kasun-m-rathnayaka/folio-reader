@@ -42,7 +42,7 @@
                         @if (_passwordRequired) { <input class="folio-input-field" type="password" aria-label="PDF password" placeholder="Password" @bind="_password" /> }
                         <div class="d-flex gap-2"><button class="folio-primary-btn" @onclick="Retry">@(_passwordRequired ? "Unlock PDF" : "Try again")</button>@if (Platform.CanRelinkBooks) { <button class="folio-subtle-btn" @onclick="Locate">Locate PDF</button> }<button class="folio-subtle-btn" @onclick="Back">Back to library</button></div>
                     }
-                    else { <MudProgressCircular Indeterminate="true" Size="Size.Small" /><p>Opening your book…</p> }
+                    else { <MudProgressCircular Indeterminate="true" Size="Size.Small" aria-label="Opening your book" /><p>Opening your book…</p> }
                 </div>
             }
         </div>

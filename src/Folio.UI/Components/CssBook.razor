@@ -1,0 +1,37 @@
+@using System.Globalization
+@inject IBookUrlResolver Urls
+@* A book built from CSS 3D faces (the 2D library and the no-WebGL fallback): cover from the PDF's first page, spine with
+   title and author, cream page block whose depth follows the page count, and a progress ribbon (LIB-4, LIB-8). *@
+<div class="folio-cssbook pose-@Pose.ToString().ToLowerInvariant() @(Interactive ? "is-interactive" : "")" style="@Style" aria-hidden="true">
+    <div class="folio-cssbook-body">
+        <div class="folio-cssbook-face folio-cssbook-front">
+            @if (_cover != null && !_failed) { <img src="@_cover" alt="" loading="lazy" draggable="false" @onerror="() => _failed = true" /> }
+            else { <div class="folio-cssbook-plain"><span class="folio-cssbook-plain-title">@Book.Title</span><span class="folio-cssbook-plain-author">@Book.Author</span></div> }
+            @if (ShowRibbon && BookGeometry.Progress(Book) > 0) { <span class="folio-cssbook-ribbon" style="--progress:@Format(BookGeometry.Progress(Book))"></span> }
+        </div>
+        <div class="folio-cssbook-face folio-cssbook-spine"><span class="folio-cssbook-spine-title">@Book.Title</span><span class="folio-cssbook-spine-author">@Book.Author</span></div>
+        <div class="folio-cssbook-face folio-cssbook-pages"></div>
+        <div class="folio-cssbook-face folio-cssbook-top"></div>
+        <div class="folio-cssbook-face folio-cssbook-back"></div>
+    </div>
+</div>
+@code {
+    public enum BookPose { Front, ThreeQuarter, Spine }
+    [Parameter, EditorRequired] public Book Book { get; set; } = default!;
+    /// <summary>Cover height in pixels; width and depth follow real proportions.</summary>
+    [Parameter] public double Height { get; set; } = 220;
+    [Parameter] public BookPose Pose { get; set; } = BookPose.ThreeQuarter;
+    [Parameter] public bool Interactive { get; set; } = true;
+    [Parameter] public bool ShowRibbon { get; set; } = true;
+    private string? _cover, _coverKey; private bool _failed;
+    private double Scale => Height / BookGeometry.HeightMm;
+    private string Style => $"--book-h:{Format(Height)}px;--book-w:{Format(BookGeometry.WidthMm * Scale)}px;--book-d:{Format(Math.Max(6, BookGeometry.ThicknessMm(Book.PageCount) * Scale))}px;";
+    private static string Format(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
+    protected override async Task OnParametersSetAsync()
+    {
+        var key = $"{Book.Id}|{Book.CoverPath}";
+        if (_coverKey == key) return;
+        _coverKey = key; _failed = false;
+        _cover = string.IsNullOrWhiteSpace(Book.CoverPath) ? null : await Urls.GetCoverUrlAsync(Book);
+    }
+}

@@ -8,6 +8,9 @@ public static class FolioUIServiceCollectionExtensions
     {
         services.AddScoped<ReaderJsBridge>();
         services.AddScoped<NotificationService>();
+        services.AddScoped<FolioNavigator>();
+        services.AddScoped<LibraryEvents>();
+        services.AddScoped<SceneKeys>();
         services.AddSingleton<Folio.Application.Common.Interfaces.IReadingSessionLifetime, ReadingSessionLifetime>();
         return services;
     }

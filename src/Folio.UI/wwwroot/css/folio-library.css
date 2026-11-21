@@ -1,0 +1,164 @@
+/* Folio 3D chrome and 2D library (M3). Bracket labels, hairlines, serif display, mono labels; CSS 3D books. */
+
+/* ---- type ---------------------------------------------------------------------------------------------------- */
+.folio-display { font-family:var(--folio-font-display); font-weight:400; letter-spacing:-0.01em; line-height:1.02; }
+h1.folio-display { font-size:clamp(34px, 4vw, 48px); margin:6px 0 8px; }
+.folio-mono, .folio-eyebrow, .folio-nav-section, kbd, .folio-key-hint { font-family:var(--folio-font-mono); text-transform:uppercase; letter-spacing:0.08em; }
+.folio-eyebrow { font-size:11px; font-weight:500; color:var(--folio-text-muted); letter-spacing:0.08em; }
+.folio-mono { font-size:11px; }
+kbd, .folio-key-hint { font-size:10px; border:1px solid var(--folio-hairline); border-radius:3px; padding:1px 5px; color:var(--folio-text-muted); background:transparent; }
+a { color:inherit; }
+::selection { background:color-mix(in srgb, var(--folio-accent) 40%, transparent); }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline:2px solid var(--folio-accent); outline-offset:3px; }
+
+.folio-skip-link { position:absolute; left:12px; top:-60px; z-index:2000; padding:8px 12px; background:var(--folio-surface); color:var(--folio-text); border:1px solid var(--folio-hairline-strong); font-family:var(--folio-font-mono); font-size:12px; text-transform:uppercase; }
+.folio-skip-link:focus { top:12px; }
+
+/* ---- bracket labels: the only button style in the library ------------------------------------------------------ */
+.folio-bracket { display:inline-flex; align-items:center; gap:0.55em; padding:8px 4px; background:none; border:0; color:var(--folio-text); font-family:var(--folio-font-mono); font-size:12px; font-weight:500; letter-spacing:0.08em; text-transform:uppercase; white-space:nowrap; cursor:pointer; position:relative; }
+.folio-bracket-edge { color:var(--folio-text-muted); }
+.folio-bracket-plus { color:var(--folio-accent); }
+.folio-bracket-label { background:linear-gradient(var(--folio-accent), var(--folio-accent)) left bottom / 0% 1px no-repeat; padding-bottom:2px; transition:background-size var(--folio-duration) var(--folio-ease); }
+.folio-bracket:hover .folio-bracket-label, .folio-bracket:focus-visible .folio-bracket-label { background-size:100% 1px; }
+.folio-bracket .folio-key-hint { margin-left:2px; }
+.folio-bracket:disabled { opacity:.45; cursor:default; }
+.folio-bracket.is-danger { color:var(--md-sys-color-error); }
+.folio-bracket.is-danger .folio-bracket-label { background-image:linear-gradient(var(--md-sys-color-error), var(--md-sys-color-error)); }
+
+/* ---- chrome --------------------------------------------------------------------------------------------------- */
+.folio-library-shell { display:flex; }
+.folio-sidebar { background:var(--folio-bg); border-right:1px solid var(--folio-hairline); }
+.folio-brand { padding:2px 12px 28px; }
+.folio-wordmark { font-family:var(--folio-font-mono); font-size:15px; font-weight:500; letter-spacing:0.32em; color:var(--folio-text); }
+.sidebar-collapsed .folio-wordmark { letter-spacing:0; font-size:13px; }
+.folio-nav-section { font-size:10px; font-weight:500; color:var(--folio-text-muted); padding:22px 12px 8px; }
+.folio-nav-link { border-radius:2px; min-height:36px; padding:8px 12px; font-size:13px; }
+.folio-nav-link.active { background:transparent; color:var(--folio-text); box-shadow:inset 2px 0 0 var(--folio-accent); }
+.folio-nav-link small { background:transparent; font-family:var(--folio-font-mono); }
+.folio-sidebar-bottom { border-top:1px solid var(--folio-hairline); }
+.folio-app-header { height:60px; border-bottom:1px solid var(--folio-hairline); background:var(--folio-bg); }
+.folio-header-context { font-size:11px; color:var(--folio-text-muted); }
+.folio-global-search { border-radius:2px; background:transparent; border-color:var(--folio-hairline); }
+.folio-global-search:focus-within { border-color:var(--folio-accent); }
+.folio-global-search input::-webkit-search-cancel-button { filter:grayscale(1); }
+.folio-icon-button { border-radius:2px; }
+.folio-primary-btn { border-radius:2px; }
+.folio-subtle-btn { border-radius:2px; border-color:var(--folio-hairline); }
+select { border-radius:2px; background:var(--folio-surface); border-color:var(--folio-hairline); }
+.folio-segmented { border-radius:2px; border-color:var(--folio-hairline); }
+.folio-library-count { font-family:var(--folio-font-mono); text-transform:uppercase; letter-spacing:.08em; border-radius:2px; border-color:var(--folio-hairline); }
+.folio-library-controls h2.folio-eyebrow { font-size:11px; font-weight:500; margin:0 0 4px; display:inline-block; margin-right:12px; }
+.folio-library-intro .folio-display { margin:6px 0 0; }
+
+/* MudBlazor dialogs, menus and toasts pick up the tokens */
+.mud-dialog { background:var(--folio-surface) !important; color:var(--folio-text) !important; border:1px solid var(--folio-hairline); border-radius:4px !important; box-shadow:0 30px 80px rgba(0,0,0,.45) !important; }
+.mud-dialog .mud-dialog-title h6, .mud-dialog .mud-dialog-title .mud-typography { font-family:var(--folio-font-display); font-size:28px; font-weight:400; }
+.folio-shelf-dialog, .folio-action-menu, .folio-notification-card, .folio-settings-group { border-radius:4px; border-color:var(--folio-hairline); }
+.mud-overlay-dark { background-color:rgba(5,5,6,.6) !important; }
+
+/* ---- CSS 3D book (2D library and no-WebGL fallback) -------------------------------------------------------------- */
+.folio-cssbook { --book-h:220px; --book-w:147px; --book-d:16px; --turn:0deg; --lift:0px; width:var(--book-w); height:var(--book-h); perspective:1100px; flex-shrink:0; }
+.folio-cssbook-body { position:relative; width:100%; height:100%; transform-style:preserve-3d; transform:translateY(var(--lift)) rotateY(var(--turn)); transition:transform 420ms var(--folio-ease); }
+.folio-cssbook.pose-threequarter { --turn:24deg; }
+.folio-cssbook.pose-front { --turn:6deg; }
+.folio-cssbook.pose-spine { --turn:84deg; }
+.folio-cssbook-face { position:absolute; top:0; backface-visibility:hidden; }
+.folio-cssbook-front { inset:0; transform:translateZ(calc(var(--book-d) / 2)); background:var(--folio-surface-raised); border-radius:1px 3px 3px 1px; overflow:hidden; box-shadow:inset 3px 0 0 rgba(0,0,0,.18), inset 5px 0 3px -2px rgba(255,255,255,.12); }
+.folio-cssbook-front img { width:100%; height:100%; object-fit:cover; display:block; }
+.folio-cssbook-front::after { content:""; position:absolute; inset:0; background:linear-gradient(105deg, rgba(255,255,255,.09) 0%, transparent 38%, rgba(0,0,0,.12) 100%); pointer-events:none; }
+.folio-cssbook-back { inset:0; transform:rotateY(180deg) translateZ(calc(var(--book-d) / 2)); background:var(--folio-surface-raised); }
+.folio-cssbook-spine { width:var(--book-d); height:100%; left:calc(50% - var(--book-d) / 2); transform:rotateY(-90deg) translateZ(calc(var(--book-w) / 2)); background:color-mix(in srgb, var(--folio-surface-raised) 80%, #000); display:flex; flex-direction:column; align-items:center; justify-content:space-between; padding:10px 0; overflow:hidden; }
+.folio-cssbook-spine-title, .folio-cssbook-spine-author { writing-mode:vertical-rl; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-height:70%; color:var(--folio-text); }
+.folio-cssbook-spine-title { font-family:var(--folio-font-display); font-size:clamp(8px, calc(var(--book-d) * .55), 15px); }
+.folio-cssbook-spine-author { font-family:var(--folio-font-ui); font-size:clamp(6px, calc(var(--book-d) * .32), 9px); color:var(--folio-text-muted); max-height:25%; }
+.folio-cssbook-pages { width:var(--book-d); height:calc(100% - 6px); top:3px; left:calc(50% - var(--book-d) / 2); transform:rotateY(90deg) translateZ(calc(var(--book-w) / 2 - 2px)); background:repeating-linear-gradient(90deg, var(--folio-page-cream) 0 1px, color-mix(in srgb, var(--folio-page-cream) 82%, #000) 1px 2px); }
+.folio-cssbook-top { width:calc(100% - 4px); height:var(--book-d); top:calc(50% - var(--book-d) / 2); transform:rotateX(90deg) translateZ(calc(var(--book-h) / 2 - 2px)); background:var(--folio-page-cream); }
+.folio-cssbook-ribbon { position:absolute; top:-2px; right:14%; width:6px; height:calc(14% + 26% * var(--progress)); background:var(--folio-accent); clip-path:polygon(0 0, 100% 0, 100% 100%, 50% 86%, 0 100%); box-shadow:0 1px 2px rgba(0,0,0,.3); }
+.folio-cssbook-plain { display:flex; flex-direction:column; justify-content:space-between; height:100%; padding:12% 12% 10%; background:linear-gradient(160deg, color-mix(in srgb, var(--folio-accent) 28%, var(--folio-surface-raised)), var(--folio-surface-raised)); }
+.folio-cssbook-plain-title { font-family:var(--folio-font-display); font-size:clamp(10px, calc(var(--book-h) * .085), 30px); line-height:1.05; color:var(--folio-text); display:-webkit-box; -webkit-line-clamp:5; -webkit-box-orient:vertical; overflow:hidden; }
+.folio-cssbook-plain-author { font-family:var(--folio-font-mono); text-transform:uppercase; font-size:clamp(6px, calc(var(--book-h) * .035), 11px); letter-spacing:.08em; color:var(--folio-text-muted); }
+.folio-cssbook::after { content:""; display:block; height:12px; margin:-6px 8% 0; background:radial-gradient(closest-side, rgba(0,0,0,.45), transparent); filter:blur(3px); }
+/* hover and focus pull the book out and tilt it (LIB-5); spring-like curve per SPEC CSS fallback */
+.folio-cssbook.is-interactive { cursor:pointer; }
+.folio-book-card:hover .folio-cssbook.is-interactive, .folio-book-card:focus-within .folio-cssbook.is-interactive, .folio-hero-book:hover .folio-cssbook { --turn:12deg; --lift:-6px; }
+
+/* ---- library grid ---------------------------------------------------------------------------------------------- */
+.folio-library-page { position:relative; padding-bottom:0; }
+.folio-book-card { border-radius:2px; }
+.folio-book-open { align-items:center; }
+.folio-book-open .folio-cssbook { margin:14px auto 0; }
+.folio-book-details { padding-top:18px; }
+.folio-book-details h3 { font-family:var(--folio-font-display); font-weight:400; font-size:17px; line-height:1.1; height:38px; }
+.folio-book-meta { font-family:var(--folio-font-mono); text-transform:uppercase; letter-spacing:.06em; }
+.folio-progress-track { border-radius:0; height:2px; background:var(--folio-hairline); }
+.folio-progress-track span { background:var(--folio-accent); }
+.folio-book-card.list-mode { border-radius:2px; background:transparent; border-color:var(--folio-hairline); }
+.list-mode .folio-book-open .folio-cssbook { margin:0; }
+.list-mode .folio-cssbook::after { display:none; }
+.folio-books-scroll { padding-bottom:72px; }
+
+/* ---- hero and title marquee (2D LIB-1, LIB-2) ------------------------------------------------------------------- */
+.folio-hero { position:relative; margin:0 -32px 26px; padding:0 32px 26px; border-bottom:1px solid var(--folio-hairline); overflow:hidden; }
+.folio-marquee { overflow:hidden; scrollbar-width:none; mask-image:linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); margin:4px 0 6px; }
+.folio-marquee-track { display:flex; gap:48px; white-space:nowrap; padding:0 40%; width:max-content; }
+.folio-marquee-title { font-family:var(--folio-font-display); font-size:clamp(42px, 6vw, 84px); line-height:1.05; color:color-mix(in srgb, var(--folio-text) 16%, transparent); transition:color 400ms var(--folio-ease); }
+.folio-marquee-title.is-current { color:var(--folio-text); }
+.folio-hero-body { display:flex; align-items:center; gap:56px; }
+.folio-hero-book { padding:12px 12px 0 24px; cursor:pointer; }
+.folio-hero-copy { min-width:0; max-width:560px; }
+.folio-hero-copy h1 { font-size:clamp(30px, 3.4vw, 44px); }
+.folio-hero-author { color:var(--folio-text-muted); font-size:14px; margin-bottom:18px; }
+.folio-hero-progress { display:flex; align-items:center; gap:14px; color:var(--folio-text-muted); }
+.folio-hero-progress .folio-progress-track { flex:1; max-width:240px; margin:0; }
+.folio-hero-actions { display:flex; flex-wrap:wrap; gap:18px; margin-top:8px; }
+.folio-hero-nav { display:flex; align-items:center; gap:6px; margin-top:14px; color:var(--folio-text-muted); }
+
+/* ---- bottom bar ------------------------------------------------------------------------------------------------ */
+.folio-bottom-bar { position:absolute; left:0; right:0; bottom:0; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:10px 32px; background:color-mix(in srgb, var(--folio-bg) 88%, transparent); backdrop-filter:blur(10px); border-top:1px solid var(--folio-hairline); z-index:5; }
+.folio-bottom-title { display:flex; align-items:baseline; gap:12px; min-width:0; }
+.folio-bottom-book { font-family:var(--folio-font-display); font-size:20px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.folio-bottom-actions { display:flex; gap:14px; flex-shrink:0; }
+
+/* ---- details (DET-1, DET-2) ------------------------------------------------------------------------------------ */
+.folio-details { --folio-details-tint:var(--folio-bg); height:100%; overflow:auto; display:grid; grid-template-columns:minmax(300px, 1fr) minmax(320px, 520px); gap:48px; align-items:center; padding:40px 56px; background:var(--folio-details-tint); transition:background-color 500ms var(--folio-ease); }
+.folio-details-stage { display:grid; place-items:center; }
+.folio-details-cover { background:none; border:0; padding:0; }
+.folio-details-panel { border-left:1px solid var(--folio-hairline); padding-left:36px; }
+.folio-details-panel h1 { font-size:40px; }
+.folio-details-author { font-size:15px; color:var(--folio-text-muted); margin-bottom:24px; }
+.folio-details-meta { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:14px 24px; margin:0 0 26px; padding:18px 0; border-top:1px solid var(--folio-hairline); border-bottom:1px solid var(--folio-hairline); }
+.folio-details-meta dt { font-family:var(--folio-font-mono); text-transform:uppercase; letter-spacing:.08em; font-size:10px; color:var(--folio-text-muted); margin-bottom:3px; }
+.folio-details-meta dd { margin:0; font-size:14px; overflow-wrap:anywhere; }
+.folio-details-actions { display:flex; flex-wrap:wrap; gap:6px 18px; align-items:center; }
+.folio-details-back { margin-top:20px; color:var(--folio-text-muted); }
+
+/* ---- settings ---------------------------------------------------------------------------------------------------- */
+.folio-settings-group { background:transparent; }
+.folio-settings-group h2.folio-eyebrow { margin-bottom:14px; }
+.folio-settings-row { display:flex; align-items:center; justify-content:space-between; margin-top:8px; }
+.folio-settings-choice { border:0; border-top:1px solid var(--folio-hairline); margin:0; padding:14px 0 6px; display:grid; gap:8px; }
+.folio-settings-choice legend { font-weight:500; padding:0 0 8px; float:left; width:100%; }
+.folio-settings-choice label { display:grid; grid-template-columns:auto 120px 1fr; align-items:baseline; gap:10px; cursor:pointer; }
+.folio-settings-choice input { accent-color:var(--folio-accent); }
+.folio-settings-choice small { color:var(--folio-text-muted); font-size:12px; }
+
+/* ---- motion levels (SET-1) ------------------------------------------------------------------------------------- */
+:root[data-motion="reduced"] .folio-cssbook-body { transition:none; }
+:root[data-motion="reduced"] .folio-cssbook { --lift:0px !important; }
+:root[data-motion="reduced"] .folio-book-card:hover .folio-cssbook, :root[data-motion="reduced"] .folio-book-card:focus-within .folio-cssbook, :root[data-motion="reduced"] .folio-hero-book:hover .folio-cssbook { --turn:inherit; }
+:root[data-motion="off"] *, :root[data-motion="off"] *::before, :root[data-motion="off"] *::after { transition:none !important; animation:none !important; scroll-behavior:auto !important; }
+:root[data-motion="off"] .folio-book-card:hover .folio-cssbook, :root[data-motion="off"] .folio-book-card:focus-within .folio-cssbook { --turn:24deg; --lift:0px; }
+
+/* ---- view transitions (OPN-3) ------------------------------------------------------------------------------------ */
+::view-transition-group(folio-book) { animation-duration:520ms; animation-timing-function:cubic-bezier(0.22, 1, 0.36, 1); }
+::view-transition-old(folio-book), ::view-transition-new(folio-book) { height:100%; object-fit:cover; }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration:240ms; }
+:root[data-motion="reduced"]::view-transition-old(root), :root[data-motion="reduced"]::view-transition-new(root) { animation-duration:150ms; }
+
+@media (max-width:900px) {
+  .folio-details { grid-template-columns:1fr; padding:24px; gap:24px; }
+  .folio-details-panel { border-left:0; padding-left:0; }
+  .folio-hero-body { flex-direction:column; align-items:flex-start; gap:20px; }
+  .folio-bottom-bar { padding:8px 16px; }
+  .folio-bottom-book { font-size:16px; }
+}

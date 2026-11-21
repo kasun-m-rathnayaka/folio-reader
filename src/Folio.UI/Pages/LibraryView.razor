@@ -7,18 +7,21 @@
 @inject IJSRuntime JS
 
 <section class="folio-library-page">
-    <div class="folio-library-intro">
-        <div><div class="folio-eyebrow">@(_isTrash ? "RECOVER YOUR BOOKS" : "A LITTLE SPACE TO READ")</div><h1>@Title</h1><p>@(_isTrash ? "Removed books keep their notes and reading position. Restore them whenever you need." : "Your books, your notes, your own pace.")</p></div>
-        <div class="folio-controls-right"><span class="folio-library-count">@_total @(_total == 1 ? "book" : "books")</span>
-            @if (_isTrash && _total > 0) { <button class="folio-subtle-btn folio-error-text" @onclick="EmptyTrash">Empty Trash</button> }
-        </div>
-    </div>
-    @if (!_isTrash && StatusFilter == null && Shelf == null && string.IsNullOrWhiteSpace(SearchQuery) && _recent.Count > 0)
+    @if (ShowHero && !_isTrash && StatusFilter == null && Shelf == null && string.IsNullOrWhiteSpace(SearchQuery) && _recent.Count > 0)
     {
-        <ContinueReadingCarousel Books="@_recent" OnOpenBook="OnOpenBook" />
+        <LibraryHero @ref="_hero" Books="@_recent" OnOpen="OnOpenBook" OnDetails="OnDetails" />
+    }
+    else
+    {
+        <div class="folio-library-intro">
+            <div><div class="folio-eyebrow">@Eyebrow</div><h1 class="folio-display">@Title</h1></div>
+            <div class="folio-controls-right"><span class="folio-library-count">@_total @(_total == 1 ? "book" : "books")</span>
+                @if (_isTrash && _total > 0) { <BracketButton Label="EMPTY TRASH" Plus="false" Class="is-danger" OnClick="EmptyTrash" /> }
+            </div>
+        </div>
     }
     <div class="folio-library-controls">
-        <div><h2>@(_isTrash ? "Removed books" : "All books")</h2><span class="folio-muted">@(string.IsNullOrWhiteSpace(SearchQuery) ? "Choose something worth your time." : $"Results for “{SearchQuery}”")</span></div>
+        <div><h2 class="folio-eyebrow">@SectionLabel</h2>@if (!string.IsNullOrWhiteSpace(SearchQuery)) { <span class="folio-muted">Results for “@SearchQuery”</span> }@if (ShowHero && _recent.Count > 0 && Shelf == null && StatusFilter == null && !_isTrash) { <span class="folio-library-count">@_total @(_total == 1 ? "book" : "books")</span> }</div>
         <div class="folio-controls-right"><label class="folio-sort"><span>Sort by</span><select aria-label="Sort books" @bind="_sort" @bind:after="RefreshAsync"><option value="Recent">Recent</option><option value="Title">Title</option><option value="Author">Author</option><option value="Added">Date added</option><option value="Progress">Progress</option></select></label>
             <div class="folio-segmented"><button class="@(_grid ? "active" : "")" aria-label="Grid view" aria-pressed="@_grid" @onclick="() => SetGrid(true)"><MudIcon Icon="@Icons.Material.Outlined.GridView" Size="Size.Small" /></button><button class="@(!_grid ? "active" : "")" aria-label="List view" aria-pressed="@(!_grid)" @onclick="() => SetGrid(false)"><MudIcon Icon="@Icons.Material.Outlined.ViewList" Size="Size.Small" /></button></div>
         </div>
@@ -27,7 +30,7 @@
     {
         <div class="folio-empty-state" role="alert"><h2>We couldn’t load your library</h2><p>@_error</p><button class="folio-primary-btn" @onclick="RefreshAsync">Try again</button></div>
     }
-    else if (_loading) { <div class="folio-empty-state"><MudProgressCircular Indeterminate="true" Size="Size.Small" /><p>Loading your books…</p></div> }
+    else if (_loading) { <div class="folio-empty-state"><MudProgressCircular Indeterminate="true" Size="Size.Small" aria-label="Loading your books" /><p>Loading your books…</p></div> }
     else if (_total == 0)
     {
         <div class="folio-empty-state"><div class="folio-empty-icon"><MudIcon Icon="@Icons.Material.Outlined.LocalLibrary" /></div>
@@ -39,11 +42,12 @@
     <div id="folio-library-grid" class="folio-books-scroll" style="display: @(_total > 0 && !_loading && _error == null ? "block" : "none");">
         <Virtualize @ref="_virtual" TItem="LibraryRow" ItemsProvider="LoadRows" ItemSize="@(_grid ? 340 : 88)" OverscanCount="2">
             <ItemContent Context="row"><div class="@(_grid ? "folio-book-row" : "folio-book-list-row")" style="@(_grid ? $"grid-template-columns: repeat({_columns}, minmax(0, 1fr));" : "")">
-                @foreach (var book in row.Books) { <BookCard @key="book.Id" Book="book" ListMode="@(!_grid)" Trash="@_isTrash" OnOpen="OnOpenBook" OnStatusChanged="StatusChanged" OnRemove="Remove" OnEdit="Edit" OnDelete="Delete" /> }
+                @foreach (var book in row.Books) { <BookCard @key="book.Id" Book="book" ListMode="@(!_grid)" Trash="@_isTrash" OnOpen="OnOpenBook" OnDetails="OnDetails" OnFocused="Focus" OnStatusChanged="StatusChanged" OnRemove="Remove" OnEdit="Edit" OnDelete="Delete" /> }
             </div></ItemContent>
             <Placeholder><div class="folio-row-placeholder" style="height: @(_grid ? "340px" : "88px");"><span>Loading books…</span></div></Placeholder>
         </Virtualize>
     </div>
+    @if (!_isTrash && _total > 0) { <LibraryBottomBar Book="@(_focused ?? _hero?.Current)" OnOpen="OnOpenBook" OnDetails="OnDetails" /> }
 </section>
 @code {
     [Parameter] public string? SearchQuery { get; set; }
@@ -53,6 +57,11 @@
     [Parameter] public EventCallback<Book> OnOpenBook { get; set; }
     [Parameter] public EventCallback OnImport { get; set; }
     [Parameter] public EventCallback OnChanged { get; set; }
+    [Parameter] public EventCallback<Book> OnDetails { get; set; }
+    /// <summary>Show the "continue reading" hero above the books (library home).</summary>
+    [Parameter] public bool ShowHero { get; set; }
+    private LibraryHero? _hero;
+    private Book? _focused;
     private Virtualize<LibraryRow>? _virtual;
     private DotNetObjectReference<LibraryView>? _reference;
     private IReadOnlyList<Book> _recent = [];
@@ -61,6 +70,12 @@
     private LibrarySort _sort = LibrarySort.Recent;
     private string? _filterKey, _error;
     private string Title => _isTrash ? "Trash" : Shelf?.Name ?? StatusFilter switch { ReadingStatus.Reading => "Currently reading", ReadingStatus.WantToRead => "Want to read", ReadingStatus.Finished => "Finished books", _ => "Your library" };
+    private string Eyebrow => _isTrash ? "[ TRASH ]" : Shelf != null ? $"[ SHELF · {Shelf.Name.ToUpperInvariant()} · {_total} ]" : StatusFilter != null ? $"[ {Title.ToUpperInvariant()} · {_total} ]" : $"[ ALL BOOKS · {_total} ]";
+    private string SectionLabel => _isTrash ? "[ REMOVED BOOKS ]" : Shelf != null ? "[ ON THIS SHELF ]" : "[ ALL BOOKS ]";
+    private Task Focus(Book book) { if (_focused?.Id == book.Id) return Task.CompletedTask; _focused = book; StateHasChanged(); return Task.CompletedTask; }
+    /// <summary>The book the bottom bar and keyboard shortcuts act on: the hovered/focused card, else the hero book.</summary>
+    public Book? FocusedBook => _focused ?? _hero?.Current;
+    public bool StepHero(int delta) { if (_hero == null || _focused != null) return false; _hero.Step(delta); return true; }
     private record LibraryRow(IReadOnlyList<Book> Books);
     protected override void OnInitialized() { _grid = Preferences.Current.GridView; _reference = DotNetObjectReference.Create(this); }
     protected override async Task OnParametersSetAsync()

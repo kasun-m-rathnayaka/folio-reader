@@ -1,0 +1,132 @@
+@page "/book/{BookId:guid}"
+@using Microsoft.Extensions.DependencyInjection
+@using Folio.Application.Annotations
+@inject ILibraryService Library
+@inject IServiceScopeFactory Scopes
+@inject FolioNavigator Navigator
+@inject IBookUrlResolver Urls
+@inject IDialogService Dialogs
+@inject NotificationService Notifications
+@inject IJSRuntime JS
+@inject SceneKeys Keys
+@implements IAsyncDisposable
+
+<PageTitle>@(_book?.Title ?? "Book") · Folio</PageTitle>
+@if (_missing)
+{
+    <div class="folio-empty-state" role="alert"><h1 class="folio-display">This book is not in your library</h1><p>It may have been moved to Trash or deleted.</p>
+        <BracketButton Label="BACK TO LIBRARY" Plus="false" OnClick="() => Navigator.Go(FolioRoutes.Home)" /></div>
+}
+else if (_book != null)
+{
+    <section class="folio-details" @ref="_root" aria-labelledby="folio-details-title">
+        <div class="folio-details-stage" data-book-id="@_book.Id">
+            <button class="folio-details-cover" aria-label="@($"Open {_book.Title}")" @onclick="Read"><CssBook Book="_book" Height="380" Pose="CssBook.BookPose.Front" Interactive="false" /></button>
+        </div>
+        <div class="folio-details-panel">
+            <div class="folio-eyebrow">[ BOOK DETAILS ]</div>
+            <h1 id="folio-details-title" class="folio-display" tabindex="-1">@_book.Title</h1>
+            <p class="folio-details-author">@(string.IsNullOrWhiteSpace(_book.Author) ? "Unknown author" : $"by {_book.Author}")</p>
+            <dl class="folio-details-meta">
+                <div><dt>Pages</dt><dd>@_book.PageCount</dd></div>
+                <div><dt>Progress</dt><dd>@BookGeometry.ProgressPercent(_book)% · page @((_book.ReadingPosition?.PageIndex ?? 0) + 1)</dd></div>
+                <div><dt>Status</dt><dd>@StatusText</dd></div>
+                <div><dt>Added</dt><dd>@_book.CreatedAt.LocalDateTime.ToString("d MMM yyyy")</dd></div>
+                <div><dt>Shelves</dt><dd>@(_shelfNames.Count == 0 ? "None" : string.Join(", ", _shelfNames))</dd></div>
+                <div><dt>Highlights</dt><dd>@_highlights</dd></div>
+                <div><dt>Bookmarks</dt><dd>@_bookmarks</dd></div>
+            </dl>
+            <div class="folio-details-actions">
+                <BracketButton Label="READ" Hint="Enter" AriaLabel="@($"Read {_book.Title}")" OnClick="Read" />
+                <BracketButton Label="EDIT" Plus="false" OnClick="Edit" />
+                <MudMenu AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft" PopoverClass="folio-action-menu">
+                    <ActivatorContent><span class="folio-bracket" role="button" tabindex="0" aria-label="Move to shelf"><span class="folio-bracket-edge" aria-hidden="true">[</span><span class="folio-bracket-label">MOVE TO SHELF</span><span class="folio-bracket-edge" aria-hidden="true">]</span></span></ActivatorContent>
+                    <ChildContent>
+                        @if (Layout?.Shelves is not { Count: > 0 } shelves) { <MudMenuItem Disabled="true">Create a shelf first</MudMenuItem> }
+                        else
+                        {
+                            foreach (var shelf in shelves)
+                            {
+                                var on = _book.BookShelves.Any(s => s.ShelfId == shelf.Id);
+                                <MudMenuItem Icon="@(on ? Icons.Material.Filled.CheckBox : Icons.Material.Outlined.CheckBoxOutlineBlank)" OnClick="() => ToggleShelf(shelf, !on)">@shelf.Name</MudMenuItem>
+                            }
+                        }
+                    </ChildContent>
+                </MudMenu>
+                <BracketButton Label="MOVE TO TRASH" Plus="false" Class="is-danger" OnClick="Trash" />
+            </div>
+            <BracketButton Label="BACK TO SHELF" Plus="false" Hint="Esc" Class="folio-details-back" OnClick="Back" />
+        </div>
+    </section>
+}
+
+@code {
+    [Parameter] public Guid BookId { get; set; }
+    [CascadingParameter] public Layout.MainLayout? Layout { get; set; }
+    private ElementReference _root;
+    private Book? _book;
+    private bool _missing, _tinted;
+    private int _highlights, _bookmarks;
+    private List<string> _shelfNames = [];
+    private string StatusText => _book?.Status switch { ReadingStatus.Reading => "Reading", ReadingStatus.Finished => "Finished", _ => "Want to read" };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_book?.Id == BookId) return;
+        _tinted = false;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _book = await Library.GetBookAsync(BookId);
+        _missing = _book == null;
+        if (_book == null) return;
+        await using var scope = Scopes.CreateAsyncScope();
+        _highlights = (await scope.ServiceProvider.GetRequiredService<IAnnotationService>().GetAnnotationsForBookAsync(BookId)).Count;
+        _bookmarks = (await scope.ServiceProvider.GetRequiredService<IBookmarkService>().GetBookmarksAsync(BookId)).Count;
+        var shelves = await Library.GetShelvesAsync();
+        _shelfNames = shelves.Where(s => _book.BookShelves.Any(b => b.ShelfId == s.Id)).Select(s => s.Name).ToList();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) _keys = await Keys.AttachAsync(Key);
+        if (_book == null || _tinted) return;
+        _tinted = true;
+        var cover = await Urls.GetCoverUrlAsync(_book);
+        await JS.InvokeVoidAsync("folioShell.applyBookTint", _root, cover);
+    }
+
+    private Task Read() => _book == null ? Task.CompletedTask : Navigator.OpenBookAsync(_book.Id, null, ".folio-details-stage .folio-cssbook");
+    private void Back() => Navigator.Go(FolioRoutes.Shelf());
+    private IAsyncDisposable? _keys;
+    private async Task Key(string key, bool shift)
+    {
+        if (key == "Enter") await Read();
+        else if (key == "Escape") Back();
+    }
+    public async ValueTask DisposeAsync() { if (_keys != null) await _keys.DisposeAsync(); }
+    private async Task Edit()
+    {
+        if (_book == null) return;
+        var dialog = await Dialogs.ShowAsync<EditBookDialog>("Book details", new DialogParameters<EditBookDialog> { { x => x.Book, _book } }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small });
+        if (await dialog.Result is { Canceled: false }) { await LoadAsync(); if (Layout != null) await Layout.NotifyLibraryChangedAsync(); }
+    }
+    private async Task ToggleShelf(Shelf shelf, bool include)
+    {
+        if (_book == null) return;
+        await Library.SetShelfAsync(_book.Id, shelf.Id, include);
+        await LoadAsync();
+        Notifications.Add(include ? $"Added to {shelf.Name}." : $"Removed from {shelf.Name}.", Severity.Info);
+        if (Layout != null) await Layout.NotifyLibraryChangedAsync();
+    }
+    private async Task Trash()
+    {
+        if (_book == null) return;
+        await Library.SetTrashAsync(_book.Id, true);
+        Notifications.Add("Moved to Trash. Highlights, bookmarks and your position are kept.", Severity.Info);
+        if (Layout != null) await Layout.NotifyLibraryChangedAsync();
+        Navigator.Go(FolioRoutes.Shelf(), replace: true);
+    }
+}
