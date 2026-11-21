@@ -8,10 +8,24 @@
 @inject NavigationManager Navigation
 @inject LibraryEvents Events
 @inject SceneKeys Keys
+@inject StageState Stage
 
 <PageTitle>@PageName · Folio</PageTitle>
-<LibraryView @ref="_view" SearchQuery="@Q" StatusFilter="@_status" Shelf="@_shelf" Trash="@_trash" ShowHero="@_home"
-    OnOpenBook="Open" OnDetails="Details" OnImport="Import" OnChanged="Changed" />
+@if (Use3DHero)
+{
+    @* Hero scene (LIB-1, LIB-2): the stage draws the book; this layer carries everything readable and focusable. *@
+    <section class="folio-stage-page folio-stage-hero">
+        <LibraryHero @ref="_hero" Books="@_recent" ShowBook="false" OnOpen="Open" OnDetails="Details" OnCurrentChanged="HeroChanged">
+            <Footer><BracketButton Label="BROWSE SHELVES" Plus="false" Hint="↓" AriaLabel="Browse shelves" Class="folio-browse" OnClick="() => Navigator.Go(FolioRoutes.Shelf())" /></Footer>
+        </LibraryHero>
+        <LibraryBottomBar Book="@(_hero?.Current ?? _recent.FirstOrDefault())" OnOpen="Open" OnDetails="Details" />
+    </section>
+}
+else if (!Stage.Starting || !_home)
+{
+    <LibraryView @ref="_view" SearchQuery="@Q" StatusFilter="@_status" Shelf="@_shelf" Trash="@_trash" ShowHero="@_home"
+        OnOpenBook="Open" OnDetails="Details" OnImport="Import" OnChanged="Changed" />
+}
 
 @code {
     [Parameter] public Guid? ShelfId { get; set; }
@@ -19,27 +33,22 @@
     [SupplyParameterFromQuery(Name = "status")] public string? Status { get; set; }
     [CascadingParameter] public Layout.MainLayout? Layout { get; set; }
     private LibraryView? _view;
+    private LibraryHero? _hero;
+    private IAsyncDisposable? _keys;
+    private IReadOnlyList<Book> _recent = [];
     private Shelf? _shelf;
     private ReadingStatus? _status;
     private bool _trash, _home;
     private string PageName => _trash ? "Trash" : _shelf?.Name ?? (_status != null ? _status.ToString()! : "Library");
+    /// <summary>The 3D hero needs the stage and at least one book read before; otherwise the 2D library shows.</summary>
+    private bool Use3DHero => _home && Stage.Available && string.IsNullOrWhiteSpace(Q) && _recent.Count > 0;
 
-    private IAsyncDisposable? _keys;
-    protected override void OnInitialized() => Events.Changed += Reload;
-    protected override async Task OnAfterRenderAsync(bool firstRender) { if (firstRender) _keys = await Keys.AttachAsync(Key); }
-
-    private async Task Key(string key, bool shift)
+    protected override void OnInitialized()
     {
-        var book = _view?.FocusedBook;
-        switch (key)
-        {
-            case "Enter" when book != null: await Open(book); break;
-            case "d" or "D" or " " when book != null: Details(book); break;
-            case "ArrowLeft" or "ArrowRight": _view?.StepHero(key == "ArrowLeft" ? -1 : 1); break;
-            case "Escape" when !_home: Navigator.Go(FolioRoutes.Home); break;
-            case [var digit] when char.IsAsciiDigit(digit) && digit != '0' && Layout?.Shelves is { } shelves && digit - '1' < shelves.Count:
-                Navigator.Go(FolioRoutes.Shelf(shelves[digit - '1'].Id)); break;
-        }
+        Events.Changed += Reload;
+        Stage.Changed += StageChanged;
+        Stage.Activated += StageActivated;
+        Stage.ScrollIntent += StageScroll;
     }
 
     protected override async Task OnParametersSetAsync()
@@ -54,12 +63,71 @@
             _shelf = (await Library.GetShelvesAsync()).FirstOrDefault(s => s.Id == id);
             if (_shelf == null) Navigator.Go(FolioRoutes.Home, replace: true);
         }
+        if (_home) _recent = await Library.GetRecentAsync();
+        UpdateStage();
     }
 
-    private Task Open(Book book) => Navigator.OpenBookAsync(book.Id, null, $"[data-book-id=\"{book.Id}\"] .folio-cssbook");
+    protected override async Task OnAfterRenderAsync(bool firstRender) { if (firstRender) _keys = await Keys.AttachAsync(Key); }
+
+    private void UpdateStage()
+    {
+        if (Use3DHero) Stage.Show(StageScene.Hero((_hero?.Current ?? _recent[0]).Id), this);
+        else Stage.Release(this);
+    }
+
+    private void StageChanged() => _ = InvokeAsync(() => { UpdateStage(); StateHasChanged(); });
+    private Task HeroChanged(Book book) { if (Use3DHero) Stage.Show(StageScene.Hero(book.Id), this); return Task.CompletedTask; }
+
+    private async Task StageActivated(Guid id, string action)
+    {
+        if (action == "open") await Navigator.OpenBookAsync(id);
+        else Navigator.Go(FolioRoutes.Book(id));
+    }
+
+    private Task StageScroll(string direction)
+    {
+        if (direction == "down" && Use3DHero) Navigator.Go(FolioRoutes.Shelf());
+        return Task.CompletedTask;
+    }
+
+    private Book? Focused => Use3DHero ? _hero?.Current : _view?.FocusedBook;
+
+    private async Task Key(string key, bool shift)
+    {
+        var book = Focused;
+        switch (key)
+        {
+            case "Enter" when book != null: await Open(book); break;
+            case "d" or "D" or " " when book != null: Details(book); break;
+            case "ArrowLeft" or "ArrowRight":
+                if (Use3DHero) _hero?.Step(key == "ArrowLeft" ? -1 : 1); else _view?.StepHero(key == "ArrowLeft" ? -1 : 1);
+                break;
+            case "ArrowDown" when Use3DHero: Navigator.Go(FolioRoutes.Shelf()); break;
+            case "Escape" when !_home: Navigator.Go(FolioRoutes.Home); break;
+            case [var digit] when char.IsAsciiDigit(digit) && digit != '0' && Layout?.Shelves is { } shelves && digit - '1' < shelves.Count:
+                Navigator.Go(FolioRoutes.Shelf(shelves[digit - '1'].Id)); break;
+        }
+    }
+
+    private Task Open(Book book) => Open(book.Id);
+    private Task Open(Guid id) => Navigator.OpenBookAsync(id, null, Use3DHero ? null : $"[data-book-id=\"{id}\"] .folio-cssbook");
     private void Details(Book book) => Navigator.Go(FolioRoutes.Book(book.Id));
     private Task Import() => Layout?.ImportBooks() ?? Task.CompletedTask;
     private Task Changed() => Layout?.RefreshNavigation() ?? Task.CompletedTask;
-    private Task Reload() => _view?.RefreshAsync() ?? Task.CompletedTask;
-    public async ValueTask DisposeAsync() { Events.Changed -= Reload; if (_keys != null) await _keys.DisposeAsync(); }
+    private async Task Reload()
+    {
+        if (_home) { _recent = await Library.GetRecentAsync(); UpdateStage(); }
+        if (_view != null) await _view.RefreshAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Events.Changed -= Reload;
+        Stage.Changed -= StageChanged;
+        Stage.Activated -= StageActivated;
+        Stage.ScrollIntent -= StageScroll;
+        Stage.Release(this);
+        if (_keys != null) await _keys.DisposeAsync();
+    }
 }

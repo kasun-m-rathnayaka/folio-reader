@@ -55,3 +55,19 @@ Done when:
 - [x] Visual snapshots for library, details and reader toolbar in light and dark (`visual.spec.mjs`; D-016)
 - [x] Axe: no serious or critical issues on library, details, reader and settings in both themes; reduced-motion check passes
 - [x] Back and Forward work across all routes on the web (`routes.spec.mjs`), deep link `?page=12` opens page 12
+
+## M4 — Stage core and hero
+
+- [x] 1. three 0.187.0 + esbuild 0.28.2 (pinned); `npm run build:stage` → `wwwroot/js/stage.bundle.mjs`; bundle, fonts and
+      "no remote URLs" verified by `npm run check` (D-017)
+- [x] 2. `StageHost.razor`, `StageJsBridge.cs`, `StageState`; render-on-demand loop, visibility pause, context-loss handling,
+      quality manager (`quality.js`), test mode `?stageTest=1`, stats on `window.__folioStage`
+- [x] 3. `book-factory.js`, `textures.js`: cover (≤ 512 px), spine (64 × 512, Instrument Serif + Inter), page edges,
+      dominant colour, LRU of 120 books
+- [x] 4. Hero scene with marquee and HTML overlay (LIB-1, LIB-2, LIB-4); idle turn and pointer tilt
+- [x] 5. Fallback: no WebGL2, software renderer, double context loss, persistent slowness → 2D
+
+Done when:
+- [x] Hero renders real covers from fixtures on web (`stage.spec.mjs`); desktop *(CI build; human check at M8)*
+- [x] Zero frames rendered after 2 s idle (`window.__folioStage.stats.frames` unchanged)
+- [x] Forcing WebGL off shows the 2D library with no errors

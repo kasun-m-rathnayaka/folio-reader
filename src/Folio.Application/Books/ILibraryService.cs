@@ -14,6 +14,8 @@ public interface ILibraryService
 {
     Task<LibraryPage> QueryAsync(LibraryQuery query, CancellationToken ct = default);
     Task<LibraryCounts> GetCountsAsync(CancellationToken ct = default);
+    /// <summary>Every book not in Trash, with reading position and shelf membership, in the given order (the 3D stage).</summary>
+    Task<IReadOnlyList<Book>> GetAllAsync(LibrarySort sort = LibrarySort.Recent, CancellationToken ct = default);
     /// <summary>Most recently read books, newest first, any reading status (the library hero, LIB-1).</summary>
     Task<IReadOnlyList<Book>> GetRecentAsync(CancellationToken ct = default);
     Task<IReadOnlyList<Shelf>> GetShelvesAsync(CancellationToken ct = default);

@@ -5,8 +5,15 @@
   "scripts": {
     "test": "node --test ../../tests/Folio.Reader.Tests/*.test.mjs",
     "check": "node --check wwwroot/js/folio-reader.js && node --check wwwroot/js/folio-shell.js && node scripts/verify-assets.mjs",
-    "test:reader": "node ../../tests/Folio.Reader.Tests/reader.integration.mjs"
+    "test:reader": "node ../../tests/Folio.Reader.Tests/reader.integration.mjs",
+    "build:stage": "esbuild stage/bridge.js --bundle --format=esm --minify --target=es2022 --legal-comments=eof --outfile=wwwroot/js/stage.bundle.mjs"
   },
-  "dependencies": { "pdfjs-dist": "6.4.299" },
-  "devDependencies": { "playwright": "1.62.1" }
+  "dependencies": {
+    "pdfjs-dist": "6.4.299",
+    "three": "0.187.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "playwright": "1.62.1"
+  }
 }

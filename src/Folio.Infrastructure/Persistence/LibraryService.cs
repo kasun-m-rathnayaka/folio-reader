@@ -34,6 +34,23 @@ public class LibraryService(IDbContextFactory<FolioDbContext> factory, IFileStor
         return new(result, total);
     }
 
+    public async Task<IReadOnlyList<Book>> GetAllAsync(LibrarySort sort = LibrarySort.Recent, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var books = await db.Books.AsNoTracking().Where(b => b.TrashedAt == null)
+            .Include(b => b.ReadingPosition).Include(b => b.BookShelves).ToListAsync(ct);
+        // Sorted in memory: SQLite cannot order by DateTimeOffset, and the whole library is loaded anyway.
+        IOrderedEnumerable<Book> ordered = sort switch
+        {
+            LibrarySort.Title => books.OrderBy(b => b.Title, StringComparer.CurrentCultureIgnoreCase),
+            LibrarySort.Author => books.OrderBy(b => b.Author ?? "\uffff", StringComparer.CurrentCultureIgnoreCase).ThenBy(b => b.Title, StringComparer.CurrentCultureIgnoreCase),
+            LibrarySort.Added => books.OrderByDescending(b => b.CreatedAt),
+            LibrarySort.Progress => books.OrderByDescending(b => b.PageCount > 0 ? (double)b.FurthestPageIndex / b.PageCount : 0),
+            _ => books.OrderByDescending(b => b.LastReadAt ?? b.CreatedAt),
+        };
+        return ordered.ThenBy(b => b.Id).ToList();
+    }
+
     public async Task<LibraryCounts> GetCountsAsync(CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);

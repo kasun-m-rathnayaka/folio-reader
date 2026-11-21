@@ -13,18 +13,13 @@
 @inject NavigationManager Navigation
 @inject FolioNavigator Navigator
 @inject LibraryEvents Events
+@inject StageState Stage
 
 <MudThemeProvider Theme="_theme" IsDarkMode="@Preferences.Current.DarkMode" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <div class="folio-app" data-theme="@(Preferences.Current.DarkMode ? "dark" : "light")">
-    @if (_inReader)
-    {
-        @Body
-    }
-    else
-    {
-    <div class="folio-library-shell @(Preferences.Current.SidebarCollapsed ? "sidebar-collapsed" : "")">
+    <div class="folio-library-shell @(Preferences.Current.SidebarCollapsed ? "sidebar-collapsed" : "") @(_inReader ? "is-covered" : "") @(Stage.Scene != null && Stage.Available ? "stage-on" : "")" inert="@_inReader">
         <a class="folio-skip-link" href="@SkipTarget">Skip to content</a>
         <aside class="folio-sidebar" aria-label="Main navigation">
             <button class="folio-brand" @onclick="() => Go(FolioRoutes.Home)" aria-label="Folio home" title="Folio home">
@@ -69,12 +64,13 @@
                 <button class="folio-icon-button" title="Import folder" aria-label="Import folder" @onclick="ImportFolder" disabled="@_importing"><MudIcon Icon="@Icons.Material.Outlined.CreateNewFolder" /></button>
                 }
             </header>
+            <div class="folio-stage-layer"><StageHost @ref="_stage" Suspended="@_inReader" /></div>
             <main id="folio-main" class="folio-page-body" tabindex="-1">
-                <CascadingValue Value="this" IsFixed="true">@Body</CascadingValue>
+                @if (!_inReader) { <CascadingValue Value="this" IsFixed="true">@Body</CascadingValue> }
             </main>
         </section>
     </div>
-    }
+    @if (_inReader) { <CascadingValue Value="this" IsFixed="true">@Body</CascadingValue> }
     <NotificationCenter>
     @if (_importing || _importResults.Count > 0)
     {
@@ -92,6 +88,7 @@
 </div>
 @code {
     private string _search = "";
+    private StageHost? _stage;
     private bool _inReader;
     private RouteInfo _route = new();
     private LibraryCounts _counts = new(0, 0, 0, 0, 0);
@@ -151,6 +148,7 @@
     {
         Inbox.Changed += ImportQueued;
         Navigation.LocationChanged += LocationChanged;
+        Stage.Changed += StageChanged;
         UpdateRoute();
         await RefreshNavigation();
     }
@@ -203,6 +201,7 @@
             motion = p.Motion.ToString().ToLowerInvariant(),
             libraryStyle = p.LibraryStyle == LibraryStyle.TwoD ? "2d" : "3d",
         });
+        if (_stage != null) await _stage.ApplyPreferencesAsync();
         StateHasChanged();
     }
     private async Task ManageShelves()
@@ -262,5 +261,6 @@
         finally { _importing = false; _importCancellation.Dispose(); _importCancellation = null; await NotifyLibraryChangedAsync(); StateHasChanged(); }
         await DrainImports();
     }
-    public void Dispose() { Inbox.Changed -= ImportQueued; Navigation.LocationChanged -= LocationChanged; _importCancellation?.Cancel(); }
+    public void Dispose() { Inbox.Changed -= ImportQueued; Navigation.LocationChanged -= LocationChanged; Stage.Changed -= StageChanged; _importCancellation?.Cancel(); }
+    private void StageChanged() => _ = InvokeAsync(StateHasChanged);
 }

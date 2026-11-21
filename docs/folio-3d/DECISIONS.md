@@ -111,3 +111,22 @@ wrapper); loading spinners had no name. MudBlazor 8 menu items are not exposed a
 
 Baselines were recorded locally on Chromium build 1243; CI installs Playwright 1.62.1's build 1255. If CI reports pixel
 differences above 0.1%, the CI images are reviewed from the `web-e2e` artifact and committed as the approved update.
+
+## D-017 · Stage sources live outside wwwroot; the bundle is committed and verified (M4)
+
+Sources are in `src/Folio.UI/stage/` (not served); esbuild bundles them into `wwwroot/js/stage.bundle.mjs`, which is
+committed so `dotnet build` needs no Node step. `npm run check` rebuilds it into a temp folder and fails if the committed
+bundle differs (line endings normalised). three 0.187.0 and esbuild 0.28.2 are pinned exactly.
+
+## D-018 · Stage details (M4)
+
+- Books are one box mesh with six material groups (fore-edge, spine, top, bottom, cover, back) rather than a rounded box:
+  it keeps draw calls low for 300 books. A detailed, hinged model is only needed for the opening animation (M6).
+- Contact shadows are soft radial-gradient planes under each book (no shadow maps); quality "shadows off" hides them.
+- The featured book (hero, details, opening) sits above the shelf rows, so Hero → Shelf is one continuous camera move.
+- Pointer input reaches the stage through the HTML layer (`#folio-main`); clicks on HTML controls are ignored by it.
+- The stage adds `OnScrollIntent(direction)` and `OnBookAccent(id, color)` to the bridge contract: Blazor owns
+  navigation, so wheel and swipe become intents, and covers' colours feed the HTML accent.
+- Software renderers (SwiftShader, Microsoft Basic Render Driver, llvmpipe) fall back to 2D except in stage test mode
+  (`?stageTest=1`), which CI uses to exercise 3D.
+- Scenes are owned: a page shows a scene and releases only its own, so route changes never leave a stale scene showing.
