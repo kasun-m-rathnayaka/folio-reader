@@ -18,6 +18,7 @@
 @inject IJSRuntime JS
 @inject IBookUrlResolver Urls
 @inject IPlatformCapabilities Platform
+@inject Folio.UI.Stage.StageState Stage
 @inject ILogger<ReaderView> Logger
 @implements IAsyncDisposable
 
@@ -145,6 +146,10 @@
         if (Book.PageCount != _pages) { await Library.SetPageCountAsync(Book.Id, _pages); Book.PageCount = _pages; }
         if (!Book.StatusIsManual && Book.Status == ReadingStatus.WantToRead) { await Library.SetStatusAsync(Book.Id, ReadingStatus.Reading, manual: false); Book.Status = ReadingStatus.Reading; }
         await LoadPage(_page); await RefreshBookmarks(); await ApplyLighting(); await InvokeAsync(StateHasChanged);
+        // OPN-1: tell the opening book where this page is drawn so its 3D spread lands exactly on it.
+        if (Stage.Phase == Folio.UI.Stage.StagePhase.Opening &&
+            await JS.InvokeAsync<Folio.UI.Stage.PageRect?>("folioReader.currentPageRect") is { } rect)
+            await Stage.ReportReaderPageAsync(rect);
     }
     [JSInvokable] public Task OnOutlineLoaded(List<OutlineNodeDto> outline) { _outline = outline; return InvokeAsync(StateHasChanged); }
     [JSInvokable] public async Task OnPositionChanged(PositionPayload payload)

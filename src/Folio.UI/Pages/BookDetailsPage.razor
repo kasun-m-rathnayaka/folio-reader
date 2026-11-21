@@ -9,6 +9,7 @@
 @inject NotificationService Notifications
 @inject IJSRuntime JS
 @inject SceneKeys Keys
+@inject StageState Stage
 @implements IAsyncDisposable
 
 <PageTitle>@(_book?.Title ?? "Book") · Folio</PageTitle>
@@ -19,7 +20,7 @@
 }
 else if (_book != null)
 {
-    <section class="folio-details" @ref="_root" aria-labelledby="folio-details-title">
+    <section class="folio-details @(Stage.Available ? "is-3d" : "")" @ref="_root" aria-labelledby="folio-details-title">
         <div class="folio-details-stage" data-book-id="@_book.Id">
             <button class="folio-details-cover" aria-label="@($"Open {_book.Title}")" @onclick="Read"><CssBook Book="_book" Height="380" Pose="CssBook.BookPose.Front" Interactive="false" /></button>
         </div>
@@ -81,7 +82,8 @@ else if (_book != null)
     {
         _book = await Library.GetBookAsync(BookId);
         _missing = _book == null;
-        if (_book == null) return;
+        if (_book == null) { Stage.Release(this); return; }
+        UpdateStage();
         await using var scope = Scopes.CreateAsyncScope();
         _highlights = (await scope.ServiceProvider.GetRequiredService<IAnnotationService>().GetAnnotationsForBookAsync(BookId)).Count;
         _bookmarks = (await scope.ServiceProvider.GetRequiredService<IBookmarkService>().GetBookmarksAsync(BookId)).Count;
@@ -98,15 +100,23 @@ else if (_book != null)
         await JS.InvokeVoidAsync("folioShell.applyBookTint", _root, cover);
     }
 
-    private Task Read() => _book == null ? Task.CompletedTask : Navigator.OpenBookAsync(_book.Id, null, ".folio-details-stage .folio-cssbook");
+    private Task Read() => _book == null ? Task.CompletedTask : Navigator.OpenBookAsync(_book.Id, null, Stage.Available ? null : ".folio-details-stage .folio-cssbook");
     private void Back() => Navigator.Go(FolioRoutes.Shelf());
     private IAsyncDisposable? _keys;
+    protected override void OnInitialized() => Stage.Changed += StageChanged;
+    private void StageChanged() => _ = InvokeAsync(() => { UpdateStage(); StateHasChanged(); });
+    /// <summary>With 3D, the stage turns the book to face the reader (DET-1); the HTML panel stays the same.</summary>
+    private void UpdateStage()
+    {
+        if (_book != null && Stage.Available) Stage.Show(StageScene.Details(_book.Id), this);
+        else Stage.Release(this);
+    }
     private async Task Key(string key, bool shift)
     {
         if (key == "Enter") await Read();
         else if (key == "Escape") Back();
     }
-    public async ValueTask DisposeAsync() { if (_keys != null) await _keys.DisposeAsync(); }
+    public async ValueTask DisposeAsync() { Stage.Changed -= StageChanged; Stage.Release(this); if (_keys != null) await _keys.DisposeAsync(); }
     private async Task Edit()
     {
         if (_book == null) return;

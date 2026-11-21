@@ -12,32 +12,32 @@ async function readOnce(page, title) {
 }
 
 test('hero renders real covers in 3D and stops drawing when idle', async ({ page }, testInfo) => {
-    const errors = await openLibrary(page);
-    await page.goto('/?stageTest=1');
-    await expect(page.locator('.folio-library-page')).toBeVisible({ timeout: 90_000 });
+    const errors = await openLibrary(page, '/?stageTest=1');
+    // An empty library in 3D is an empty shelf with an Add books action (LIB-7).
+    await expect(page.locator('.folio-stage-shelf')).toContainText('Make room for a good book');
     await importFiles(page, ['01_single_column_book_300p.pdf', '02_two_column_paper.pdf'].map(fixture));
     await page.getByRole('button', { name: 'Dismiss import results' }).click();
-    await readOnce(page, 'Folio Classical Studies');
 
+    // Before anything is read, the hero shows the newest additions (LIB-1).
     await expect(page.locator('.folio-stage.is-visible')).toBeVisible();
-    await expect(page.locator('.folio-stage-hero h1')).toHaveText('Folio Classical Studies Volume I');
+    await expect(page.locator('.folio-stage-hero h1')).not.toBeEmpty();
     await expect.poll(() => page.evaluate(() => window.__folioStage?.stats.looks ?? 0), { timeout: 30_000 }).toBeGreaterThanOrEqual(1);
     await expect.poll(() => page.evaluate(() => window.__folioStage.stats.textures)).toBeGreaterThanOrEqual(2); // cover + spine
-    const stats = await page.evaluate(() => window.__folioStage.stats);
-    expect(stats.scene).toBe('hero');
+    expect(await page.evaluate(() => window.__folioStage.stats.scene)).toBe('hero');
     await testInfo.attach('hero', { body: await page.screenshot(), contentType: 'image/png' });
 
-    // Zero frames rendered after 2 s with no input (SPEC: rendering).
+    // Zero frames rendered after 2 s with no input (SPEC: rendering). Test mode advances a fixed step per frame, so on
+    // software GL the scene first needs to finish settling in real time; then not a single frame may be drawn.
     await page.mouse.move(5, 5);
-    await page.waitForTimeout(2000);
+    await expect.poll(() => page.evaluate(() => window.__folioStage.settled), { timeout: 30_000 }).toBe(true);
     const before = await page.evaluate(() => window.__folioStage.stats.frames);
     await page.waitForTimeout(2000);
     expect(await page.evaluate(() => window.__folioStage.stats.frames)).toBe(before);
 
-    // The stage pauses under the reader and resumes after.
-    await page.getByRole('button', { name: /^Open Folio Classical/ }).first().click();
+    // The stage pauses under the reader.
+    await page.locator('.folio-hero').getByRole('button', { name: /^Open / }).click();
     await waitForReader(page);
-    expect(await page.evaluate(() => window.__folioStage.stats.paused)).toBe(true);
+    await expect.poll(() => page.evaluate(() => window.__folioStage.stats.paused)).toBe(true);
     expect(errors).toEqual([]);
 });
 

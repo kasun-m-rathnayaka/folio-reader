@@ -45,7 +45,7 @@ export class BookFactory {
     /** Detailed materials: cover image, generated spine, cloth tinted by the accent. Returns a disposer. */
     dress(mesh, book, cover, accent) {
         const cloth = clothColor(accent);
-        const sheen = new THREE.Color(accent || '#8a7a62');
+        const sheen = new THREE.Color(accent || '#8a7a62').multiplyScalar(0.3); // a hint of the accent, not a white glaze
         const spineMap = spineTexture(book, cloth, accent);
         const spine = new THREE.MeshPhysicalMaterial({ map: spineMap, roughness: 0.8, sheen: 0.5, sheenColor: sheen });
         const back = new THREE.MeshPhysicalMaterial({ color: cloth, roughness: 0.8, sheen: 0.5, sheenColor: sheen });

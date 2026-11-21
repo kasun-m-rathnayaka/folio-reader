@@ -1,8 +1,10 @@
 // Motion primitives (SPEC: motion). Every moving value eases toward its target with exponential damping, which is
 // frame-rate independent: after t seconds the remaining distance is e^(-λt) of the start.
 
-export const LAMBDA = { camera: 4, pullOut: 10, pointer: 6, details: 5 };
-export const EPSILON = 1e-4;
+export const LAMBDA = { camera: 4, pullOut: 10, pointer: 6, details: 5, opening: 10 };
+// Snap threshold: 2e-3 world units is under 0.05 px at shelf distance, and 2e-3 rad is about 0.1°. Small enough to be
+// invisible, large enough that long moves stop drawing promptly (SPEC: zero frames after 2 s idle).
+export const EPSILON = 2e-3;
 
 export function damp(value, target, lambda, dt) {
     if (!(dt > 0)) return value;

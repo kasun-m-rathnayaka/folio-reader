@@ -10,8 +10,8 @@ test('back and forward walk every route', async ({ page }) => {
 
     visited.push(pathOf(page));
     await go(() => page.getByRole('button', { name: 'Want to read' }).click(), /^\/shelf\?status=WantToRead$/, page.locator('.folio-library-page'));
-    await go(() => page.getByRole('button', { name: 'Trash' }).click(), /^\/trash$/, page.getByRole('heading', { name: 'Trash' }));
-    await go(() => page.getByRole('button', { name: 'Settings' }).click(), /^\/settings$/, page.getByRole('heading', { name: 'Settings' }));
+    await go(() => page.getByRole('button', { name: 'Trash' }).click(), /^\/trash$/, page.getByRole('heading', { name: 'Trash', exact: true }));
+    await go(() => page.getByRole('button', { name: 'Settings' }).click(), /^\/settings$/, page.getByRole('heading', { name: 'Settings', exact: true }));
     await go(() => page.getByRole('button', { name: 'Library' }).click(), /^\/$/, page.locator('.folio-library-page'));
     await go(() => openFirstDetails(page), /^\/book\/[0-9a-f-]{36}$/, page.locator('.folio-details'));
     await go(() => page.getByRole('button', { name: /^Read / }).click(), /^\/book\/[0-9a-f-]{36}\/read$/, page.locator('.folio-reader'));

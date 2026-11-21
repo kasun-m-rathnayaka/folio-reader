@@ -130,3 +130,40 @@ bundle differs (line endings normalised). three 0.187.0 and esbuild 0.28.2 are p
 - Software renderers (SwiftShader, Microsoft Basic Render Driver, llvmpipe) fall back to 2D except in stage test mode
   (`?stageTest=1`), which CI uses to exercise 3D.
 - Scenes are owned: a page shows a scene and releases only its own, so route changes never leave a stale scene showing.
+
+## D-019 · Shelf scene details (M5)
+
+- Rows: "All books" then each shelf (SHF-1). Up/Down and the wheel move between Hero → All books → shelves; 1–9 jump to
+  shelf n; Left/Right move along the row. The first arrow press moves keyboard focus onto the focused book.
+- The HTML focus layer is a list with an Open and a Details button per book, visually hidden except a focused control,
+  which shows a labelled outline at the bottom left; the 3D pull-out and the bottom bar show the focused book. Hovering a
+  spine moves DOM focus (SPEC: accessibility). Space on a book means Details, Enter means Open.
+- The stage always holds the whole library; sort and filters (`?sort=`, `?status=`, `?q=`) only decide which books stand
+  on the rows, so any book can still open (search results, SRC-2). Changes reflow by damping to new slots (LIB-6).
+- Spine cloth is darkened until spine text reaches 7:1 in the texture (≥ 4.5:1 after lighting); sheen is a dim tint of
+  the accent. LIB-8's progress ribbon is drawn along the spine's edge.
+- Performance gate in CI: CI has no GPU, so the 300-book check asserts main-thread time per frame (p95 ≤ 16.7 ms; measured
+  3–5 ms) and records the software-GL frame interval; the 60 fps target is confirmed on hardware at M8.
+- Damping snaps within 2e-3 (under 0.05 px, about 0.1°) so long camera moves stop drawing promptly.
+
+## D-020 · Open-book handoff (M6)
+
+- The stage canvas is full-window behind the chrome; a damped projection offset centres scenes on the main area. While a
+  book opens, the offset eases to zero and the chrome fades, so the 3D page can be aligned in the reader's coordinates
+  without the canvas resizing.
+- The reader reports its current page's rectangle after the first render; the stage places the spread's right page in a
+  plane facing the camera with a closed-form pose (`opening.js`), then snaps exactly onto it and hands off. Measured
+  through the real camera: corner error ≈ 1e-13 px. Timeline overlaps the spec's phases to finish in ~0.8–0.87 s.
+- The reader's page shows real content only after the 120 ms crossfade; the 3D page is plain paper (rendering the PDF page
+  on the stage as well would double the work for one frame of overlap).
+- Reduced motion and Off skip the 3D opening and use the View Transition path (150 ms crossfade / cut).
+- "Reader accepts input ≤ 300 ms after" is recorded as a metric: on software GL in CI the main thread is saturated, so the
+  absolute number is checked on hardware at M8. The test asserts the reader responds to the keyboard after the handoff.
+- Durations in CI are measured on the stage clock (test mode advances 1/60 s per frame).
+
+## D-021 · Firefox and WebKit in CI lack OPFS sync access handles (M2–M6)
+
+Playwright's headless Firefox and WebKit builds fail SqliteWasmBlazor's start-up with "Missing required OPFS APIs", so
+the web app cannot open a library there, while current Firefox (111+) and Safari support them. CI tries enabling
+Firefox's `dom.fs.*` prefs; the app now shows a plain explanation when storage is missing. Until those engines pass in CI,
+the cross-browser gates for M2 are proven on Chromium only and need a manual check on real Firefox and Safari (M8).

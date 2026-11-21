@@ -20,6 +20,12 @@ public sealed record StageFilter(LibrarySort Sort = LibrarySort.Recent, ReadingS
         shelfId is { } id ? filtered.Where(b => b.BookShelves.Any(s => s.ShelfId == id)).ToList() : filtered;
 }
 
+/// <summary>A rectangle in viewport CSS pixels (the reader's page).</summary>
+public sealed record PageRect(double X, double Y, double Width, double Height);
+
+/// <summary>Where the open/close sequence is (OPN-1, OPN-2).</summary>
+public enum StagePhase { None, Opening, Handoff, Closing }
+
 /// <summary>A scene the stage should show (SPEC: scenes). Book and shelf ids are optional.</summary>
 public sealed record StageScene(string Kind, Guid? BookId = null, Guid? ShelfId = null, int? Page = null)
 {
@@ -44,6 +50,61 @@ public sealed class StageState
     public Guid? HoveredBookId { get; private set; }
     public IReadOnlyDictionary<Guid, string?> Accents => _accents;
     private readonly Dictionary<Guid, string?> _accents = [];
+
+    // ---- opening and closing a book (OPN-1, OPN-2) ----------------------------------------------------------------
+
+    public StagePhase Phase { get; private set; }
+    public Guid? OpeningBookId { get; private set; }
+    /// <summary>The motion level the stage runs at: full, reduced or off.</summary>
+    public string Motion { get; internal set; } = "full";
+    /// <summary>The scene shown before the book opened; closing returns to it.</summary>
+    public StageScene? ReturnScene { get; private set; }
+    internal Func<Guid, Task<bool>>? BeginOpenHandler;
+    internal Func<PageRect, Task>? AlignHandler;
+    internal Func<Guid, PageRect, StageScene, Task>? BeginCloseHandler;
+
+    /// <summary>
+    /// The 3D open-book transition runs whenever the stage is available and motion is Full — also from views without a
+    /// scene, such as search results (SRC-2): the book then appears on the stage and opens.
+    /// </summary>
+    public bool CanAnimateBooks => Available && Motion == "full" && BeginOpenHandler != null;
+
+    public async Task<bool> BeginOpenAsync(Guid bookId)
+    {
+        if (!CanAnimateBooks || Phase != StagePhase.None) return false;
+        ReturnScene = Scene;
+        if (!await BeginOpenHandler!(bookId)) return false;
+        OpeningBookId = bookId; Phase = StagePhase.Opening; Changed?.Invoke();
+        return true;
+    }
+
+    /// <summary>The reader reports where it drew the current page; the stage aligns its spread to it.</summary>
+    public Task ReportReaderPageAsync(PageRect rect) => Phase == StagePhase.Opening && AlignHandler != null ? AlignHandler(rect) : Task.CompletedTask;
+
+    /// <summary>The spread is aligned: crossfade to the reader (120 ms), then the stage pauses.</summary>
+    public async Task CompleteHandoffAsync()
+    {
+        if (Phase != StagePhase.Opening) return;
+        Phase = StagePhase.Handoff; Changed?.Invoke();
+        await Task.Delay(140);
+        if (Phase == StagePhase.Handoff) { Phase = StagePhase.None; OpeningBookId = null; Changed?.Invoke(); }
+    }
+
+    public bool CanAnimateClose => Available && Motion == "full" && BeginCloseHandler != null && ReturnScene != null && Phase == StagePhase.None;
+
+    /// <summary>Shows the 3D spread aligned with the reader's page, then closes the book back into the library.</summary>
+    public async Task BeginCloseAsync(Guid bookId, PageRect rect)
+    {
+        if (!CanAnimateClose) return;
+        OpeningBookId = bookId; Phase = StagePhase.Closing; Changed?.Invoke();
+        await BeginCloseHandler!(bookId, rect, ReturnScene!);
+    }
+
+    public void EndClose()
+    {
+        if (Phase != StagePhase.Closing) return;
+        Phase = StagePhase.None; OpeningBookId = null; Changed?.Invoke();
+    }
 
     public StageFilter Filter { get; private set; } = new();
     public event Action? FilterChanged;

@@ -34,7 +34,13 @@ else
             await Picker.RegisterDropTargetAsync();
             _ready = true;
         }
-        catch (Exception ex) { _error = ex.Message; }
+        catch (Exception ex)
+        {
+            // SqliteWasmBlazor needs private file storage with sync access handles in workers (OPFS).
+            _error = ex.Message.Contains("SqliteWasm", StringComparison.Ordinal) || ex.Message.Contains("OPFS", StringComparison.Ordinal)
+                ? "This browser does not offer the private file storage Folio keeps your library in. Use a current Chrome, Edge, Firefox or Safari, outside private browsing."
+                : ex.Message;
+        }
         StateHasChanged();
     }
 }

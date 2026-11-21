@@ -122,7 +122,10 @@ class FolioReaderEngine {
     }
     currentOffset() {
         const page = this.pages[this.currentPageIndex];
-        return page ? Math.max(0, Math.min(1, (this.container.scrollTop - page.container.offsetTop) / page.container.offsetHeight)) : 0;
+        // A hidden or closing reader has zero-height pages: report the top of the page, never NaN.
+        if (!page || !page.container.offsetHeight) return 0;
+        const offset = (this.container.scrollTop - page.container.offsetTop) / page.container.offsetHeight;
+        return Number.isFinite(offset) ? Math.max(0, Math.min(1, offset)) : 0;
     }
     handleScroll() {
         if (this.disposed || !this.pages.length) return;
@@ -289,6 +292,14 @@ class FolioReaderEngine {
     }
     pulseAnnotation(id) { document.querySelectorAll(`[data-annotation-id="${id}"]`).forEach(el => { el.classList.add('folio-annotation-pulsing'); setTimeout(() => el.classList.remove('folio-annotation-pulsing'), 1000); }); }
     setDogEar(index, folded) { const ear = this.pages[index]?.dogEar; ear?.classList.toggle('active', folded); ear?.setAttribute('aria-pressed', folded ? 'true' : 'false'); }
+    /** OPN-1/2: where the current page is drawn, in viewport CSS pixels (the stage aligns its 3D page to it). */
+    currentPageRect() {
+        const page = this.pages[this.currentPageIndex];
+        const canvas = page?.canvasWrap.querySelector('canvas') ?? page?.container;
+        if (!canvas) return null;
+        const r = canvas.getBoundingClientRect();
+        return r.width > 0 && r.height > 0 ? { x: r.left, y: r.top, width: r.width, height: r.height } : null;
+    }
     async getPageText(index) {
         if (!this.pdfDoc) return null;
         const page = await this.pdfDoc.getPage(index + 1), content = await page.getTextContent();
@@ -354,7 +365,7 @@ class FolioReaderEngine {
         this.container?.replaceChildren();
     }
 }
-const methods = ['loadDocument','goToPage','setZoom','setFitWidth','setFitPage','setLayoutMode','setRotation','search','clearSearch','getPageText','getThumbnail','drawAnnotations','pulseAnnotation','setDogEar','clearSelectionBox','applyTheme'];
+const methods = ['loadDocument','goToPage','setZoom','setFitWidth','setFitPage','setLayoutMode','setRotation','search','clearSearch','getPageText','getThumbnail','drawAnnotations','pulseAnnotation','setDogEar','clearSelectionBox','applyTheme','currentPageRect'];
 window.folioReader = {
     engine: null,
     get pdfDoc() { return this.engine?.pdfDoc; },

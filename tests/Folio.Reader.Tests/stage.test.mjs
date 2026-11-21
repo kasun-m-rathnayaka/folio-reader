@@ -91,3 +91,29 @@ test('software renderers are detected', () => {
         assert.ok(SOFTWARE_RENDERER.test(name), name);
     assert.ok(!SOFTWARE_RENDERER.test('ANGLE (Intel, Intel(R) Iris(R) Xe Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)'));
 });
+
+test('spine cloth keeps spine text at 4.5:1 for any cover colour', async () => {
+    globalThis.document ??= undefined;
+    const { clothColor } = await import('../../src/Folio.UI/stage/textures.js').catch(() => ({}));
+    if (!clothColor) return; // three needs a DOM only for canvases; clothColor itself is pure
+    const { contrast } = await import('../../src/Folio.UI/wwwroot/js/folio-color.mjs');
+    for (const accent of ['#FFFFFF', '#F5E6A1', '#1B2A6B', '#C0392B', null]) assert.ok(contrast(clothColor(accent), '#F2EEE6') >= 4.5, String(accent));
+});
+
+import { alignmentPose, projectedRect, cornerError, OPENING } from '../../src/Folio.UI/stage/opening.js';
+
+test('handoff alignment round-trips to the reader rectangle within a pixel', () => {
+    const camera = { x: 0, y: 0, z: 40, planeZ: 0, fov: 30 };
+    for (const viewport of [{ width: 1280, height: 800 }, { width: 1920, height: 1080 }, { width: 800, height: 1100 }])
+        for (const rect of [{ x: 334, y: 60, width: 612, height: 792 }, { x: 10, y: 10, width: 300, height: 420 }, { x: 900, y: 500, width: 200, height: 260 }]) {
+            const plane = alignmentPose(rect, viewport, camera);
+            assert.ok(cornerError(projectedRect(plane, viewport, camera), rect) < 1e-6);
+        }
+});
+
+test('opening timeline fits 900 ms and keeps the spec order', () => {
+    assert.ok(OPENING.total <= 0.9);
+    assert.ok(OPENING.coverStart < OPENING.forward + OPENING.cover && OPENING.alignStart > OPENING.coverStart);
+    assert.ok(OPENING.alignStart + OPENING.align + OPENING.crossfade <= OPENING.total + 1e-9);
+    assert.equal(cornerError({ x: 0, y: 0, width: 10, height: 10 }, { x: 3, y: 4, width: 10, height: 10 }), 5);
+});

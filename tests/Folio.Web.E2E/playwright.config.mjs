@@ -7,7 +7,8 @@ const wanted = (process.env.FOLIO_E2E_BROWSERS || 'chromium,firefox,webkit').spl
 const chromiumLaunch = process.env.FOLIO_CHROMIUM_PATH ? { launchOptions: { executablePath: process.env.FOLIO_CHROMIUM_PATH } } : {};
 const projects = [
     { name: 'chromium', use: { ...devices['Desktop Chrome'], ...chromiumLaunch } },
-    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+    // Playwright's Firefox may ship with the Origin Private File System off; the app needs it (DECISIONS D-021).
+    { name: 'firefox', use: { ...devices['Desktop Firefox'], launchOptions: { firefoxUserPrefs: { 'dom.fs.enabled': true, 'dom.fs.writable_file_stream.enabled': true } } } },
     { name: 'webkit', use: { ...devices['Desktop Safari'] } },
 ].filter(p => wanted.includes(p.name));
 

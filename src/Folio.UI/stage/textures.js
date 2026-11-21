@@ -1,7 +1,7 @@
 // Generated textures (LIB-4): cover from the PDF's first-page render, spine drawn from title and author, cream
 // page edges, and the cover's dominant colour as the book's accent. Covers and spines live in an LRU of ~120 books.
 import * as THREE from 'three';
-import { dominantColor, parseHex, toHex, mix } from '../wwwroot/js/folio-color.mjs';
+import { dominantColor, parseHex, toHex, mix, contrast } from '../wwwroot/js/folio-color.mjs';
 
 export const COVER_MAX = 512, SPINE_W = 64, SPINE_H = 512;
 
@@ -45,9 +45,12 @@ export async function loadCover(url, anisotropy = 4) {
 
 /** Cloth colour for a book: the accent darkened enough that light spine text reads on it. */
 export function clothColor(accent) {
-    const base = accent ? parseHex(accent) : [58, 54, 48];
-    return toHex(mix(base, [18, 17, 16], 0.45));
+    let rgb = mix(accent ? parseHex(accent) : [58, 54, 48], [18, 17, 16], 0.35);
+    // 7:1 in the texture leaves headroom for the key light, so spine text stays above 4.5:1 on screen.
+    for (let i = 0; i < 16 && contrast(rgb, SPINE_TEXT) < 7; i++) rgb = mix(rgb, [12, 11, 10], 0.2);
+    return toHex(rgb);
 }
+const SPINE_TEXT = '#F2EEE6';
 
 let fontsReady = null;
 export function ensureFonts() {
@@ -70,7 +73,7 @@ export function spineTexture(book, cloth, ribbon) {
     g.globalAlpha = 1;
     g.save();
     g.translate(SPINE_W / 2, 0); g.rotate(Math.PI / 2);
-    g.fillStyle = '#F2EEE6'; g.textBaseline = 'middle';
+    g.fillStyle = SPINE_TEXT; g.textBaseline = 'middle';
     const fit = (text, font, max, size) => {
         let s = size;
         do { g.font = `${font.replace('{s}', s)}`; s -= 1; } while (g.measureText(text).width > max && s > 10);

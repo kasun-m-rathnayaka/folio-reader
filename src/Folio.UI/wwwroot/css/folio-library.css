@@ -165,7 +165,10 @@ select { border-radius:2px; background:var(--folio-surface); border-color:var(--
 
 /* ---- 3D stage layer (M4) ------------------------------------------------------------------------------------------ */
 .folio-shell-main { position:relative; }
-.folio-stage-layer { position:absolute; left:0; right:0; top:60px; bottom:0; z-index:0; pointer-events:none; }
+/* The stage canvas fills the window behind the chrome; scenes are centred on the main area by a projection offset, so
+   the open book can align with the full-window reader without the canvas ever resizing (M6). */
+.folio-stage-layer { position:fixed; inset:0; z-index:0; pointer-events:none; }
+.folio-sidebar, .folio-app-header { position:relative; z-index:2; }
 .folio-stage { position:absolute; inset:0; opacity:0; visibility:hidden; transition:opacity 300ms var(--folio-ease), visibility 0s linear 300ms; }
 .folio-stage.is-visible { opacity:1; visibility:visible; transition:opacity 300ms var(--folio-ease); }
 .folio-stage canvas { display:block; width:100%; height:100%; }
@@ -179,3 +182,38 @@ select { border-radius:2px; background:var(--folio-surface); border-color:var(--
 .folio-hero-stage-slot { height:100%; min-height:300px; }
 .folio-browse { margin-top:22px; color:var(--folio-text-muted); }
 :root[data-motion="off"] .folio-stage, :root[data-motion="off"] .folio-stage.is-visible { transition:none; }
+
+/* ---- shelf scene overlay (M5) ------------------------------------------------------------------------------------ */
+.folio-sr-only { position:absolute !important; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+.folio-stage-shelf { display:flex; flex-direction:column; padding:24px 32px 0; }
+.folio-stage-shelf-head { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; }
+.folio-stage-shelf-head h1 { margin-bottom:6px; }
+.folio-row-index, .folio-status-filter { display:flex; flex-wrap:wrap; gap:0 14px; }
+.folio-status-filter { margin-top:-2px; }
+.folio-row-index .folio-bracket, .folio-status-filter .folio-bracket { color:var(--folio-text-muted); font-size:11px; }
+.folio-row-index .folio-bracket.is-current, .folio-status-filter .folio-bracket.is-current { color:var(--folio-text); }
+.folio-row-index .folio-bracket.is-current .folio-bracket-label, .folio-status-filter .folio-bracket.is-current .folio-bracket-label { background-size:100% 1px; }
+.folio-stage-empty { margin:auto; text-align:center; display:grid; gap:12px; justify-items:center; padding-bottom:80px; }
+.folio-stage-empty .folio-display { font-size:32px; }
+/* The focus layer is the real library for keyboard and screen readers. It sits along the bottom edge, visually quiet:
+   the focused book is shown by the 3D pull-out and the bottom bar; a focused control still gets a visible outline. */
+.folio-focus-layer { list-style:none; margin:auto 0 0; padding:0 0 64px; display:flex; flex-wrap:nowrap; overflow:hidden; gap:2px; height:1px; }
+.folio-focus-layer li { display:contents; }
+.folio-focus-layer button { position:absolute; left:32px; bottom:70px; opacity:0; pointer-events:none; padding:4px 8px; font-family:var(--folio-font-mono); font-size:11px; text-transform:uppercase; letter-spacing:.08em; background:var(--folio-surface); color:var(--folio-text); border:1px solid var(--folio-hairline); }
+.folio-focus-layer button:focus-visible { opacity:1; outline:2px solid var(--folio-accent); outline-offset:2px; }
+
+/* ---- open and close a book (OPN-1, OPN-2) --------------------------------------------------------------------------- */
+.stage-opening .folio-library-shell, .stage-handoff .folio-library-shell, .stage-closing .folio-library-shell { position:fixed; inset:0; z-index:50; pointer-events:none; }
+.stage-opening .folio-sidebar, .stage-opening .folio-app-header, .stage-opening .folio-page-body,
+.stage-handoff .folio-sidebar, .stage-handoff .folio-app-header, .stage-handoff .folio-page-body,
+.stage-closing .folio-sidebar, .stage-closing .folio-app-header, .stage-closing .folio-page-body { opacity:0; }
+.folio-sidebar, .folio-app-header, .folio-page-body { transition:opacity 200ms var(--folio-ease); }
+.stage-opening .folio-reader { opacity:0; }
+.stage-handoff .folio-reader { opacity:1; transition:opacity 120ms linear; }
+.stage-handoff .folio-stage.is-visible { opacity:0; transition:opacity 120ms linear; }
+.stage-closing .folio-stage.is-visible { animation:folio-fade-in 120ms linear; }
+@keyframes folio-fade-in { from { opacity:0; } to { opacity:1; } }
+
+/* ---- 3D details (DET-1): the stage draws the book and the tint; the panel floats on it ------------------------------ */
+.folio-details.is-3d { background:transparent; }
+.folio-details.is-3d .folio-details-stage { visibility:hidden; }

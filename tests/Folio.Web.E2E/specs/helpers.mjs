@@ -6,14 +6,14 @@ export const fixtures = resolve(dirname(fileURLToPath(import.meta.url)), '../../
 export const fixture = name => resolve(fixtures, name);
 
 /** Opens the app on a fresh origin storage and waits until the library is ready. */
-export async function openLibrary(page) {
+export async function openLibrary(page, url = '/') {
     const errors = [];
     page.on('pageerror', error => errors.push(String(error)));
     page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
     const logs = [];
     page.on('console', message => logs.push(`${message.type()}: ${message.text()}`));
-    await page.goto('/');
-    const ready = page.locator('.folio-library-page, #app [role="alert"]').first();
+    await page.goto(url);
+    const ready = page.locator('.folio-library-page, .folio-stage-page, #app [role="alert"]').first();
     try { await ready.waitFor({ timeout: 90_000 }); }
     catch (error) { throw new Error(`Library did not open. Page: ${(await page.locator('#app').innerText().catch(() => '?')).slice(0, 400)}\nConsole:\n${logs.slice(-25).join('\n')}`); }
     if (await page.locator('#app [role="alert"]').count())

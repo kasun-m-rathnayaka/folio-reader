@@ -6,6 +6,7 @@ import { BOOK_HEIGHT, ROW_SPACING, PULL_OUT, rowPositions, cameraX } from './lay
 export const FEATURE_Y = 0;
 export const SHELF_TOP_Y = -70;
 export const CAMERA_FOV = 30;
+export const SHELF_DISTANCE = 108;
 const HERO_TURN = 0.48;                 // 3/4 view: cover and spine both visible
 const DEG = Math.PI / 180;
 
@@ -20,7 +21,7 @@ export function cameraPose(scene, ctx) {
             const layout = ctx.rows?.[row]?.layout;
             const focus = layout?.positions.get(ctx.focusId)?.x ?? (layout ? Math.min(layout.width / 2, 20) : 0);
             const x = layout ? cameraX(focus, layout.width, ctx.halfViewWidth ?? 30) : 0;
-            return { px: x, py: y + 3, pz: 64, lx: x, ly: y + 1, lz: 0 };
+            return { px: x, py: y + 6, pz: SHELF_DISTANCE, lx: x, ly: y + 1, lz: 0 };
         }
         case 'details':
             // Book left of the HTML panel: look slightly right of it.

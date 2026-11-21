@@ -37,7 +37,8 @@ Done when:
 - [x] 4. `tests/Folio.Web.E2E` (Playwright) with the fixture PDFs; `web` CI job on Chromium, Firefox, WebKit
 
 Done when:
-- [x] Import, open, highlight, reload — book and highlight persist: Chromium (local); Firefox and WebKit *(CI)*
+- [x] Import, open, highlight, reload — book and highlight persist: Chromium (local and CI)
+- [ ] Same on Firefox and WebKit — blocked in CI: Playwright's builds lack OPFS sync access handles (D-021); manual check on real browsers at M8
 - [x] Library search returns "Paragraph 15.1" from `01_single_column_book_300p.pdf` on page 15
 - [x] `dotnet publish src/Folio.Web` produces a static site that runs from a plain file server (`tests/Folio.Web.E2E/serve.mjs`)
 
@@ -71,3 +72,28 @@ Done when:
 - [x] Hero renders real covers from fixtures on web (`stage.spec.mjs`); desktop *(CI build; human check at M8)*
 - [x] Zero frames rendered after 2 s idle (`window.__folioStage.stats.frames` unchanged)
 - [x] Forcing WebGL off shows the 2D library with no errors
+
+## M5 — Shelf scene and navigation
+
+- [x] 1. Shelf scene: rows per shelf, focus pull-out (24 mm, 6°), camera travel, wheel/swipe/keys (LIB-3, LIB-5, SHF-1)
+- [x] 2. HTML focus layer synchronised with 3D focus both ways; polite live region ("Shelf: Design, 14 books")
+- [x] 3. Sort and filter reflow (LIB-6), progress ribbon (LIB-8), empty shelf + Add books and import slide-in (LIB-7),
+      live shelf updates through `LibraryEvents` (SHF-2) (D-019)
+
+Done when:
+- [x] Keyboard only: every book on three shelves reached, one opened, Escape returns to the same shelf (`shelf.spec.mjs`)
+- [x] 300 synthetic books: main-thread p95 3–5 ms per frame, 197–212 draw calls, textures capped at 120 books; recorded in
+      `perf-shelf-300.json` (D-019 — absolute 60 fps confirmed on hardware at M8)
+
+## M6 — Details and the open-book transition
+
+- [x] 1. Details scene: book turned to face the reader, stage background tinted with the contrast-checked accent; HTML
+      panel with highlight and bookmark counts (DET-1, DET-2)
+- [x] 2. Opening: forward → cover swings open → spread aligns to the reader's reported page → 120 ms crossfade (OPN-1)
+- [x] 3. Close: spread fades in over the reader, cover closes, book returns to its place (OPN-2); search results use the
+      same path and land on the matching page (SRC-2) (D-020)
+
+Done when:
+- [x] At handoff the 3D page and reader page differ by ≤ 2 px at the corners — measured ≈ 1e-13 px (`open.spec.mjs`)
+- [x] Open completes in ≤ 900 ms (stage clock: 817–867 ms); reader accepts input after the crossfade — absolute ≤ 300 ms
+      to confirm on hardware at M8 (D-020)

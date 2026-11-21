@@ -18,8 +18,8 @@
 <MudThemeProvider Theme="_theme" IsDarkMode="@Preferences.Current.DarkMode" />
 <MudPopoverProvider />
 <MudDialogProvider />
-<div class="folio-app" data-theme="@(Preferences.Current.DarkMode ? "dark" : "light")">
-    <div class="folio-library-shell @(Preferences.Current.SidebarCollapsed ? "sidebar-collapsed" : "") @(_inReader ? "is-covered" : "") @(Stage.Scene != null && Stage.Available ? "stage-on" : "")" inert="@_inReader">
+<div class="folio-app @PhaseClass" data-theme="@(Preferences.Current.DarkMode ? "dark" : "light")">
+    <div class="folio-library-shell @(Preferences.Current.SidebarCollapsed ? "sidebar-collapsed" : "") @(_inReader && Stage.Phase == StagePhase.None ? "is-covered" : "") @(Stage.Scene != null && Stage.Available ? "stage-on" : "")" inert="@(_inReader || Stage.Phase != StagePhase.None)">
         <a class="folio-skip-link" href="@SkipTarget">Skip to content</a>
         <aside class="folio-sidebar" aria-label="Main navigation">
             <button class="folio-brand" @onclick="() => Go(FolioRoutes.Home)" aria-label="Folio home" title="Folio home">
@@ -64,7 +64,7 @@
                 <button class="folio-icon-button" title="Import folder" aria-label="Import folder" @onclick="ImportFolder" disabled="@_importing"><MudIcon Icon="@Icons.Material.Outlined.CreateNewFolder" /></button>
                 }
             </header>
-            <div class="folio-stage-layer"><StageHost @ref="_stage" Suspended="@_inReader" /></div>
+            <div class="folio-stage-layer"><StageHost @ref="_stage" Suspended="@(_inReader && Stage.Phase is StagePhase.None)" /></div>
             <main id="folio-main" class="folio-page-body" tabindex="-1">
                 @if (!_inReader) { <CascadingValue Value="this" IsFixed="true">@Body</CascadingValue> }
             </main>
@@ -89,6 +89,7 @@
 @code {
     private string _search = "";
     private StageHost? _stage;
+    private string PhaseClass => Stage.Phase switch { StagePhase.Opening => "stage-opening", StagePhase.Handoff => "stage-handoff", StagePhase.Closing => "stage-closing", _ => "" };
     private bool _inReader;
     private RouteInfo _route = new();
     private LibraryCounts _counts = new(0, 0, 0, 0, 0);

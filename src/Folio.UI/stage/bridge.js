@@ -40,6 +40,7 @@ export function init(canvasId, options, dotNetRef) {
             onScrollIntent: direction => call('OnScrollIntent', direction),
             onFallback: reason => call('OnFallback', reason),
             onAccent: (id, color) => call('OnBookAccent', id, color),
+            onOpenHandoff: (id, rect, elapsedMs) => call('OnOpenHandoff', id, rect, elapsedMs),
         });
         return { ok: true, renderer: stage.stats.renderer };
     } catch (error) {
@@ -48,16 +49,31 @@ export function init(canvasId, options, dotNetRef) {
     }
 }
 
-export function setLibrary(books, shelves) {
+export function setLibrary(books, shelves, visibleIds) {
     if (!stage) return;
     const clean = (Array.isArray(books) ? books : []).map(cleanBook).filter(Boolean);
     const cleanShelves = (Array.isArray(shelves) ? shelves : []).filter(s => typeof s?.id === 'string').map(s => ({ id: s.id, name: str(s.name) || '' }));
-    stage.setLibrary(clean, cleanShelves);
+    stage.setLibrary(clean, cleanShelves, Array.isArray(visibleIds) ? visibleIds.filter(x => typeof x === 'string') : null);
 }
 
 export function setScene(scene) {
     if (!stage || !SCENES.has(scene?.kind)) return;
     stage.setScene({ kind: scene.kind, bookId: str(scene.bookId, 64), shelfId: str(scene.shelfId, 64), page: Number.isFinite(scene.page) ? scene.page : null });
+}
+
+const cleanRect = r => r && [r.x, r.y, r.width, r.height].every(Number.isFinite) && r.width > 0 && r.height > 0
+    ? { x: r.x, y: r.y, width: r.width, height: r.height } : null;
+
+/** OPN-1: start opening a book; returns false if the stage does not know it (then .NET just navigates). */
+export const beginOpen = id => typeof id === 'string' && !!stage?.beginOpen(id);
+/** OPN-1: the reader's page rectangle in viewport pixels; the stage aligns, then calls OnOpenHandoff. */
+export const alignTo = rect => { const r = cleanRect(rect); if (r) stage?.alignTo(r); };
+/** OPN-2: start aligned with the reader's page, close the cover and return to `scene`. */
+export function beginClose(id, rect, scene) {
+    if (!stage || !SCENES.has(scene?.kind)) return;
+    const r = cleanRect(rect);
+    const next = { kind: scene.kind, bookId: str(scene.bookId, 64), shelfId: str(scene.shelfId, 64) };
+    if (!r || typeof id !== 'string') stage.setScene(next); else stage.beginClose(id, r, next);
 }
 
 export const focusBook = id => stage?.focusBook(typeof id === 'string' ? id : null);

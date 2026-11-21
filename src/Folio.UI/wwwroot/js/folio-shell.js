@@ -23,6 +23,7 @@ window.folioShell = {
         const left = current.offsetLeft - (container.clientWidth - current.clientWidth) / 2;
         container.scrollTo({ left, behavior: this.motion === 'full' ? 'smooth' : 'instant' });
     },
+    focusElement(id) { document.getElementById(id)?.focus({ preventScroll: true }); },
     setSceneKeyTarget(reference) { this.sceneKeyTarget = reference; },
     get motion() { return document.documentElement.dataset.motion || 'full'; },
     async waitFor(selector, timeout = 800) {
@@ -103,7 +104,9 @@ window.addEventListener('keydown', event => {
     if (element?.closest('input, textarea, select, [contenteditable="true"], .mud-dialog, .mud-popover-open, [role="menu"]')) return;
     const keys = ['Enter', 'Escape', 'd', 'D', ' ', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', '?', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
     if (!keys.includes(event.key)) return;
-    if ((event.key === 'Enter' || event.key === ' ') && element?.closest('button, a[href], [role="button"], summary')) return;
+    // Space on a book in the focus layer means Details (SPEC: interactions), not the button's own activation.
+    const spaceDetails = event.key === ' ' && element?.closest('[data-space-details]');
+    if (!spaceDetails && (event.key === 'Enter' || event.key === ' ') && element?.closest('button, a[href], [role="button"], summary')) return;
     if (event.key.startsWith('Arrow') && element?.closest('.folio-shelves-list, .folio-books-scroll') && !element.closest('button')) return;
     if (event.key === ' ' || event.key.startsWith('Arrow')) event.preventDefault();
     target.invokeMethodAsync('OnSceneKey', event.key, event.shiftKey).catch(() => {});

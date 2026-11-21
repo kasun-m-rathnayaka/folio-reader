@@ -9,39 +9,108 @@
 @inject LibraryEvents Events
 @inject SceneKeys Keys
 @inject StageState Stage
+@inject IJSRuntime JS
 
 <PageTitle>@PageName · Folio</PageTitle>
-@if (Use3DHero)
+@if (Mode == View.Hero)
 {
     @* Hero scene (LIB-1, LIB-2): the stage draws the book; this layer carries everything readable and focusable. *@
     <section class="folio-stage-page folio-stage-hero">
-        <LibraryHero @ref="_hero" Books="@_recent" ShowBook="false" OnOpen="Open" OnDetails="Details" OnCurrentChanged="HeroChanged">
+        <LibraryHero @ref="_hero" Books="@HeroBooks" ShowBook="false" OnOpen="Open" OnDetails="Details" OnCurrentChanged="HeroChanged">
             <Footer><BracketButton Label="BROWSE SHELVES" Plus="false" Hint="↓" AriaLabel="Browse shelves" Class="folio-browse" OnClick="() => Navigator.Go(FolioRoutes.Shelf())" /></Footer>
         </LibraryHero>
-        <LibraryBottomBar Book="@(_hero?.Current ?? _recent.FirstOrDefault())" OnOpen="Open" OnDetails="Details" />
+        <LibraryBottomBar Book="@(_hero?.Current ?? HeroBooks.FirstOrDefault())" OnOpen="Open" OnDetails="Details" />
+        <div class="folio-sr-only" role="status" aria-live="polite">@_announcement</div>
     </section>
 }
-else if (!Stage.Starting || !_home)
+else if (Mode == View.Shelf)
+{
+    @* Shelf scene (LIB-3, LIB-5, SHF-1). The canvas is aria-hidden; the list below is the real, focusable library. *@
+    <section class="folio-stage-page folio-stage-shelf" aria-labelledby="folio-shelf-title">
+        <header class="folio-stage-shelf-head">
+            <div>
+                <div class="folio-eyebrow">[ SHELF · @RowName.ToUpperInvariant() · @_row.Count ]</div>
+                <h1 id="folio-shelf-title" class="folio-display" tabindex="-1">@RowName</h1>
+            </div>
+            <label class="folio-sort"><span>Sort</span><select aria-label="Sort books" value="@_filter.Sort" @onchange="SortChanged">
+                @foreach (var sort in Enum.GetValues<LibrarySort>()) { <option value="@sort">@SortName(sort)</option> }
+            </select></label>
+        </header>
+        <nav class="folio-row-index" aria-label="Shelves">
+            <BracketButton Label="ALL BOOKS" Plus="false" Class="@(ShelfId == null ? "is-current" : "")" aria-current="@(ShelfId == null ? "page" : null)" OnClick="() => Navigator.Go(FolioRoutes.Shelf(null, _status, Q))" />
+            @for (var i = 0; i < _shelves.Count; i++)
+            {
+                var shelf = _shelves[i]; var number = i + 1;
+                <BracketButton Label="@shelf.Name.ToUpperInvariant()" AriaLabel="@($"Shelf {shelf.Name}")" Plus="false" Hint="@(number <= 9 ? number.ToString() : null)" Class="@(ShelfId == shelf.Id ? "is-current" : "")" aria-current="@(ShelfId == shelf.Id ? "page" : null)" OnClick="() => Navigator.Go(FolioRoutes.Shelf(shelf.Id, _status, Q))" />
+            }
+        </nav>
+        <div class="folio-status-filter" role="group" aria-label="Reading status">
+            @foreach (var (status, label) in Statuses)
+            {
+                <BracketButton Label="@label" Plus="false" Class="@(_status == status ? "is-current" : "")" aria-pressed="@((_status == status).ToString().ToLowerInvariant())" OnClick="() => Navigator.Go(FolioRoutes.Shelf(ShelfId, status, Q))" />
+            }
+        </div>
+        @if (_row.Count == 0)
+        {
+            <div class="folio-stage-empty">
+                <p class="folio-display">@(_all.Count == 0 ? "Make room for a good book" : "No books here yet")</p>
+                @if (_all.Count == 0) { <BracketButton Label="ADD BOOKS" AriaLabel="Add books to an empty library" OnClick="Import" /> }
+                else { <p class="folio-muted">Add books with MOVE TO SHELF on their details, or change the filter.</p> }
+            </div>
+        }
+        <ul class="folio-focus-layer" aria-label="@($"Books on {RowName}")" @onfocusin="() => _layerFocused = true" @onfocusout="() => _layerFocused = false">
+            @foreach (var book in _row)
+            {
+                <li @key="book.Id">
+                    <button type="button" id="@BookButtonId(book.Id)" class="folio-focus-book @(book.Id == _focusId ? "is-focused" : "")" data-space-details="true"
+                        aria-label="@BookGeometry.AccessibleName(book)" @onfocus="() => Focus(book.Id)" @onclick="() => Open(book)">@book.Title</button>
+                    <button type="button" class="folio-focus-details" aria-label="@($"Details, {book.Title}")" @onfocus="() => Focus(book.Id)" @onclick="() => Details(book)">Details</button>
+                </li>
+            }
+        </ul>
+        <LibraryBottomBar Book="@FocusedBook" EmptyLabel="[ ← → TO BROWSE · ↑ ↓ FOR SHELVES ]" OnOpen="Open" OnDetails="Details" />
+        <div class="folio-sr-only" role="status" aria-live="polite">@_announcement</div>
+    </section>
+}
+else if (Mode == View.TwoD)
 {
     <LibraryView @ref="_view" SearchQuery="@Q" StatusFilter="@_status" Shelf="@_shelf" Trash="@_trash" ShowHero="@_home"
         OnOpenBook="Open" OnDetails="Details" OnImport="Import" OnChanged="Changed" />
 }
 
 @code {
+    private enum View { Waiting, Hero, Shelf, TwoD }
+    private static readonly (ReadingStatus? Status, string Label)[] Statuses =
+        [(null, "ANY STATUS"), (ReadingStatus.Reading, "READING"), (ReadingStatus.WantToRead, "WANT TO READ"), (ReadingStatus.Finished, "FINISHED")];
     [Parameter] public Guid? ShelfId { get; set; }
     [SupplyParameterFromQuery(Name = "q")] public string? Q { get; set; }
     [SupplyParameterFromQuery(Name = "status")] public string? Status { get; set; }
+    [SupplyParameterFromQuery(Name = "sort")] public string? Sort { get; set; }
     [CascadingParameter] public Layout.MainLayout? Layout { get; set; }
     private LibraryView? _view;
     private LibraryHero? _hero;
     private IAsyncDisposable? _keys;
-    private IReadOnlyList<Book> _recent = [];
+    private IReadOnlyList<Book> _recent = [], _all = [], _row = [];
+    private IReadOnlyList<Shelf> _shelves = [];
+    private StageFilter _filter = new();
     private Shelf? _shelf;
     private ReadingStatus? _status;
-    private bool _trash, _home;
+    private Guid? _focusId;
+    private bool _trash, _home, _shelfRoute, _loaded, _layerFocused;
+    private string? _announcement;
+
+    private View Mode => !_loaded || (Stage.Starting && !_trash) ? View.Waiting
+        : Stage.Available && _home && string.IsNullOrWhiteSpace(Q) && HeroBooks.Count > 0 ? View.Hero
+        : Stage.Available && (_shelfRoute || (_home && _all.Count == 0)) ? View.Shelf
+        : View.TwoD;
+    /// <summary>LIB-1: the most recently read books; before anything is read, the newest additions.</summary>
+    private IReadOnlyList<Book> HeroBooks => _recent.Count > 0 ? _recent : _all.Take(8).ToList();
+    private string RowName => _shelf?.Name ?? "All books";
+    private Book? FocusedBook => _row.FirstOrDefault(b => b.Id == _focusId);
+    private string ShelfAnnouncement => $"Shelf: {RowName}, {_row.Count} {(_row.Count == 1 ? "book" : "books")}";
     private string PageName => _trash ? "Trash" : _shelf?.Name ?? (_status != null ? _status.ToString()! : "Library");
-    /// <summary>The 3D hero needs the stage and at least one book read before; otherwise the 2D library shows.</summary>
-    private bool Use3DHero => _home && Stage.Available && string.IsNullOrWhiteSpace(Q) && _recent.Count > 0;
+    private static string BookButtonId(Guid id) => $"folio-book-{id:N}";
+    private static string SortName(LibrarySort sort) => sort switch { LibrarySort.Added => "Date added", _ => sort.ToString() };
 
     protected override void OnInitialized()
     {
@@ -49,6 +118,8 @@ else if (!Stage.Starting || !_home)
         Stage.Changed += StageChanged;
         Stage.Activated += StageActivated;
         Stage.ScrollIntent += StageScroll;
+        Stage.Hovered += StageHovered;
+        Stage.Settled += StageSettled;
     }
 
     protected override async Task OnParametersSetAsync()
@@ -56,14 +127,29 @@ else if (!Stage.Starting || !_home)
         var path = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Trim('/');
         _trash = path == "trash";
         _home = path.Length == 0;
+        _shelfRoute = path == "shelf" || path.StartsWith("shelf/", StringComparison.Ordinal);
         _status = Enum.TryParse<ReadingStatus>(Status, true, out var status) ? status : null;
+        _shelves = await Library.GetShelvesAsync();
         _shelf = null;
         if (ShelfId is { } id)
         {
-            _shelf = (await Library.GetShelvesAsync()).FirstOrDefault(s => s.Id == id);
-            if (_shelf == null) Navigator.Go(FolioRoutes.Home, replace: true);
+            _shelf = _shelves.FirstOrDefault(s => s.Id == id);
+            if (_shelf == null) { Navigator.Go(FolioRoutes.Home, replace: true); return; }
         }
-        if (_home) _recent = await Library.GetRecentAsync();
+        _filter = new StageFilter(Enum.TryParse<LibrarySort>(Sort, true, out var sort) ? sort : LibrarySort.Recent, _shelfRoute ? _status : null, _shelfRoute ? Q : null);
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (!_trash)
+        {
+            _recent = _home ? await Library.GetRecentAsync() : [];
+            _all = await Library.GetAllAsync(_filter.Sort);
+            _row = StageFilter.Row(_filter.Apply(_all), ShelfId);
+            if (_focusId == null || _row.All(b => b.Id != _focusId)) _focusId = _row.FirstOrDefault()?.Id;
+        }
+        _loaded = true;
         UpdateStage();
     }
 
@@ -71,12 +157,65 @@ else if (!Stage.Starting || !_home)
 
     private void UpdateStage()
     {
-        if (Use3DHero) Stage.Show(StageScene.Hero((_hero?.Current ?? _recent[0]).Id), this);
-        else Stage.Release(this);
+        switch (Mode)
+        {
+            case View.Hero:
+                Stage.SetFilter(new());
+                Stage.Show(StageScene.Hero((_hero?.Current ?? HeroBooks[0]).Id), this);
+                break;
+            case View.Shelf:
+                Stage.SetFilter(_filter);
+                Stage.Show(StageScene.Shelf(ShelfId, _focusId), this);
+                // Announce the scene when it is shown; the stage's settle event repeats it once the camera arrives.
+                _announcement = ShelfAnnouncement;
+                break;
+            case View.TwoD:
+                Stage.Release(this);
+                break;
+        }
     }
 
+    // ---- focus: DOM focus and 3D focus follow each other --------------------------------------------------------------
+
+    private void Focus(Guid id)
+    {
+        if (_focusId == id) return;
+        _focusId = id;
+        if (Mode == View.Shelf) Stage.Show(StageScene.Shelf(ShelfId, id), this);
+    }
+
+    private async Task MoveFocus(int delta)
+    {
+        if (_row.Count == 0) return;
+        var index = _row.ToList().FindIndex(b => b.Id == _focusId);
+        // The first arrow press moves keyboard focus onto the focused book; later presses move along the row.
+        var next = _layerFocused ? _row[Math.Clamp(index + delta, 0, _row.Count - 1)] : FocusedBook ?? _row[0];
+        Focus(next.Id);
+        StateHasChanged();
+        await JS.InvokeVoidAsync("folioShell.focusElement", BookButtonId(next.Id));
+    }
+
+    private void StageHovered(Guid id) => _ = InvokeAsync(async () =>
+    {
+        if (Mode != View.Shelf || _row.All(b => b.Id != id)) return;
+        Focus(id);
+        StateHasChanged();
+        await JS.InvokeVoidAsync("folioShell.focusElement", BookButtonId(id));
+    });
+
+    private void StageSettled(string kind) => _ = InvokeAsync(() =>
+    {
+        _announcement = kind switch
+        {
+            "shelf" when Mode == View.Shelf => ShelfAnnouncement,
+            "hero" when Mode == View.Hero => $"Continue reading: {(_hero?.Current ?? HeroBooks.FirstOrDefault())?.Title}",
+            _ => _announcement
+        };
+        StateHasChanged();
+    });
+
     private void StageChanged() => _ = InvokeAsync(() => { UpdateStage(); StateHasChanged(); });
-    private Task HeroChanged(Book book) { if (Use3DHero) Stage.Show(StageScene.Hero(book.Id), this); return Task.CompletedTask; }
+    private Task HeroChanged(Book book) { if (Mode == View.Hero) Stage.Show(StageScene.Hero(book.Id), this); return Task.CompletedTask; }
 
     private async Task StageActivated(Guid id, string action)
     {
@@ -84,39 +223,57 @@ else if (!Stage.Starting || !_home)
         else Navigator.Go(FolioRoutes.Book(id));
     }
 
-    private Task StageScroll(string direction)
-    {
-        if (direction == "down" && Use3DHero) Navigator.Go(FolioRoutes.Shelf());
-        return Task.CompletedTask;
-    }
+    private Task StageScroll(string direction) => InvokeAsync(() => StepRow(direction == "down" ? 1 : -1));
 
-    private Book? Focused => Use3DHero ? _hero?.Current : _view?.FocusedBook;
+    /// <summary>Up/down through Hero → All books → each shelf (LIB-3, SHF-1).</summary>
+    private void StepRow(int delta)
+    {
+        if (Mode == View.Hero) { if (delta > 0) Navigator.Go(FolioRoutes.Shelf()); return; }
+        if (Mode != View.Shelf) return;
+        var rows = new List<Guid?> { null };
+        rows.AddRange(_shelves.Select(s => (Guid?)s.Id));
+        var index = rows.IndexOf(ShelfId) + delta;
+        if (index < 0) Navigator.Go(FolioRoutes.Home);
+        else if (index < rows.Count) Navigator.Go(FolioRoutes.Shelf(rows[index], _status, Q));
+    }
 
     private async Task Key(string key, bool shift)
     {
-        var book = Focused;
+        var book = Mode switch { View.Hero => _hero?.Current ?? HeroBooks.FirstOrDefault(), View.Shelf => FocusedBook, _ => _view?.FocusedBook };
         switch (key)
         {
             case "Enter" when book != null: await Open(book); break;
             case "d" or "D" or " " when book != null: Details(book); break;
             case "ArrowLeft" or "ArrowRight":
-                if (Use3DHero) _hero?.Step(key == "ArrowLeft" ? -1 : 1); else _view?.StepHero(key == "ArrowLeft" ? -1 : 1);
+                var delta = key == "ArrowLeft" ? -1 : 1;
+                if (Mode == View.Shelf) await MoveFocus(delta);
+                else if (Mode == View.Hero) _hero?.Step(delta);
+                else _view?.StepHero(delta);
                 break;
-            case "ArrowDown" when Use3DHero: Navigator.Go(FolioRoutes.Shelf()); break;
+            case "ArrowDown": StepRow(1); break;
+            case "ArrowUp": StepRow(-1); break;
             case "Escape" when !_home: Navigator.Go(FolioRoutes.Home); break;
-            case [var digit] when char.IsAsciiDigit(digit) && digit != '0' && Layout?.Shelves is { } shelves && digit - '1' < shelves.Count:
-                Navigator.Go(FolioRoutes.Shelf(shelves[digit - '1'].Id)); break;
+            case [var digit] when char.IsAsciiDigit(digit) && digit != '0' && digit - '1' < _shelves.Count:
+                Navigator.Go(FolioRoutes.Shelf(_shelves[digit - '1'].Id)); break;
         }
     }
 
+    private void SortChanged(ChangeEventArgs e)
+    {
+        var sort = Enum.TryParse<LibrarySort>(e.Value?.ToString(), out var s) ? s : LibrarySort.Recent;
+        var url = FolioRoutes.Shelf(ShelfId, _status, Q);
+        Navigator.Go(url + (url.Contains('?') ? "&" : "?") + $"sort={sort}", replace: true);
+    }
+
     private Task Open(Book book) => Open(book.Id);
-    private Task Open(Guid id) => Navigator.OpenBookAsync(id, null, Use3DHero ? null : $"[data-book-id=\"{id}\"] .folio-cssbook");
+    private Task Open(Guid id) => Navigator.OpenBookAsync(id, null, Mode == View.TwoD ? $"[data-book-id=\"{id}\"] .folio-cssbook" : null);
     private void Details(Book book) => Navigator.Go(FolioRoutes.Book(book.Id));
     private Task Import() => Layout?.ImportBooks() ?? Task.CompletedTask;
     private Task Changed() => Layout?.RefreshNavigation() ?? Task.CompletedTask;
     private async Task Reload()
     {
-        if (_home) { _recent = await Library.GetRecentAsync(); UpdateStage(); }
+        _shelves = await Library.GetShelvesAsync();
+        await LoadAsync();
         if (_view != null) await _view.RefreshAsync();
         await InvokeAsync(StateHasChanged);
     }
@@ -127,6 +284,8 @@ else if (!Stage.Starting || !_home)
         Stage.Changed -= StageChanged;
         Stage.Activated -= StageActivated;
         Stage.ScrollIntent -= StageScroll;
+        Stage.Hovered -= StageHovered;
+        Stage.Settled -= StageSettled;
         Stage.Release(this);
         if (_keys != null) await _keys.DisposeAsync();
     }
