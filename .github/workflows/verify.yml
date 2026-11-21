@@ -47,7 +47,7 @@ jobs:
         run: dotnet workload install wasm-tools
       - name: Publish the web app as a static site
         run: dotnet publish src/Folio.Web -c Release -warnaserror -o .artifacts/web
-      - name: End-to-end tests (Chromium, Firefox, WebKit)
+      - name: End-to-end tests (Chromium; cross-engine check on Firefox and WebKit)
         working-directory: tests/Folio.Web.E2E
         run: |
           npm ci

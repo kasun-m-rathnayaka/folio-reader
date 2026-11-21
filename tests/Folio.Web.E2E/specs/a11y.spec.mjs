@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { openLibrary, seedLibrary, waitForReader, openFirstDetails } from './helpers.mjs';
+import { openLibrary, seedLibrary, waitForReader, openFirstDetails, importFiles, fixture } from './helpers.mjs';
 
 // M3 gate: no serious or critical axe issues on the library, details, settings and reader; reduced motion disables
 // transitions.
@@ -39,4 +39,23 @@ test('reduced motion: system preference resolves to reduced and books do not ani
     await page.locator('.folio-book-card').first().hover();
     const turn = await page.locator('.folio-cssbook').first().evaluate(el => getComputedStyle(el).getPropertyValue('--lift').trim());
     expect(turn).toBe('0px');
+});
+
+// M8: the 3D views carry the same HTML semantics (canvas aria-hidden, focus layer, live region).
+test('axe: 3D hero, shelf and details', async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'Stage checks run on Chromium');
+    await openLibrary(page, '/?stageTest=1');
+    await importFiles(page, ['01_single_column_book_300p.pdf', '02_two_column_paper.pdf'].map(fixture));
+    await page.getByRole('button', { name: 'Dismiss import results' }).click();
+    await expect(page.locator('.folio-stage-hero')).toBeVisible();
+    await expect(page.locator('#folio-stage-canvas').locator('..')).toHaveAttribute('aria-hidden', 'true');
+    await scan(page, 'hero (3D)');
+    await page.keyboard.press('ArrowDown');
+    await expect(page.locator('.folio-stage-shelf')).toBeVisible();
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('.folio-focus-book:focus')).toHaveCount(1);
+    await scan(page, 'shelf (3D)');
+    await page.keyboard.press('d');
+    await expect(page.locator('.folio-details.is-3d')).toBeVisible();
+    await scan(page, 'details (3D)');
 });

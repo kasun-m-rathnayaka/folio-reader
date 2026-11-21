@@ -21,7 +21,7 @@ public sealed class FolioNavigator(NavigationManager navigation, IJSRuntime js, 
     /// <param name="sourceElementId">The 2D element (cover or book) that morphs into the reader page.</param>
     public async Task OpenBookAsync(Guid bookId, int? pageIndex = null, string? sourceElementId = null)
     {
-        if (!FolioRoutes.IsReader(RelativePath)) _returnUrl = "/" + RelativePath;
+        if (!FolioRoutes.IsReader(RelativePath)) _returnUrl = RelativePath.Length == 0 ? FolioRoutes.Home : RelativePath;
         var url = FolioRoutes.Read(bookId, pageIndex);
         if (await stage.BeginOpenAsync(bookId))
         {

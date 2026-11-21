@@ -107,3 +107,19 @@ Done when:
 Done when:
 - [x] Offline: after the first visit the app loads and opens a stored book with the network disabled (`offline.spec.mjs`)
 - [x] Backup round trip restores books, highlights, bookmarks and positions into an empty profile (`backup.spec.mjs`)
+
+## M8 — Hardening and release
+
+- [x] 1. Qualification: axe clean on 2D (both themes) and 3D hero, shelf and details; keyboard path; performance metrics
+      recorded (`perf-shelf-300.json`, handoff metrics). Fixed: sub-path routing, skip link, NaN reader offset, stale
+      announcements, idle frames after long moves
+- [x] 2. `README.md`, `docs/how-folio-works.md` and a pointer from the original product spec updated
+- [x] 3. `release.yml`: Folio Web → GitHub Pages on `main`; Windows build → GitHub release on `v*` tags (D-023)
+- [x] 4. Dead code reviewed: removed in M1–M3 (Notebook, OCR, marginalia, quote, carousel, BookCover); study tables kept
+      for compatibility; the 2D library remains the fallback
+
+Done when:
+- [ ] All quality gates pass on the release commit *(CI)* — Chromium visual baselines need the CI-rendered images (D-016)
+- [ ] A human has used the Windows build on real hardware and signed off here *(human)*. Please also check: 60 fps with
+      300 books on an integrated GPU, open ≤ 900 ms and reader input ≤ 300 ms in real time, WebView2 3D (not falling
+      back), battery saver, and the web app on real Firefox and Safari (D-021)

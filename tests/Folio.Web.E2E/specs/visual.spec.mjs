@@ -22,7 +22,7 @@ for (const theme of ['dark', 'light']) {
     test(`library, details and reader chrome (${theme})`, async ({ page }, testInfo) => {
         await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: theme });
         await openLibrary(page);
-        await page.evaluate(theme => localStorage.setItem('folio.preferences', JSON.stringify({ DarkMode: theme === 'dark', Motion: 3 })), theme);
+        await page.evaluate(theme => localStorage.setItem('folio.preferences', JSON.stringify({ DarkMode: theme === 'dark', Motion: 3, BackupReminderAt: new Date().toISOString() })), theme);
         await page.reload();
         await expect(page.locator('.folio-library-page')).toBeVisible({ timeout: 90_000 });
         await seedLibrary(page);

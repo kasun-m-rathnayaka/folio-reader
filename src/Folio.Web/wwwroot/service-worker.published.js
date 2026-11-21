@@ -15,7 +15,8 @@ async function onInstall() {
     const requests = self.assetsManifest.assets
         .filter(asset => offlineAssetsInclude.some(pattern => pattern.test(asset.url)))
         .filter(asset => !offlineAssetsExclude.some(pattern => pattern.test(asset.url)))
-        .map(asset => new Request(new URL(asset.url, base).href, { integrity: asset.hash, cache: 'no-cache' }));
+        // index.html is rewritten after publish when hosted under a sub-path (its base href), so it skips the hash check.
+        .map(asset => new Request(new URL(asset.url, base).href, { integrity: /\.html$/.test(asset.url) ? undefined : asset.hash, cache: 'no-cache' }));
     await caches.open(cacheName).then(cache => cache.addAll(requests));
     self.skipWaiting();
 }

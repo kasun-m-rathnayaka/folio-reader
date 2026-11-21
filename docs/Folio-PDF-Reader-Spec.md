@@ -1,5 +1,7 @@
 # Folio — Desktop PDF Library & Reader
 
+> **Superseded in part by Folio 3D** ([docs/folio-3d/SPEC.md](folio-3d/SPEC.md)): the library is now a 3D stage with a 2D fallback, Folio also ships as a web app, and marginalia, the Notebook, OCR and quote-with-citation were removed. Where the two documents differ, the Folio 3D specification and its [decisions log](folio-3d/DECISIONS.md) apply.
+
 ### Product & Technical Specification · v0.1 (draft) · 2026-10-08
 
 > **Working title:** "Folio" (placeholder, rename freely).

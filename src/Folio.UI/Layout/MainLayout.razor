@@ -20,7 +20,7 @@
 <MudDialogProvider />
 <div class="folio-app @PhaseClass" data-theme="@(Preferences.Current.DarkMode ? "dark" : "light")">
     <div class="folio-library-shell @(Preferences.Current.SidebarCollapsed ? "sidebar-collapsed" : "") @(_inReader && Stage.Phase == StagePhase.None ? "is-covered" : "") @(Stage.Scene != null && Stage.Available ? "stage-on" : "")" inert="@(_inReader || Stage.Phase != StagePhase.None)">
-        <a class="folio-skip-link" href="@SkipTarget">Skip to content</a>
+        <button type="button" class="folio-skip-link" @onclick="SkipToContent">Skip to content</button>
         <aside class="folio-sidebar" aria-label="Main navigation">
             <button class="folio-brand" @onclick="() => Go(FolioRoutes.Home)" aria-label="Folio home" title="Folio home">
                 <span class="folio-wordmark">FOLIO</span>
@@ -140,7 +140,8 @@
         { Status: ReadingStatus.Reading } => "Currently reading", { Status: ReadingStatus.WantToRead } => "Want to read", { Status: ReadingStatus.Finished } => "Finished",
         _ => "Library"
     };
-    private string SkipTarget => "#folio-main";
+    // A button, not href="#…": with a base href, a fragment link would navigate to the base address.
+    private async Task SkipToContent() => await JS.InvokeVoidAsync("folioShell.focusElement", "folio-main");
     private static string Active(bool active) => active ? "active" : "";
     private static string? Current(bool active) => active ? "page" : null;
     private void Go(string url) => Navigator.Go(url);
@@ -183,6 +184,7 @@
             _ => FolioRoutes.Shelf(query: q)
         };
         if (q == null && _route.Shelf && _route.ShelfId == null && _route.Status == null) target = FolioRoutes.Home;
+        // Typing replaces the history entry instead of adding one per keystroke.
         Navigator.Go(target, replace: true);
     }
     private void SearchKey(KeyboardEventArgs e) { if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_search)) Navigator.Go(FolioRoutes.Search(_search.Trim())); }

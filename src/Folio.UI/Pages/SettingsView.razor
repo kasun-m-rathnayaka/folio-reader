@@ -92,7 +92,7 @@
             var result = await Backup!.ImportAsync(Reporter());
             if (!result.Completed) { if (result.Message != "No backup chosen.") Notifications.Add(result.Message ?? "The backup could not be restored.", Severity.Error, "Restore failed"); return; }
             // Every view and cache starts again from the restored library.
-            Navigation.NavigateTo("/", forceLoad: true);
+            Navigation.NavigateTo(Navigation.BaseUri, forceLoad: true);
         }
         catch (Exception ex) { Notifications.Add(ex.Message, Severity.Error, "Restore failed"); }
         finally { _busy = false; }

@@ -5,11 +5,14 @@ import { defineConfig, devices } from '@playwright/test';
 // FOLIO_E2E_BROWSERS limits engines (comma separated); FOLIO_CHROMIUM_PATH reuses a preinstalled Chromium.
 const wanted = (process.env.FOLIO_E2E_BROWSERS || 'chromium,firefox,webkit').split(',');
 const chromiumLaunch = process.env.FOLIO_CHROMIUM_PATH ? { launchOptions: { executablePath: process.env.FOLIO_CHROMIUM_PATH } } : {};
+// Chromium runs every spec. Firefox and WebKit run the cross-engine spec: Playwright's builds of them lack the OPFS
+// sync access handles SQLite needs, so the full suite cannot start a library there (DECISIONS D-021).
+const crossEngine = /browsers\.spec\.mjs$/;
 const projects = [
     { name: 'chromium', use: { ...devices['Desktop Chrome'], ...chromiumLaunch } },
     // Playwright's Firefox may ship with the Origin Private File System off; the app needs it (DECISIONS D-021).
-    { name: 'firefox', use: { ...devices['Desktop Firefox'], launchOptions: { firefoxUserPrefs: { 'dom.fs.enabled': true, 'dom.fs.writable_file_stream.enabled': true } } } },
-    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+    { name: 'firefox', testMatch: crossEngine, use: { ...devices['Desktop Firefox'], launchOptions: { firefoxUserPrefs: { 'dom.fs.enabled': true, 'dom.fs.writable_file_stream.enabled': true } } } },
+    { name: 'webkit', testMatch: crossEngine, use: { ...devices['Desktop Safari'] } },
 ].filter(p => wanted.includes(p.name));
 
 export default defineConfig({

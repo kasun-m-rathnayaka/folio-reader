@@ -180,3 +180,14 @@ the cross-browser gates for M2 are proven on Chromium only and need a manual che
 - Battery saver (DSK-2): `StageHost` reads `IBatteryMonitor` every 30 s (Win32 power status on desktop; the Battery Status
   API in browsers that have it, else "unknown"). On battery the stage skips frames to stay ≤ 30 fps and turns idle motion
   off. Quality (SET-3) was wired in M4.
+
+## D-023 · Release and hosting (M8)
+
+- `release.yml` deploys Folio Web to GitHub Pages on `main` and attaches a zipped Windows build to a GitHub release for
+  `v*` tags (using the workflow token; no secrets). Pages must be enabled with "GitHub Actions" as the source.
+- Pages serves a project site under `/<repo>/`: the workflow rewrites the base href, copies `index.html` to `404.html` so
+  deep links load the app, and the offline service worker caches HTML without an integrity hash (it is rewritten after
+  publish). All in-app addresses are relative to the base href (`FolioRoutes`), and the skip link is a button that moves
+  focus, since a `#fragment` link would resolve against the base and navigate home.
+- CI runs every end-to-end spec on Chromium and a cross-engine spec on Firefox and WebKit, which runs the core flow where
+  the engine has the storage Folio needs and otherwise checks the plain explanation and skips with the reason (D-021).
