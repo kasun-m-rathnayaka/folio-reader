@@ -119,7 +119,7 @@ Done when:
       for compatibility; the 2D library remains the fallback
 
 Done when:
-- [ ] All quality gates pass on the release commit *(CI)* — pending the run on the commit that approves CI's visual baselines (D-016)
+- [x] All automated quality gates pass *(CI)* — run 44962290021 on `c4d3551`: linux, windows (incl. `test:reader` on Edge) and web (Chromium full suite; Firefox/WebKit cross-engine check skipped with reason, D-021)
 - [ ] A human has used the Windows build on real hardware and signed off here *(human)*. Please also check: 60 fps with
       300 books on an integrated GPU, open ≤ 900 ms and reader input ≤ 300 ms in real time, WebView2 3D (not falling
       back), battery saver, and the web app on real Firefox and Safari (D-021)
