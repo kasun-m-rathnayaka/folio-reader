@@ -9,6 +9,7 @@
 @inject NotificationService Notifications
 @inject IDialogService Dialogs
 @inject ImportInbox Inbox
+@inject IPlatformCapabilities Platform
 
 <MudThemeProvider Theme="_theme" IsDarkMode="@Preferences.Current.DarkMode" />
 <MudPopoverProvider />
@@ -22,7 +23,6 @@
             </button>
             <div class="folio-nav-section">WORKSPACE</div>
             <button class="folio-nav-link @Active("Library")" @onclick='() => Navigate("Library")' title="Library"><MudIcon Icon="@Icons.Material.Outlined.LocalLibrary" /><span>Library</span><small>@_counts.All</small></button>
-            <button class="folio-nav-link @Active("Notebook")" @onclick='() => Navigate("Notebook")' title="Notebook"><MudIcon Icon="@Icons.Material.Outlined.EditNote" /><span>Notebook</span></button>
             <div class="folio-nav-section">READING</div>
             <button class="folio-nav-link @FilterActive(ReadingStatus.Reading)" @onclick="() => Filter(ReadingStatus.Reading)" title="Currently reading"><MudIcon Icon="@Icons.Material.Outlined.AutoStories" /><span>Currently reading</span><small>@_counts.Reading</small></button>
             <button class="folio-nav-link @FilterActive(ReadingStatus.WantToRead)" @onclick="() => Filter(ReadingStatus.WantToRead)" title="Want to read"><MudIcon Icon="@Icons.Material.Outlined.BookmarkBorder" /><span>Want to read</span><small>@_counts.WantToRead</small></button>
@@ -47,19 +47,20 @@
                 @if (_nav != "Settings")
                 {
                 <label class="folio-global-search"><MudIcon Icon="@Icons.Material.Outlined.Search" Size="Size.Small" />
-                    <input id="folio-library-search" aria-label="@(_nav == "Notebook" ? "Search notebook" : "Search library")" placeholder="@(_nav == "Notebook" ? "Search notes and highlights…" : "Search library… Enter for PDF text")" @bind="_search" @bind:event="oninput" @onkeydown="SearchKey" /><kbd>Ctrl K</kbd>
+                    <input id="folio-library-search" aria-label="Search library" placeholder="Search library… Enter for PDF text" @bind="_search" @bind:event="oninput" @onkeydown="SearchKey" /><kbd>Ctrl K</kbd>
                 </label>
                 }
                 else { <span class="folio-header-spacer"></span> }
                 <button class="folio-icon-button" @onclick="ToggleTheme" aria-label="Toggle light and dark theme"><MudIcon Icon="@(Preferences.Current.DarkMode ? Icons.Material.Outlined.LightMode : Icons.Material.Outlined.DarkMode)" Size="Size.Small" /></button>
                 <button class="folio-primary-btn" @onclick="ImportBooks" disabled="@_importing"><MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" />Add books</button>
+@if (Platform.CanImportFolders) {
                 <button class="folio-icon-button" title="Import folder" aria-label="Import folder" @onclick="ImportFolder" disabled="@_importing"><MudIcon Icon="@Icons.Material.Outlined.CreateNewFolder" /></button>
+                }
             </header>
             <main class="folio-page-body">
                 @if (_nav is "Library" or "Trash") { <LibraryView @ref="_libraryView" SearchQuery="@_search" StatusFilter="@_status" Shelf="@_shelf" Trash="@(_nav == "Trash")" OnOpenBook="OpenBook" OnImport="ImportBooks" OnChanged="RefreshNavigation" /> }
-                else if (_nav == "Notebook") { <LibraryNotebook Search="@_search" OnOpen="OpenNote" /> }
                 else if (_nav == "Settings") { <SettingsView OnPreferencesChanged="ApplyPreferences" /> }
-                else if (_nav == "Search") { <LibrarySearchView Query="@_search" OnOpen="OpenNote" /> }
+                else if (_nav == "Search") { <LibrarySearchView Query="@_search" OnOpen="OpenResult" /> }
             </main>
         </section>
     </div>
@@ -102,7 +103,7 @@
     private string FilterActive(ReadingStatus status) => _nav == "Library" && _status == status ? "active" : "";
     protected override async Task OnInitializedAsync() { Inbox.Changed += ImportQueued; await RefreshNavigation(); }
     protected override async Task OnAfterRenderAsync(bool firstRender) { if (firstRender) { await ApplyPreferences(); await DrainImports(); } }
-    private void SearchKey(KeyboardEventArgs e) { if (e.Key == "Enter" && _nav != "Notebook") { _nav = "Search"; _shelf = null; _status = null; } }
+    private void SearchKey(KeyboardEventArgs e) { if (e.Key == "Enter") { _nav = "Search"; _shelf = null; _status = null; } }
     private async Task RefreshNavigation() { _counts = await Library.GetCountsAsync(); _shelves = await Library.GetShelvesAsync(); }
     private void Navigate(string nav) { _nav = nav; _status = null; _shelf = null; _search = ""; }
     private void Filter(ReadingStatus status) { Navigate("Library"); _status = status; }
@@ -137,7 +138,7 @@
         finally { _creatingShelf = false; }
     }
     private async Task OpenBook(Book book) { _book = await Library.GetBookAsync(book.Id); _requestedPage = null; }
-    private async Task OpenNote((Guid BookId, int PageIndex) note) { _book = await Library.GetBookAsync(note.BookId); _requestedPage = note.PageIndex; }
+    private async Task OpenResult((Guid BookId, int PageIndex) result) { _book = await Library.GetBookAsync(result.BookId); _requestedPage = result.PageIndex; }
     private async Task CloseBook() { _book = null; _requestedPage = null; if (_libraryView != null) await _libraryView.RefreshAsync(); await RefreshNavigation(); }
     private async Task ImportBooks()
     {

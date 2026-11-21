@@ -37,11 +37,11 @@ public partial class MainWindow : Window
             {
                 // Virtual host mapping to managed books folder with Allow permissions (ADR-005)
                 e.WebView.CoreWebView2.SetVirtualHostNameToFolderMapping(
-                    "folio.books",
+                    Folio.Platform.Windows.VirtualHostBookUrlResolver.BooksHost,
                     fileStore.BooksDirectory,
                     CoreWebView2HostResourceAccessKind.Allow);
                 e.WebView.CoreWebView2.SetVirtualHostNameToFolderMapping(
-                    "folio.covers", fileStore.CoversDirectory, CoreWebView2HostResourceAccessKind.DenyCors);
+                    Folio.Platform.Windows.VirtualHostBookUrlResolver.CoversHost, fileStore.CoversDirectory, CoreWebView2HostResourceAccessKind.DenyCors);
                 e.WebView.CoreWebView2.NavigationStarting += (_, navigation) =>
                 {
                     if (!Uri.TryCreate(navigation.Uri, UriKind.Absolute, out var uri) ||

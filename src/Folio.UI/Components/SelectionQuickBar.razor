@@ -33,20 +33,6 @@
             <u><strong>U</strong></u>
         </button>
 
-        <!-- Add Note -->
-        <button class="folio-subtle-btn" style="width: 26px; height: 26px; padding: 0;"
-                @onclick="@(() => OnAddNote.InvokeAsync())"
-                title="Attach Margin Note">
-            <MudIcon Icon="@Icons.Material.Filled.ChatBubbleOutline" Size="Size.Small" Style="font-size: 16px;" />
-        </button>
-
-        <!-- Copy Quote Citation -->
-        <button class="folio-subtle-btn" style="width: 26px; height: 26px; padding: 0;"
-                @onclick="@(() => OnCopyQuote.InvokeAsync())"
-                title="Copy as Quote Citation">
-            <MudIcon Icon="@Icons.Material.Filled.FormatQuote" Size="Size.Small" Style="font-size: 16px;" />
-        </button>
-
         <!-- Dismiss / Clear -->
         <button class="folio-subtle-btn" style="width: 26px; height: 26px; padding: 0;"
                 @onclick="@(() => OnDismiss.InvokeAsync())"
@@ -61,8 +47,6 @@
     [Parameter] public double ClientX { get; set; } = 300;
     [Parameter] public double ClientY { get; set; } = 150;
     [Parameter] public EventCallback<(HighlightColor Color, AnnotationType Type)> OnApplyHighlight { get; set; }
-    [Parameter] public EventCallback OnAddNote { get; set; }
-    [Parameter] public EventCallback OnCopyQuote { get; set; }
     [Parameter] public EventCallback OnDefine { get; set; }
     [Parameter] public EventCallback OnDismiss { get; set; }
 

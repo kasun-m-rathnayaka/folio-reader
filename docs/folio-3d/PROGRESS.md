@@ -13,3 +13,17 @@ Resume from the first unchecked step. Gates marked *(CI)* are proven by GitHub A
 Done when:
 - [x] Linux build succeeds with zero warnings under `-warnaserror`
 - [ ] Windows CI job green *(CI)*
+
+## M1 — Platform split
+
+- [x] 1. Removed marginalia (lane, card, note action), Notebook (dialog and library page), OCR (service, JS painting, tests) and quote with citation; data untouched (D-004)
+- [x] 2. `Folio.Infrastructure` → net10.0; WinRT rasterizer and battery monitor → `Folio.Platform.Windows` (FileStore stays shared, D-003)
+- [x] 3. `IBookUrlResolver`, `IDatabaseSetup`, `IPlatformCapabilities` added; UI uses the resolver instead of hard-coded hosts
+- [x] 4. `Folio.Platform.Windows.Tests` (DI, virtual-host URLs, WinRT rasterizer on a fixture)
+- [x] 5. Desktop DI registers `AddFolioWindowsPlatform()` and initialises the database through `IDatabaseSetup`
+
+Done when:
+- [x] `Folio.Infrastructure.Tests` pass on Linux — 43/43
+- [ ] Full Windows CI green, including `test:reader` *(CI)*
+- [x] No `net10.0-windows` reference from any shared project
+- [x] No marginalia, Notebook, OCR or quote-with-citation code or UI remains; highlights and bookmarks still work (reader test 7/7 on Chromium)

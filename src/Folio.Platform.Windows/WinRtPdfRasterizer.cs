@@ -3,11 +3,11 @@ using Windows.Data.Pdf;
 using Windows.Storage;
 using Windows.Storage.Streams;
 
-namespace Folio.Infrastructure.Rasterization;
+namespace Folio.Platform.Windows;
 
 /// <summary>
 /// Hardware-accelerated PDF page rasterization using Windows.Data.Pdf (WinRT).
-/// Produces page thumbnails and OCR bitmap targets within performance budgets (FR-LIB-03, FR-OCR-02).
+/// Produces page thumbnails within performance budgets (FR-LIB-03).
 /// </summary>
 public class WinRtPdfRasterizer : IPdfRasterizer
 {

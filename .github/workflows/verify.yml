@@ -19,13 +19,17 @@ jobs:
           dotnet restore Folio.sln -p:EnableWindowsTargeting=true
           dotnet build Folio.sln --no-restore -c Release -m:1 -warnaserror -p:EnableWindowsTargeting=true
       - name: Shared .NET tests
-        run: dotnet test tests/Folio.Domain.Tests --no-build --no-restore -c Release
-      - name: JavaScript checks
+        run: |
+          dotnet test tests/Folio.Domain.Tests --no-build --no-restore -c Release
+          dotnet test tests/Folio.Infrastructure.Tests --no-build --no-restore -c Release
+      - name: JavaScript checks and reader engine (Chromium)
         working-directory: src/Folio.UI
         run: |
           npm ci --ignore-scripts
           npm run check
           npm test
+          npx playwright install --with-deps chromium
+          FOLIO_BROWSER_PATH="$(node -e "console.log(require('playwright').chromium.executablePath())")" npm run test:reader
   windows:
     runs-on: windows-latest
     steps:
@@ -46,6 +50,7 @@ jobs:
           dotnet test tests/Folio.Domain.Tests --no-build --no-restore -c Release
           dotnet test tests/Folio.Infrastructure.Tests --no-build --no-restore -c Release
           dotnet test tests/Folio.Desktop.Tests --no-build --no-restore -c Release
+          dotnet test tests/Folio.Platform.Windows.Tests --no-build --no-restore -c Release
       - name: Reader engine tests
         working-directory: src/Folio.UI
         run: |

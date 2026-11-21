@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using Folio.Application.Common.Interfaces;
 
-namespace Folio.Infrastructure.Jobs;
+namespace Folio.Platform.Windows;
 
 /// <summary>
 /// Queries Windows Win32 GetSystemPowerStatus to determine AC vs battery power state (NFR-10).

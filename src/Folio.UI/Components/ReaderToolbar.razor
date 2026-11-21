@@ -7,11 +7,10 @@
     <span class="folio-toolbar-divider"></span>
     <button class="folio-icon-button @(IsSearchOpen ? "active" : "")" aria-label="Find in book" title="Find in book (Ctrl F)" @onclick="OnToggleSearch"><MudIcon Icon="@Icons.Material.Outlined.Search" Size="Size.Small" /></button>
     <button class="folio-icon-button @(IsDogEared ? "active" : "")" aria-label="Bookmark current page" aria-pressed="@IsDogEared" title="Bookmark current page (Ctrl D)" @onclick="OnToggleDogEar"><MudIcon Icon="@(IsDogEared ? Icons.Material.Filled.Bookmark : Icons.Material.Outlined.BookmarkBorder)" Size="Size.Small" /></button>
-    <button class="folio-icon-button @(IsNotesOpen ? "active" : "")" aria-label="Margin notes" title="Margin notes" @onclick="OnToggleNotes"><MudIcon Icon="@Icons.Material.Outlined.EditNote" Size="Size.Small" /></button>
     <MudMenu Icon="@Icons.Material.Filled.MoreHoriz" aria-label="Reader options" PopoverClass="folio-action-menu" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
         <MudMenuItem Icon="@Icons.Material.Outlined.FitScreen" OnClick="OnFitWidth">Fit width</MudMenuItem><MudMenuItem Icon="@Icons.Material.Outlined.CropFree" OnClick="OnFitPage">Fit page</MudMenuItem>
         <MudMenuItem Icon="@Icons.Material.Outlined.RotateRight" OnClick="OnRotateClockwise">Rotate clockwise</MudMenuItem><MudMenuItem Icon="@Icons.Material.Outlined.ViewStream" OnClick="OnToggleLayoutMode">@(LayoutMode == ReaderViewMode.Continuous ? "Single page" : "Continuous scroll")</MudMenuItem>
-        <MudDivider /><MudMenuItem Icon="@Icons.Material.Outlined.Notes" OnClick="OnOpenNotebook">Notebook</MudMenuItem><MudMenuItem Icon="@Icons.Material.Outlined.Fullscreen" OnClick="OnToggleZenMode">@(IsZenMode ? "Exit focus mode" : "Focus mode (F11)")</MudMenuItem>
+        <MudDivider /><MudMenuItem Icon="@Icons.Material.Outlined.Fullscreen" OnClick="OnToggleZenMode">@(IsZenMode ? "Exit focus mode" : "Focus mode (F11)")</MudMenuItem>
     </MudMenu>
 </header>
 @code {
@@ -24,12 +23,9 @@
     [Parameter] public bool IsSearchOpen { get; set; }
     [Parameter] public bool IsZenMode { get; set; }
     [Parameter] public bool IsDogEared { get; set; }
-    [Parameter] public bool IsNotesOpen { get; set; }
     [Parameter] public EventCallback OnBack { get; set; }
     [Parameter] public EventCallback OnToggleOutline { get; set; }
     [Parameter] public EventCallback OnToggleDogEar { get; set; }
-    [Parameter] public EventCallback OnToggleNotes { get; set; }
-    [Parameter] public EventCallback OnOpenNotebook { get; set; }
     [Parameter] public EventCallback OnPrevPage { get; set; }
     [Parameter] public EventCallback OnNextPage { get; set; }
     [Parameter] public EventCallback OnOpenGoToPage { get; set; }
