@@ -106,7 +106,7 @@
     {
         _loaded = false; _error = null; StateHasChanged();
         var url = await Urls.GetBookUrlAsync(Book);
-        if (url == null) { _error = Platform.CanRelinkBooks ? "The managed PDF is missing. Locate the original document to restore it; your highlights are kept." : "This book's PDF is missing from this browser's storage. Import it again; your highlights are kept."; return; }
+        if (url == null) { _ = Stage.CompleteHandoffAsync(); _error = Platform.CanRelinkBooks ? "The managed PDF is missing. Locate the original document to restore it; your highlights are kept." : "This book's PDF is missing from this browser's storage. Import it again; your highlights are kept."; return; }
         await JS.InvokeVoidAsync("folioReader.loadDocument", url, _page, _offset, _zoom, _mode == ReaderViewMode.SinglePage ? "single" : "continuous", _password);
     }
     private async Task Retry() { await Reader.DisposeAsync(); await Reader.InitAsync("folio-pdf-container", _reference!); await OpenDocument(); }
@@ -220,7 +220,7 @@
     private async Task Find(string query, bool forward = true) { _query = query; if (string.IsNullOrWhiteSpace(query)) { _matches = _match = 0; await Reader.ClearSearchAsync(); } else await Reader.SearchAsync(query, forward); }
     [JSInvokable] public Task OnSearchMatch(SearchPayload match) { _match = match.CurrentMatch; _matches = match.TotalMatches; return InvokeAsync(StateHasChanged); }
     private async Task ApplyLighting() => await Reader.ApplyThemeAsync(new { cssFilter = _lighting == "warm" ? "sepia(0.16)" : "none" });
-    [JSInvokable] public Task OnReaderError(ErrorPayload error) { _loaded = false; _passwordRequired = error.Code == "password"; _error = _passwordRequired ? "Enter the document password. It is used only for this session." : "The PDF may be missing, damaged, or unavailable. Your notes and bookmarks are preserved."; return InvokeAsync(StateHasChanged); }
+    [JSInvokable] public Task OnReaderError(ErrorPayload error) { _ = Stage.CompleteHandoffAsync(); _loaded = false; _passwordRequired = error.Code == "password"; _error = _passwordRequired ? "Enter the document password. It is used only for this session." : "The PDF may be missing, damaged, or unavailable. Your notes and bookmarks are preserved."; return InvokeAsync(StateHasChanged); }
     [JSInvokable] public async Task OnExternalLinkRequested(string url)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https")) return;

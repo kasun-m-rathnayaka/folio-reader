@@ -11,7 +11,8 @@ namespace Folio.UI.Services;
 /// </summary>
 public sealed class FolioNavigator(NavigationManager navigation, IJSRuntime js, StageState stage)
 {
-    private const int HandoffTimeoutMs = 4000; // safety net only: the stage normally hands off in < 900 ms
+    // Last resort only: the stage hands off in < 900 ms, and a reader error ends the transition at once (ReaderView).
+    private const int HandoffTimeoutMs = 10_000;
     private string? _returnUrl;
 
     public string RelativePath => navigation.ToBaseRelativePath(navigation.Uri);
