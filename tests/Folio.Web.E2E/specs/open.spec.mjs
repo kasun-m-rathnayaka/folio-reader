@@ -1,12 +1,15 @@
 import { test, expect } from '@playwright/test';
-import { openLibrary, importFiles, fixture, waitForReader, pathOf } from './helpers.mjs';
+import { openLibrary, importFiles, fixture, waitForReader, pathOf, setPreferences } from './helpers.mjs';
 
 // M6 gates, in stage test mode on Chromium. Durations are measured on the stage clock (test mode advances it by a fixed
 // 1/60 s per frame, so software GL does not stretch them); real-time speed is confirmed on hardware at M8.
 test.skip(({ browserName }) => browserName !== 'chromium', 'Stage checks run on Chromium');
 
+// These specs cover the flat-pages reading path (the book opens in 3D and hands off to the 2D reader, M6). The 3D spread is in
+// reading.spec.mjs.
 async function library(page) {
     const errors = await openLibrary(page, '/?stageTest=1');
+    await setPreferences(page, { ReadingView: 1 }, '/?stageTest=1');
     await importFiles(page, ['01_single_column_book_300p.pdf', '02_two_column_paper.pdf'].map(fixture));
     await page.getByRole('button', { name: 'Dismiss import results' }).click();
     await expect(page.locator('.folio-stage-hero')).toBeVisible();

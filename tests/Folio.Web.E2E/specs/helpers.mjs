@@ -34,6 +34,13 @@ export async function openBook(page, title) {
     await page.waitForFunction(() => window.folioReader?.engine?.pages?.[0]?.rendered === true || window.folioReader?.engine?.pages?.some(p => p.rendered), null, { timeout: 60_000 });
 }
 
+/** Saves preferences (Motion: 1 full · 2 reduced · 3 off; ReadingView: 0 3D book · 1 flat pages) and reloads on them. */
+export async function setPreferences(page, preferences, url = '/') {
+    await page.evaluate(p => localStorage.setItem('folio.preferences', JSON.stringify({ BackupReminderAt: new Date().toISOString(), ...p })), preferences);
+    await page.goto(url);
+    await page.locator('.folio-library-page, .folio-stage-page, #app [role="alert"]').first().waitFor({ timeout: 90_000 });
+}
+
 /** A small, deterministic library: three fixtures, toast dismissed. */
 export async function seedLibrary(page) {
     await importFiles(page, ['01_single_column_book_300p.pdf', '02_two_column_paper.pdf', '03_textbook_figures_tables.pdf'].map(fixture));

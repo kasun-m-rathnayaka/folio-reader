@@ -6,7 +6,7 @@ import { ensureFonts } from './textures.js';
 
 let stage = null, dotnet = null;
 const call = (method, ...args) => dotnet?.invokeMethodAsync(method, ...args).catch(error => console.warn(`[FolioStage] ${method}`, error));
-const SCENES = new Set(['hero', 'shelf', 'opening']);
+const SCENES = new Set(['hero', 'shelf', 'opening', 'reading']);
 const LEVELS = new Set(['full', 'reduced', 'off']);
 const QUALITIES = new Set(['auto', 'high', 'low']);
 const str = (v, max = 400) => typeof v === 'string' ? v.slice(0, max) : null;
@@ -40,6 +40,8 @@ export function init(canvasId, options, dotNetRef) {
             onBookActivated: (id, action) => call('OnBookActivated', id, action),
             onSceneSettled: (kind, row) => call('OnSceneSettled', kind, Number.isInteger(row) ? row : -1),
             onRowsStale: version => call('OnRowsStale', version),
+            onReadingSettled: (id, spread) => call('OnReadingSettled', id, spread),
+            onReadingClosed: id => call('OnReadingClosed', id),
             onScrollIntent: direction => call('OnScrollIntent', direction),
             onFallback: reason => call('OnFallback', reason),
             onAccent: (id, color) => call('OnBookAccent', id, color),
@@ -95,6 +97,16 @@ export async function bookImages(book) {
     })().catch(error => { imageUrls.delete(key); console.warn('[FolioStage] images', error?.message); return null; }));
     return imageUrls.get(key);
 }
+
+/** WP6: open the book as a 3D spread; returns false if the stage does not know it. */
+export const beginReading = id => typeof id === 'string' && !!stage?.beginReading(id);
+/** WP6: the reader has the document open; land on `pageIndex` of `total` pages. */
+export const readingStart = (pageIndex, total) => stage?.readingStart(Number.isFinite(pageIndex) ? Math.max(0, Math.floor(pageIndex)) : 0, Number.isFinite(total) ? Math.max(1, Math.floor(total)) : 1);
+/** WP6: close the open book back to `scene`. */
+export function closeReading(scene) { if (stage && SCENES.has(scene?.kind)) stage.closeReading(cleanScene(scene)); }
+
+/** WP6: the document could not be opened; put the book back without the closing animation. */
+export function abortReading(scene) { if (!stage) return; stage.endReading(); if (SCENES.has(scene?.kind)) stage.setScene(cleanScene(scene)); }
 
 export const focusBook = id => stage?.focusBook(typeof id === 'string' ? id : null);
 export const setMotion = level => stage?.setMotion(LEVELS.has(level) ? level : 'full');

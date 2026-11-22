@@ -92,6 +92,15 @@ export function composeCover(book, { width = COVER_SIZES.full, dominant = null, 
     return { color, orm, normal, design };
 }
 
+/** Endpaper: marbled paper in the cover's palette, lightened toward cream, for the inside of the boards (WP6). */
+export function composeEndpaper(design, width = 256) {
+    const W = width, H = Math.round(width * 1.5), c = canvas(W, H), g = c.getContext('2d');
+    g.fillStyle = design.cloth; g.fillRect(0, 0, W, H);
+    marble.paint(g, { x: 0, y: 0, w: W, h: H }, { ...design, seed: design.seed ^ 0x5bd1e995 }, { fieldW: 1, fieldH: 1.5 });
+    g.fillStyle = 'rgba(243,238,226,.58)'; g.fillRect(0, 0, W, H);
+    return c;
+}
+
 /** A tangent-space normal map from a white-on-black mask: the white areas press into the board. */
 export function normalFromMask(mask, W, H, strength = 3) {
     const w = mask.width, h = mask.height, src = mask.getContext('2d').getImageData(0, 0, w, h).data;

@@ -23,6 +23,9 @@ class FolioReaderEngine {
             this.selectionTimer = setTimeout(() => this.handleTextSelection(), 60);
         }, options);
         window.addEventListener('keydown', e => this.handleKeyDown(e), options);
+        // WP6: in 3D reading the stage draws the pages and tells this engine where they are, so the text layer, highlights and
+        // dog-ears sit exactly over them.
+        window.addEventListener('folio-spread', e => this.setSpread(e.detail), options);
         window.addEventListener('pointermove', e => {
             const reader = document.querySelector('.folio-zen-active');
             if (reader && e.clientY < 90) {
@@ -43,7 +46,7 @@ class FolioReaderEngine {
             window.chrome?.webview?.postMessage({kind:'reader-error',code:`interop:${method}`,detail:String(error.message || error)});
         }
     }
-    async loadDocument(url, initialPage = 0, initialOffset = 0, initialZoom = 1, mode = 'continuous', password = null) {
+    async loadDocument(url, initialPage = 0, initialOffset = 0, initialZoom = 1, mode = 'continuous', password = null, spread = false) {
         let timeout;
         try {
             this.container.replaceChildren();
@@ -55,7 +58,8 @@ class FolioReaderEngine {
             this.totalPages = this.pdfDoc.numPages;
             this.currentPageIndex = resolvePageIndex(initialPage, this.totalPages);
             this.zoom = initialZoom === -1 || initialZoom === -2 ? initialZoom : Math.max(.25, Math.min(4, initialZoom));
-            this.layoutMode = mode; this.rotation = 0;
+            this.layoutMode = spread ? 'spread' : mode; this.previousMode = mode; this.rotation = 0;
+            if (spread) this.container.classList.add('folio-spread-overlay');
             const firstPage = await this.pdfDoc.getPage(this.currentPageIndex + 1);
             const viewport = firstPage.getViewport({ scale: 1 });
             const fragment = document.createDocumentFragment();
@@ -74,8 +78,8 @@ class FolioReaderEngine {
                     rendered: false, rendering: false, generation: 0, annotations: [] };
             });
             this.container.append(fragment);
-            this.updateLayoutDisplay(); this.goToPage(this.currentPageIndex, initialOffset, false, false);
-            await this.renderPage(this.pages[this.currentPageIndex]);
+            if (spread) this.pages.forEach(p => { p.container.style.display = 'none'; });      // the stage places them when it lands on a page
+            else { this.updateLayoutDisplay(); this.goToPage(this.currentPageIndex, initialOffset, false, false); await this.renderPage(this.pages[this.currentPageIndex]); }
             if (this.disposed) return;
             await this.notify('OnDocumentLoaded', { totalPages: this.totalPages, outline: [] });
             this.scheduleVirtualization();
@@ -99,7 +103,8 @@ class FolioReaderEngine {
         return await Promise.all((outline || []).map(async node => ({ title: node.title || 'Untitled',
             pageIndex: await this.destinationIndex(node.dest).catch(() => 0), children: await this.formatOutline(node.items) })));
     }
-    getEffectiveZoom() {
+    getEffectiveZoom(forPage) {
+        if (this.layoutMode === 'spread' && forPage?.spreadScale) return forPage.spreadScale;
         if (this.zoom > 0) return this.zoom;
         const page = this.pages[this.currentPageIndex];
         if (!page) return 1;
@@ -110,6 +115,7 @@ class FolioReaderEngine {
         return Math.max(.25, Math.min(4, this.zoom === -2 ? Math.min(scaleW, scaleH) : scaleW));
     }
     updatePageDimensions() {
+        if (this.layoutMode === 'spread') return;
         const scale = this.getEffectiveZoom(), sideways = this.rotation % 180 !== 0;
         for (const page of this.pages) {
             page.container.style.width = `${(sideways ? page.height : page.width) * scale}px`;
@@ -117,6 +123,7 @@ class FolioReaderEngine {
         }
     }
     updateLayoutDisplay() {
+        if (this.layoutMode === 'spread') return;      // setSpread decides which pages show, and where
         for (const page of this.pages) page.container.style.display = this.layoutMode === 'single' && page.index !== this.currentPageIndex ? 'none' : 'block';
         this.updatePageDimensions();
     }
@@ -128,7 +135,7 @@ class FolioReaderEngine {
         return Number.isFinite(offset) ? Math.max(0, Math.min(1, offset)) : 0;
     }
     handleScroll() {
-        if (this.disposed || !this.pages.length) return;
+        if (this.disposed || !this.pages.length || this.layoutMode === 'spread') return;
         const marker = this.container.scrollTop + Math.min(120, this.container.clientHeight / 4);
         if (this.layoutMode !== 'single') {
             let nearest = 0;
@@ -150,7 +157,7 @@ class FolioReaderEngine {
         } finally { this.positionBusy = false; }
     }
     scheduleVirtualization() {
-        if (this.disposed || !this.pages.length) return;
+        if (this.disposed || !this.pages.length || this.layoutMode === 'spread') return;
         const firstVisible = this.pages.findIndex(p => p.container.offsetTop + p.container.offsetHeight > this.container.scrollTop);
         let endVisible = this.currentPageIndex;
         for (let i = Math.max(0, firstVisible); i < this.pages.length; i++) {
@@ -178,18 +185,20 @@ class FolioReaderEngine {
                 const offset = this.currentOffset(); page.width = base.width; page.height = base.height; this.updatePageDimensions();
                 this.goToPage(this.currentPageIndex, offset, false);
             }
-            const viewport = page.proxy.getViewport({ scale: this.getEffectiveZoom(), rotation: (page.proxy.rotate + this.rotation) % 360 });
+            const viewport = page.proxy.getViewport({ scale: this.getEffectiveZoom(page), rotation: (page.proxy.rotate + this.rotation) % 360 });
             page.viewport = viewport;
-            const canvas = document.createElement('canvas');
-            const dpr = Math.min(window.devicePixelRatio || 1, 2);
-            canvas.width = Math.ceil(viewport.width * dpr); canvas.height = Math.ceil(viewport.height * dpr);
-            canvas.style.width = `${viewport.width}px`; canvas.style.height = `${viewport.height}px`;
-            page.canvasWrap.replaceChildren(canvas);
-            page.canvasWrap.style.filter = this.theme?.cssFilter || 'none';
-            page.renderTask = page.proxy.render({ canvasContext: canvas.getContext('2d'), viewport,
-                transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null });
-            await page.renderTask.promise;
-            if (generation !== page.generation || this.disposed) return;
+            if (this.layoutMode !== 'spread') {        // in 3D reading the stage draws the page; only the layers above it are drawn here
+                const canvas = document.createElement('canvas');
+                const dpr = Math.min(window.devicePixelRatio || 1, 2);
+                canvas.width = Math.ceil(viewport.width * dpr); canvas.height = Math.ceil(viewport.height * dpr);
+                canvas.style.width = `${viewport.width}px`; canvas.style.height = `${viewport.height}px`;
+                page.canvasWrap.replaceChildren(canvas);
+                page.canvasWrap.style.filter = this.theme?.cssFilter || 'none';
+                page.renderTask = page.proxy.render({ canvasContext: canvas.getContext('2d'), viewport,
+                    transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null });
+                await page.renderTask.promise;
+                if (generation !== page.generation || this.disposed) return;
+            }
             page.textLayer.replaceChildren();
             page.container.style.setProperty('--scale-factor', viewport.scale);
             page.container.style.setProperty('--total-scale-factor', viewport.scale);
@@ -237,13 +246,78 @@ class FolioReaderEngine {
     }
     goToPage(index, offset = 0, report = true, schedule = true) {
         if (!this.pages.length) return;
+        if (this.layoutMode === 'spread') {            // the stage turns (one curl) or riffles to the page, then reports the new spread
+            window.dispatchEvent(new CustomEvent('folio-goto', { detail: { index: resolvePageIndex(index, this.pages.length) } }));
+            return;
+        }
         this.currentPageIndex = resolvePageIndex(index, this.pages.length);
         if (this.layoutMode === 'single') this.updateLayoutDisplay();
         const page = this.pages[this.currentPageIndex];
         this.container.scrollTop = page.container.offsetTop + page.container.offsetHeight * Math.max(0, Math.min(1, offset));
         if (schedule) this.scheduleVirtualization(); if (report) this.emitPosition();
     }
+    /**
+     * WP6: the stage reports where it drew the two pages of the spread (viewport CSS pixels, already fitted to each page's aspect).
+     * Those pages get a wrapper fixed over the rectangle, with the text layer, links, highlights and dog-ear; everything else hides.
+     * `visible: false` (while a page turns) hides the overlay without losing the spread.
+     */
+    setSpread(detail) {
+        if (this.disposed || !this.pages.length || !detail) return;
+        if (detail.off) { this.exitSpread(); return; }
+        if (this.layoutMode !== 'spread') { this.previousMode = this.layoutMode; this.layoutMode = 'spread'; this.container.classList.add('folio-spread-overlay'); }
+        const entries = [detail.left, detail.right].filter(Boolean);
+        for (const page of this.pages) {
+            const entry = detail.visible === false ? null : entries.find(e => e.index === page.index);
+            const style = page.container.style;
+            if (!entry) { style.display = 'none'; page.container.inert = true; if (page.rendered || page.rendering) this.recyclePage(page); continue; }
+            const base = page.proxy?.getViewport({ scale: 1 }) ?? { height: page.height };
+            const scale = entry.rect.height / base.height;
+            const changed = Math.abs((page.spreadScale ?? 0) - scale) > 1e-4;
+            page.spreadScale = scale;
+            Object.assign(style, { display: 'block', position: 'fixed', left: `${entry.rect.x}px`, top: `${entry.rect.y}px`, width: `${entry.rect.width}px`, height: `${entry.rect.height}px`, margin: '0', background: 'transparent', boxShadow: 'none' });
+            page.container.inert = false;
+            if (changed && (page.rendered || page.rendering)) this.recyclePage(page);
+            if (!page.rendered && !page.rendering) this.renderPage(page);
+        }
+        if (detail.visible !== false && entries.length) {
+            this.currentPageIndex = entries[0].index;
+            this.emitPosition();
+        }
+    }
+
+    exitSpread() {
+        if (this.layoutMode !== 'spread') return;
+        this.layoutMode = this.previousMode === 'single' ? 'single' : 'continuous';
+        this.container.classList.remove('folio-spread-overlay');
+        for (const page of this.pages) {
+            Object.assign(page.container.style, { position: '', left: '', top: '', margin: '', background: '', boxShadow: '' });
+            if (page.rendered || page.rendering) this.recyclePage(page);
+        }
+        this.refreshLayout();
+    }
+
+    /** The shape of a page (width / height), known before it renders; the stage fits its page images to it. */
+    pageAspect(index) {
+        const page = this.pages[index] ?? this.pages[this.currentPageIndex];
+        return page ? page.width / page.height : 0.7;
+    }
+
+    /** A page rendered to its own canvas, for the stage to use as a texture; independent of the layout and of the page wrappers. */
+    async renderPageImage(index, heightPx) {
+        if (!this.pdfDoc || this.disposed || index < 0 || index >= this.totalPages) return null;
+        const proxy = await this.pdfDoc.getPage(index + 1);
+        const base = proxy.getViewport({ scale: 1 }), scale = Math.max(0.2, heightPx / base.height);
+        const viewport = proxy.getViewport({ scale });
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
+        const task = proxy.render({ canvasContext: canvas.getContext('2d'), viewport });
+        await task.promise;
+        if (this.disposed) { canvas.width = canvas.height = 0; return null; }
+        return { canvas, aspect: base.width / base.height };
+    }
+
     refreshLayout() {
+        if (this.layoutMode === 'spread') return;
         const index = this.currentPageIndex, offset = this.currentOffset();
         this.pages.forEach(p => this.recyclePage(p)); this.updateLayoutDisplay(); this.goToPage(index, offset);
     }
@@ -294,6 +368,7 @@ class FolioReaderEngine {
     setDogEar(index, folded) { const ear = this.pages[index]?.dogEar; ear?.classList.toggle('active', folded); ear?.setAttribute('aria-pressed', folded ? 'true' : 'false'); }
     /** OPN-1/2: where the current page is drawn, in viewport CSS pixels (the stage aligns its 3D page to it). */
     currentPageRect() {
+        if (this.layoutMode === 'spread') return null;
         const page = this.pages[this.currentPageIndex];
         const canvas = page?.canvasWrap.querySelector('canvas') ?? page?.container;
         if (!canvas) return null;
@@ -342,6 +417,7 @@ class FolioReaderEngine {
     handleKeyDown(e) {
         if (e.target.closest('input,textarea,select,[contenteditable="true"],.mud-dialog') || this.disposed) return;
         const ctrl = e.ctrlKey || e.metaKey, key = e.key.toLowerCase();
+        if (!ctrl && key === 'z' && !e.altKey && this.layoutMode !== 'spread') { e.preventDefault(); this.notify('OnReaderShortcut', { key:'z', ctrlKey:false, altKey:false }); return; }
         if ((ctrl && ['g','d','f','k','+','=','-'].includes(key)) || ['F11','Escape'].includes(e.key) || (!ctrl && ['h'].includes(key) && window.getSelection()?.toString().trim())) {
             e.preventDefault(); this.notify('OnReaderShortcut', { key:e.key, ctrlKey:ctrl, altKey:e.altKey }); return;
         }
@@ -352,6 +428,10 @@ class FolioReaderEngine {
         if (e.altKey && e.key === 'ArrowRight' && this.historyIndex + 1 < this.history.length) {
             e.preventDefault(); const current = { page:this.currentPageIndex, offset:this.currentOffset() };
             const target = this.history[++this.historyIndex]; this.history[this.historyIndex] = current; this.goToPage(target.page,target.offset); return;
+        }
+        if (this.layoutMode === 'spread') {            // the stage turns pages and riffles in 3D reading
+            if (!ctrl && key === 'z') { e.preventDefault(); this.notify('OnReaderShortcut', { key:'z', ctrlKey:false, altKey:false }); }
+            return;
         }
         const deltas = { ArrowRight:1, PageDown:1, ArrowLeft:-1, PageUp:-1 };
         if (e.key in deltas) { e.preventDefault(); this.goToPage(this.currentPageIndex + deltas[e.key]); }
@@ -365,7 +445,7 @@ class FolioReaderEngine {
         this.container?.replaceChildren();
     }
 }
-const methods = ['loadDocument','goToPage','setZoom','setFitWidth','setFitPage','setLayoutMode','setRotation','search','clearSearch','getPageText','getThumbnail','drawAnnotations','pulseAnnotation','setDogEar','clearSelectionBox','applyTheme','currentPageRect'];
+const methods = ['loadDocument','goToPage','setZoom','setFitWidth','setFitPage','setLayoutMode','setRotation','search','clearSearch','getPageText','getThumbnail','drawAnnotations','pulseAnnotation','setDogEar','clearSelectionBox','applyTheme','currentPageRect','setSpread','pageAspect','renderPageImage'];
 window.folioReader = {
     engine: null,
     get pdfDoc() { return this.engine?.pdfDoc; },

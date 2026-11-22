@@ -21,6 +21,10 @@
             <label><input type="radio" name="folio-style" checked="@(Preferences.Current.LibraryStyle == LibraryStyle.ThreeD)" @onchange="() => Save(Preferences.Current with { LibraryStyle = LibraryStyle.ThreeD })" /><span>3D</span><small>Books on a stage. Falls back to 2D when this device cannot draw 3D.</small></label>
             <label><input type="radio" name="folio-style" checked="@(Preferences.Current.LibraryStyle == LibraryStyle.TwoD)" @onchange="() => Save(Preferences.Current with { LibraryStyle = LibraryStyle.TwoD })" /><span>2D</span><small>Flat pages with CSS books. Lightest on battery and older graphics.</small></label>
         </fieldset>
+        <fieldset class="folio-settings-choice"><legend>Reading view</legend>
+            <label><input type="radio" name="folio-reading" checked="@(Preferences.Current.ReadingView == ReadingView.Book3D)" @onchange="() => Save(Preferences.Current with { ReadingView = ReadingView.Book3D })" /><span>3D book</span><small>The book opens and you turn its pages. Needs 3D; Zoom (Z) shows flat pages any time.</small></label>
+            <label><input type="radio" name="folio-reading" checked="@(Preferences.Current.ReadingView == ReadingView.Flat)" @onchange="() => Save(Preferences.Current with { ReadingView = ReadingView.Flat })" /><span>Flat pages</span><small>Scrolling pages, best for long or dense documents.</small></label>
+        </fieldset>
         <fieldset class="folio-settings-choice"><legend>3D quality</legend>
             @foreach (var (value, label, hint) in QualityChoices)
             {
@@ -45,7 +49,7 @@
     }
     <div class="folio-settings-group"><h2 class="folio-eyebrow">[ SHORTCUTS ]</h2><dl class="folio-shortcuts">
         <dt>Open focused book</dt><dd>Enter</dd><dt>Book menu</dt><dd>Right-click or Menu key</dd><dt>Shelf 1–9</dt><dd>1 – 9</dd><dt>Back</dt><dd>Esc</dd>
-        <dt>Find in book</dt><dd>Ctrl F</dd><dt>Go to page</dt><dd>Ctrl G</dd><dt>Bookmark page</dt><dd>Ctrl D</dd><dt>Reader commands</dt><dd>Ctrl K</dd><dt>Focus mode</dt><dd>F11</dd></dl></div>
+        <dt>Turn page (3D book)</dt><dd>← → · Page Up / Down</dd><dt>First or last page</dt><dd>Home · End</dd><dt>Flat pages (Zoom)</dt><dd>Z</dd><dt>Find in book</dt><dd>Ctrl F</dd><dt>Go to page</dt><dd>Ctrl G</dd><dt>Bookmark page</dt><dd>Ctrl D</dd><dt>Reader commands</dt><dd>Ctrl K</dd><dt>Focus mode</dt><dd>F11</dd></dl></div>
 </section>
 @code {
     [Parameter] public EventCallback OnPreferencesChanged { get; set; }

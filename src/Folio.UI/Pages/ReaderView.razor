@@ -19,10 +19,11 @@
 @inject IBookUrlResolver Urls
 @inject IPlatformCapabilities Platform
 @inject Folio.UI.Stage.StageState Stage
+@inject NavigationManager Navigation
 @inject ILogger<ReaderView> Logger
 @implements IAsyncDisposable
 
-<div class="folio-reader @(_zen ? "folio-zen-active" : "")">
+<div class="folio-reader @(_zen ? "folio-zen-active" : "") @(Spread ? "reading-3d" : "")">
     <ReaderToolbar Title="@Book.Title" CurrentPage="@(_page + 1)" TotalPages="@Math.Max(1, _pages)" Zoom="@_zoom" LayoutMode="@_mode"
         IsOutlineOpen="@_contents" IsSearchOpen="@_find" IsZenMode="@_zen" IsDogEared="@_bookmarked"
         OnBack="Back" OnToggleOutline="() => _contents = !_contents" OnToggleDogEar="() => ToggleBookmark(_page)"
@@ -49,6 +50,12 @@
         </div>
     </div>
     <SelectionQuickBar IsVisible="@_selectionVisible" ClientX="@_selectionX" ClientY="@_selectionY" OnApplyHighlight="Highlight" OnDismiss="DismissSelection" />
+    @if (Spread)
+    {
+        <SpreadToolbar CurrentPage="@(_page + 1)" TotalPages="@Math.Max(1, _pages)" Bookmarked="@_bookmarked"
+            OnPrevious="() => Turn(-1)" OnNext="() => Turn(1)" OnContents="() => _contents = !_contents" OnFind="ToggleFind"
+            OnZoom="() => SetFlat(true)" OnBookmark="() => ToggleBookmark(_page)" OnClose="Back" />
+    }
     <footer class="folio-reader-status"><span>@(_loaded ? $"Page {_page + 1} of {_pages}" : "PDF reader")</span><div class="folio-reader-status-progress"><span style="width: @Progress%;"></span></div>
         @if (_saveError) { <button class="folio-subtle-btn folio-error-text" @onclick="() => Persist(true)">Position not saved · Retry</button> }
         else { <span class="folio-save-status">@(_loaded ? "Position saved automatically" : "Local PDF · Original preserved")</span> }
@@ -75,10 +82,23 @@
     private IReadOnlyList<NormalizedRect> _selectionRects = [];
     private IReadOnlyList<BookmarkDto> _bookmarks = [];
     private List<OutlineNodeDto> _outline = [];
+    /// <summary>The book is open as a 3D spread (not Zoom): the stage draws the pages and this view only draws what sits on them.</summary>
+    private bool Spread => _spread && !Stage.ReadingFlat;
+    private bool _spread;
+    private async Task Turn(int step) => await JS.InvokeVoidAsync("folioShell.turnPage", step);
+    private async Task SetFlat(bool flat)
+    {
+        if (!_spread) return;
+        Stage.SetReadingFlat(flat);
+        if (flat) await JS.InvokeVoidAsync("folioReader.setSpread", new { off = true });
+        else await JS.InvokeVoidAsync("folioShell.requestSpread");
+        await InvokeAsync(StateHasChanged);
+    }
     private int Progress => (int)Math.Clamp(100.0 * (_page + 1) / Math.Max(1, _pages), 0, 100);
     protected override void OnInitialized()
     {
         _pages = Book.PageCount; _reference = DotNetObjectReference.Create(this);
+        _spread = Stage.ReadingSpread && Stage.Phase is Folio.UI.Stage.StagePhase.Opening or Folio.UI.Stage.StagePhase.Reading;
         // Native close must not depend on a renderer that may already be tearing down.
         _closeSave = () => Persist(true, repaint: false); Session.SaveBeforeClose = _closeSave;
     }
@@ -92,10 +112,22 @@
             if (InitialPageIndex.HasValue) { _page = InitialPageIndex.Value; _offset = 0; }
             _page = Math.Clamp(_page, 0, Math.Max(0, _pages - 1));
             await Reader.InitAsync("folio-pdf-container", _reference!);
+            await TryOpenSpreadAsync();
             await OpenDocument();
             _saveLoop = SaveLoop();
         }
         catch (Exception ex) { Logger.LogError(ex, "Reader initialization failed for {BookId}", Book.Id); _error = "The reader could not start. Return to the library and try again."; StateHasChanged(); }
+    }
+    /// <summary>
+    /// A deep link or reload lands in the reader without going through the library, so the 3D book was not opened for it: do it now
+    /// when 3D reading is on and the stage is (or is about to be) available.
+    /// </summary>
+    private async Task TryOpenSpreadAsync()
+    {
+        if (_spread) return;
+        for (var i = 0; i < 40 && Stage.Starting; i++) await Task.Delay(100);
+        if (_disposed || !Stage.CanRead3D) return;
+        if (await Stage.BeginOpenAsync(Book.Id)) { _spread = true; await InvokeAsync(StateHasChanged); }
     }
     private async Task<TValue> Use<TService, TValue>(Func<TService, Task<TValue>> action) where TService : notnull
     {
@@ -106,8 +138,8 @@
     {
         _loaded = false; _error = null; StateHasChanged();
         var url = await Urls.GetBookUrlAsync(Book);
-        if (url == null) { _ = Stage.CompleteHandoffAsync(); _error = Platform.CanRelinkBooks ? "The managed PDF is missing. Locate the original document to restore it; your highlights are kept." : "This book's PDF is missing from this browser's storage. Import it again; your highlights are kept."; return; }
-        await JS.InvokeVoidAsync("folioReader.loadDocument", url, _page, _offset, _zoom, _mode == ReaderViewMode.SinglePage ? "single" : "continuous", _password);
+        if (url == null) { _ = EndOpening(); _error = Platform.CanRelinkBooks ? "The managed PDF is missing. Locate the original document to restore it; your highlights are kept." : "This book's PDF is missing from this browser's storage. Import it again; your highlights are kept."; return; }
+        await JS.InvokeVoidAsync("folioReader.loadDocument", url, _page, _offset, _zoom, _mode == ReaderViewMode.SinglePage ? "single" : "continuous", _password, _spread);
     }
     private async Task Retry() { await Reader.DisposeAsync(); await Reader.InitAsync("folio-pdf-container", _reference!); await OpenDocument(); }
     private async Task Locate()
@@ -146,6 +178,8 @@
         if (Book.PageCount != _pages) { await Library.SetPageCountAsync(Book.Id, _pages); Book.PageCount = _pages; }
         if (!Book.StatusIsManual && Book.Status == ReadingStatus.WantToRead) { await Library.SetStatusAsync(Book.Id, ReadingStatus.Reading, manual: false); Book.Status = ReadingStatus.Reading; }
         await LoadPage(_page); await RefreshBookmarks(); await ApplyLighting(); await InvokeAsync(StateHasChanged);
+        // WP6: the book lies open; it riffles to this page and the text layer takes over the spread.
+        if (_spread && Stage.ReadingSpread) { await Stage.ReadingStartAsync(_page, _pages); return; }
         // OPN-1: tell the opening book where this page is drawn so its 3D spread lands exactly on it.
         if (Stage.Phase == Folio.UI.Stage.StagePhase.Opening &&
             await JS.InvokeAsync<Folio.UI.Stage.PageRect?>("folioReader.currentPageRect") is { } rect)
@@ -157,7 +191,12 @@
         if (_disposed) return;
         _activity = DateTimeOffset.UtcNow; var previous = _page;
         _page = Math.Clamp(payload.PageIndex, 0, Math.Max(0, _pages - 1)); _offset = payload.OffsetPercent; _zoom = payload.Zoom; _version++;
-        if (_loaded && previous != _page) { await LoadPage(_page); _bookmarked = _bookmarks.Any(b => b.PageIndex == _page && b.IsDogEar); }
+        if (_loaded && previous != _page)
+        {
+            await LoadPage(_page); _bookmarked = _bookmarks.Any(b => b.PageIndex == _page && b.IsDogEar);
+            // The address follows every turn: /book/{id}/read?page=n (replacing, so Back leaves the book rather than un-turning pages).
+            if (_spread) Navigation.NavigateTo(FolioRoutes.Read(Book.Id, _page), replace: true);
+        }
         await InvokeAsync(StateHasChanged);
     }
     [JSInvokable] public async Task OnPageRendered(int page)
@@ -220,7 +259,7 @@
     private async Task Find(string query, bool forward = true) { _query = query; if (string.IsNullOrWhiteSpace(query)) { _matches = _match = 0; await Reader.ClearSearchAsync(); } else await Reader.SearchAsync(query, forward); }
     [JSInvokable] public Task OnSearchMatch(SearchPayload match) { _match = match.CurrentMatch; _matches = match.TotalMatches; return InvokeAsync(StateHasChanged); }
     private async Task ApplyLighting() => await Reader.ApplyThemeAsync(new { cssFilter = _lighting == "warm" ? "sepia(0.16)" : "none" });
-    [JSInvokable] public Task OnReaderError(ErrorPayload error) { _ = Stage.CompleteHandoffAsync(); _loaded = false; _passwordRequired = error.Code == "password"; _error = _passwordRequired ? "Enter the document password. It is used only for this session." : "The PDF may be missing, damaged, or unavailable. Your notes and bookmarks are preserved."; return InvokeAsync(StateHasChanged); }
+    [JSInvokable] public Task OnReaderError(ErrorPayload error) { _ = EndOpening(); _loaded = false; _passwordRequired = error.Code == "password"; _error = _passwordRequired ? "Enter the document password. It is used only for this session." : "The PDF may be missing, damaged, or unavailable. Your notes and bookmarks are preserved."; return InvokeAsync(StateHasChanged); }
     [JSInvokable] public async Task OnExternalLinkRequested(string url)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https")) return;
@@ -230,9 +269,10 @@
     {
         var key = shortcut.Key.ToLowerInvariant();
         if (shortcut.CtrlKey) { switch (key) { case "g": await GoToDialog(); break; case "f": await ToggleFind(); break; case "d": await ToggleBookmark(_page); break; case "k": await Commands(); break; case "+": case "=": await ZoomBy(.25); break; case "-": await ZoomBy(-.25); break; } }
+        else if (key == "z" && _spread) await SetFlat(!Stage.ReadingFlat);
         else if (key == "f11") _zen = !_zen;
         else if (key == "h" && _selectionVisible) await Highlight((HighlightColor.Yellow, AnnotationType.Highlight));
-        else if (key == "escape") { if (_selectionVisible) await DismissSelection(); else if (_find) await ToggleFind(); else if (_contents) _contents = false; else if (_zen) _zen = false; else await Back(); }
+        else if (key == "escape") { if (_spread && Stage.ReadingFlat) await SetFlat(false); else if (_selectionVisible) await DismissSelection(); else if (_find) await ToggleFind(); else if (_contents) _contents = false; else if (_zen) _zen = false; else await Back(); }
         await InvokeAsync(StateHasChanged);
     }
     private async Task Commands()
@@ -240,10 +280,14 @@
         var dialog = await Dialogs.ShowAsync<CommandPalette>("Reader commands");
         if (await dialog.Result is { Canceled: false, Data: string command }) switch (command) { case "goto": await GoToDialog(); break; case "find": await ToggleFind(); break; case "fitwidth": await FitWidth(); break; case "fitpage": await FitPage(); break; case "zoomin": await ZoomBy(.25); break; case "zoomout": await ZoomBy(-.25); break; case "rotate": await Reader.SetRotationAsync(90); break; case "layout": await ToggleLayout(); break; case "toc": _contents = !_contents; break; case "zen": _zen = !_zen; break; case "back": await Back(); break; }
     }
+    /// <summary>The document could not be shown: finish whatever opening animation is running so the error is visible.</summary>
+    private Task EndOpening() => _spread ? Stage.AbortReadingAsync() : Stage.CompleteHandoffAsync();
     private async Task Back() { try { await Persist(true); await OnBackToLibrary.InvokeAsync(); } catch { Notifications.Add("Position could not be saved. Retry before leaving the book.", Severity.Error); } }
     public async ValueTask DisposeAsync()
     {
         _disposed = true; _lifetime.Cancel();
+        // Leaving the book by any route (browser Back, a link) still closes the 3D book rather than stranding it open on the stage.
+        if (Stage.ReadingSpread && Stage.Phase is Folio.UI.Stage.StagePhase.Reading or Folio.UI.Stage.StagePhase.Opening) _ = Stage.BeginCloseReadingAsync();
         if (_saveLoop != null) await _saveLoop;
         await Persist(false);
         if (Session.SaveBeforeClose == _closeSave) Session.SaveBeforeClose = null;

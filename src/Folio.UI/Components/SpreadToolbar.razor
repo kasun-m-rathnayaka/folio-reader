@@ -1,0 +1,23 @@
+@* The toolbar under the open 3D book (WP6): [ ← ]  12 OF 300  [ → ]  [ CONTENTS ]  [ FIND ]  [ ZOOM ]  [ BOOKMARK ]  [ × ]. *@
+<nav class="folio-spread-toolbar" aria-label="Book controls">
+    <BracketButton Label="←" Plus="false" AriaLabel="Previous page" Disabled="@(CurrentPage <= 1)" OnClick="OnPrevious" Class="folio-spread-prev" />
+    <span class="folio-spread-count folio-mono" role="status" aria-live="polite">@CurrentPage OF @TotalPages</span>
+    <BracketButton Label="→" Plus="false" AriaLabel="Next page" Disabled="@(CurrentPage >= TotalPages)" OnClick="OnNext" Class="folio-spread-next" />
+    <BracketButton Label="CONTENTS" Plus="false" AriaLabel="Contents and bookmarks" OnClick="OnContents" />
+    <BracketButton Label="FIND" Plus="false" Hint="Ctrl F" AriaLabel="Find in book" OnClick="OnFind" />
+    <BracketButton Label="ZOOM" Plus="false" Hint="Z" AriaLabel="Zoom: flat pages" OnClick="OnZoom" />
+    <BracketButton Label="BOOKMARK" Plus="false" AriaLabel="@(Bookmarked ? "Remove bookmark from this page" : "Bookmark this page")" Class="@(Bookmarked ? "is-current" : "")" OnClick="OnBookmark" />
+    <BracketButton Label="×" Plus="false" AriaLabel="Close book" Hint="Esc" OnClick="OnClose" />
+</nav>
+@code {
+    [Parameter] public int CurrentPage { get; set; }
+    [Parameter] public int TotalPages { get; set; }
+    [Parameter] public bool Bookmarked { get; set; }
+    [Parameter] public EventCallback OnPrevious { get; set; }
+    [Parameter] public EventCallback OnNext { get; set; }
+    [Parameter] public EventCallback OnContents { get; set; }
+    [Parameter] public EventCallback OnFind { get; set; }
+    [Parameter] public EventCallback OnZoom { get; set; }
+    [Parameter] public EventCallback OnBookmark { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+}

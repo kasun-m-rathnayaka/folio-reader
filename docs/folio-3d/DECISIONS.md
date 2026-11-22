@@ -252,3 +252,36 @@ the cross-browser gates for M2 are proven on Chromium only and need a manual che
   empty wood or the back panel, horizontal wheel and Shift + wheel pan; the pan position is the camera's x (undamped, so the
   row follows the hand). Only books within 1.5 view widths of the camera on the current and adjacent rows have meshes (a pool of
   reused meshes, binary search over the row's sorted positions).
+
+## D-027 · Present motion, generated covers and 3D reading (WP4, WP5, WP6)
+
+- **Present (WP4).** Hover lifts a spine 8 mm up and 4 mm forward at once (λ = 12, about 250 ms). Resting 250 ms on the same book,
+  a click, or an arrow key presents it: it turns 90° to face the camera, comes 9 cm forward and leans back 2°; neighbours part by
+  half the cover width − half the thickness + 1 cm (nearer ones faster, λ 10 against 7); the row recentres on it; the page
+  tints with its contrast-checked accent and the title marquee slides to its title. Only presenting recentres, never a hover.
+  Reduced motion and Off do not lift; presenting snaps (the 150 ms crossfade the plan names is a cut for books, since there is
+  nothing to fade between). A presented book's large cover is released again once it has turned away.
+- **Covers (WP5).** `cover-composer.js` paints every cover (1024 × 1536, 512 × 768 on the shelf) and spine (128 × 1024, 64 × 512) from
+  the title and author; the PDF's page 1 only feeds the Plate halftone and the cloth colour. Templates (plate, marble, line, cloth)
+  are chosen by an FNV hash of the book id; the cloth is page 1's dominant colour when it is colourful and carries the title at
+  4.5:1, else the nearest of 12 curated colours. Foil is a roughness/metalness texture (G, B) written with the title and mark;
+  cloth covers deboss the title through a normal map. `HardcoverGeometry` is one merged mesh with 8 material groups.
+  Shelf books load only a spine; the cover is painted when a book is presented or featured.
+- **Cover cache.** The plan says covers are cached in the covers folder (desktop) and OPFS (web). They are cached as PNG blobs in the
+  origin's IndexedDB instead (`cover-cache.js`), which both hosts have and which needs no change to `IFileStore` or the .NET
+  side. The cache key holds the book id, the design version and a hash of title and author, so edits repaint. The 2D books
+  (`CssBook`) call `bookImages` in the stage bundle, so they show the same images.
+- **3D reading (WP6).** Pages are rendered by the reader engine itself (`renderPageImage`, main thread) rather than by a separate
+  PDF.js worker with `OffscreenCanvas`: the engine already owns the loaded document, and this avoids loading the PDF twice.
+  Textures: 8-page LRU, spreads either side prefetched, a 480 px preview shown first. The engine gained a `spread` layout: the
+  stage dispatches `folio-spread` with the two pages' rectangles (viewport pixels, fitted to each page's aspect) and the engine
+  fixes its page wrappers (text layer, links, highlights, dog-ears) over them with the canvases not drawn; `folio-goto` and
+  `folio-turn` go the other way. The reader's selection, quick bar, highlights, bookmarks and find therefore work unchanged.
+  Open: forward 300 ms, cover 400 ms, lay open 300 ms, riffle (up to 12 leaves, 50 ms apart) and settle 200 ms: 1.57 s on the stage
+  clock. A neighbour spread is one curl (400 ms); Home, End, find and contents riffle. Any key or click skips (input that started
+  the opening does not). Spreads are (1,2), (3,4)… with page 1 alone on the right.
+- **Reading view and Zoom.** Settings → Reading view (3D book | Flat pages). 3D reading needs the stage and Motion ≠ Off; reduced
+  motion opens and turns without a riffle or curl. Z shows the flat reader at the same page (the stage pauses); Esc returns to the
+  spread, and Esc again closes the book. A deep link or reload opens the 3D book too, from the hero position. Closing returns the
+  book to its slot while the library appears.
+- **Shadow of the lifted leaf** is two soft strips under the fold rather than a shadow map: no light or draw-call cost.

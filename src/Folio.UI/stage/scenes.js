@@ -4,6 +4,7 @@
 import { BOOK_HEIGHT, ROW_SPACING, rowPositions, cameraX } from './layout.js';
 
 export const FEATURE_Y = 0;
+export const READ_CAMERA_Z = 52;
 export const SHELF_TOP_Y = -70;
 export const CAMERA_FOV = 30;
 export const SHELF_DISTANCE = 108;
@@ -26,6 +27,8 @@ export function cameraPose(scene, ctx) {
         }
         case 'opening':
             return { px: 0, py: FEATURE_Y, pz: 40, lx: 0, ly: FEATURE_Y, lz: 0 };
+        case 'reading': // the open book fills the reading area; the camera looks straight at the gutter (WP6)
+            return { px: 0, py: 0, pz: READ_CAMERA_Z, lx: 0, ly: 0, lz: 0 };
         default: // hero: close, slightly low, 3/4 view; the book sits left of the HTML copy
             return { px: 3, py: FEATURE_Y - 6, pz: 76, lx: 3, ly: FEATURE_Y - 2.5, lz: 0 };
     }

@@ -23,6 +23,10 @@ window.folioShell = {
         const left = current.offsetLeft - (container.clientWidth - current.clientWidth) / 2;
         container.scrollTo({ left, behavior: this.motion === 'full' ? 'smooth' : 'instant' });
     },
+    /** WP6: turn the open 3D book one page (the toolbar's arrows); the stage listens for this. */
+    turnPage(step) { window.dispatchEvent(new CustomEvent('folio-turn', { detail: { step } })); },
+    /** WP6: after Zoom, ask the stage to draw the spread's text-layer rectangles again. */
+    requestSpread() { window.dispatchEvent(new CustomEvent('folio-spread-request')); },
     focusElement(id) { document.getElementById(id)?.focus({ preventScroll: true }); },
     setSceneKeyTarget(reference) { this.sceneKeyTarget = reference; },
     get motion() { return document.documentElement.dataset.motion || 'full'; },

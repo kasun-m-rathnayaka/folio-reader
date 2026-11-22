@@ -22,7 +22,7 @@
     private bool _started, _starting, _libraryLoaded, _disposed;
     private StageScene? _appliedScene;
     private bool? _appliedPaused;
-    private bool Visible => _started && State.Available && (State.Scene != null || State.Phase != StagePhase.None) && !Suspended;
+    private bool Visible => _started && State.Available && (State.Scene != null || State.Phase != StagePhase.None) && !Suspended && !State.ReadingFlat;
 
     protected override void OnInitialized()
     {
@@ -57,6 +57,11 @@
             State.Motion = motion;
             State.BeginOpenHandler = async id => { await SyncAsync(force: true); return await Bridge.BeginOpenAsync(id); };
             State.AlignHandler = async rect => await Bridge.AlignToAsync(rect);
+            State.Prefer3DReading = Preferences.Current.ReadingView == ReadingView.Book3D;
+            State.BeginReadingHandler = async id => { await SyncAsync(force: true); return await Bridge.BeginReadingAsync(id); };
+            State.ReadingStartHandler = async (page, total) => await Bridge.ReadingStartAsync(page, total);
+            State.CloseReadingHandler = async scene => { _appliedScene = scene; await SyncAsync(force: true); await Bridge.CloseReadingAsync(scene); };
+            State.AbortReadingHandler = async scene => { _appliedScene = scene; await Bridge.AbortReadingAsync(scene); await SyncAsync(); };
             State.BeginCloseHandler = async (id, rect, scene) => { _appliedScene = scene; await SyncAsync(force: true); await Bridge.BeginCloseAsync(id, rect, scene); };
             await LoadLibraryAsync();
             State.SetAvailable(true, null);
@@ -77,6 +82,7 @@
         }
         if (!_started) { await StartAsync(); StateHasChanged(); return; }
         State.Motion = await JS.InvokeAsync<string>("folioShell.applyMotion");
+        State.Prefer3DReading = Preferences.Current.ReadingView == ReadingView.Book3D;
         await Bridge.SetMotionAsync(State.Motion);
         await Bridge.SetQualityAsync(Preferences.Current.Quality.ToString().ToLowerInvariant());
         await Bridge.SetThemeAsync(Preferences.Current.DarkMode ? "dark" : "light");
@@ -142,6 +148,8 @@
     [JSInvokable] public Task OnBookActivated(string id, string action) => Guid.TryParse(id, out var g) ? State.ReportActivated(g, action) : Task.CompletedTask;
     [JSInvokable] public void OnSceneSettled(string kind, int rowIndex) { State.ReportSettled(kind, rowIndex); if (State.Phase == StagePhase.Closing) State.EndClose(); }
     [JSInvokable] public async Task OnRowsStale(int version) { if (_started) await InvokeAsync(ReloadLibrary); }
+    [JSInvokable] public void OnReadingSettled(string id, int spread) => State.CompleteReadingOpen();
+    [JSInvokable] public void OnReadingClosed(string id) => State.EndClose();
     [JSInvokable] public Task OnOpenHandoff(string id, PageRect rect, int elapsedMs) => State.CompleteHandoffAsync();
     [JSInvokable] public Task OnScrollIntent(string direction) => State.ReportScroll(direction);
     [JSInvokable] public void OnBookAccent(string id, string? color) { if (Guid.TryParse(id, out var g)) State.ReportAccent(g, color); }

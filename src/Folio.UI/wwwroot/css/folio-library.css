@@ -214,3 +214,24 @@ select { border-radius:2px; background:var(--folio-surface); border-color:var(--
 .folio-shelf-marquee { position:absolute; left:0; right:0; top:184px; margin:0; pointer-events:none; z-index:0; }
 .folio-shelf-marquee .folio-marquee-title { font-size:clamp(30px, 4vw, 54px); color:color-mix(in srgb, var(--folio-text) 22%, transparent); text-shadow:0 2px 24px var(--folio-bg); }
 .folio-shelf-marquee .folio-marquee-title.is-current { color:var(--folio-text); }
+
+/* ---- 3D reading (WP6): the open book is drawn by the stage; the reader only draws what sits on its pages ---------------------- */
+.stage-reading:not(.reading-flat) .folio-sidebar, .stage-reading:not(.reading-flat) .folio-app-header, .stage-reading:not(.reading-flat) .folio-page-body { opacity:0; }
+.folio-reader.reading-3d { background:transparent; }
+.stage-reading:not(.reading-flat) .folio-reader.reading-3d, .stage-opening .folio-reader.reading-3d { background:transparent; }
+.reading-3d .folio-reader-toolbar, .reading-3d .folio-reader-status { display:none; }
+.reading-3d .folio-reader-workspace, .reading-3d .folio-reader-viewport, .reading-3d .folio-reader-container { background:transparent; pointer-events:none; }
+.reading-3d .folio-reader-container { overflow:hidden; padding:0; }
+.reading-3d .folio-page-wrapper { pointer-events:auto; }
+.reading-3d .folio-canvas-layer { opacity:0; transition:opacity 150ms linear; }
+.reading-3d .folio-page-wrapper .folio-text-layer { cursor:text; }
+.reading-3d .folio-reader-sidebar, .reading-3d .folio-sidebar-panel { pointer-events:auto; }
+.folio-spread-toolbar { position:absolute; left:50%; bottom:22px; transform:translateX(-50%); width:max-content; display:flex; align-items:center; gap:4px 10px; padding:6px 14px; z-index:30; pointer-events:auto;
+  background:color-mix(in srgb, var(--folio-bg) 78%, transparent); border:1px solid var(--folio-hairline); backdrop-filter:blur(6px); flex-wrap:wrap; justify-content:center; max-width:calc(100% - 32px); }
+.folio-spread-count { min-width:9ch; text-align:center; color:var(--folio-text); }
+.folio-spread-toolbar .folio-bracket { font-size:11px; }
+.stage-opening .folio-reader.reading-3d { opacity:0; }
+/* While the book lies open the stage sits under the reader, whose text layer and highlights draw over the pages. */
+.stage-reading .folio-library-shell { position:fixed; inset:0; z-index:1; pointer-events:none; }
+.stage-reading .folio-reader { position:fixed; inset:0; z-index:50; width:auto; height:auto; }
+.stage-reading.reading-flat .folio-library-shell { display:none; }

@@ -28,7 +28,7 @@ public sealed class FolioNavigator(NavigationManager navigation, IJSRuntime js, 
         {
             navigation.NavigateTo(url);
             // If the reader never reports its page (missing PDF, password), finish the crossfade anyway.
-            _ = Task.Delay(HandoffTimeoutMs).ContinueWith(_ => stage.CompleteHandoffAsync(), TaskScheduler.Default);
+            if (!stage.ReadingSpread) _ = Task.Delay(HandoffTimeoutMs).ContinueWith(_ => stage.CompleteHandoffAsync(), TaskScheduler.Default);
             return;
         }
         try { await js.InvokeVoidAsync("folioShell.navigateWithTransition", url, sourceElementId, ".folio-reader-viewport"); }
@@ -40,6 +40,14 @@ public sealed class FolioNavigator(NavigationManager navigation, IJSRuntime js, 
     {
         var url = _returnUrl ?? FolioRoutes.Home;
         _returnUrl = null;
+        if (stage.ReadingSpread && stage.Phase is StagePhase.Reading or StagePhase.Opening)
+        {
+            // 3D reading: the cover shuts and the book returns to its slot while the library appears (WP6).
+            await stage.BeginCloseReadingAsync();
+            navigation.NavigateTo(url);
+            _ = Task.Delay(4000).ContinueWith(_ => stage.EndClose(), TaskScheduler.Default);   // safety net if the stage never reports
+            return;
+        }
         if (stage.CanAnimateClose)
         {
             var rect = await js.InvokeAsync<PageRect?>("folioReader.currentPageRect");

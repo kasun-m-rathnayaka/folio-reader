@@ -24,7 +24,7 @@ public sealed record StageFilter(LibrarySort Sort = LibrarySort.Recent, ReadingS
 public sealed record PageRect(double X, double Y, double Width, double Height);
 
 /// <summary>Where the open/close sequence is (OPN-1, OPN-2).</summary>
-public enum StagePhase { None, Opening, Handoff, Closing }
+public enum StagePhase { None, Opening, Handoff, Closing, Reading }
 
 /// <summary>A scene the stage should show (SPEC: scenes). Book and shelf ids are optional.</summary>
 public sealed record StageScene(string Kind, Guid? BookId = null, int? RowIndex = null, int? RowsVersion = null, int? Page = null)
@@ -60,6 +60,18 @@ public sealed class StageState
     /// <summary>The scene shown before the book opened; closing returns to it.</summary>
     public StageScene? ReturnScene { get; private set; }
     internal Func<Guid, Task<bool>>? BeginOpenHandler;
+    internal Func<Guid, Task<bool>>? BeginReadingHandler;
+    internal Func<int, int, Task>? ReadingStartHandler;
+    internal Func<StageScene, Task>? CloseReadingHandler;
+    internal Func<StageScene, Task>? AbortReadingHandler;
+    /// <summary>True while the open book is drawn as a 3D spread (opening, reading or closing); false for the flat reader.</summary>
+    public bool ReadingSpread { get; private set; }
+    /// <summary>Zoom: the reader shows flat pages over the paused stage; Esc (or Z) returns to the spread.</summary>
+    public bool ReadingFlat { get; private set; }
+    /// <summary>Set from the Reading view setting.</summary>
+    public bool Prefer3DReading { get; set; } = true;
+    /// <summary>The book opens as a 3D spread when 3D is on, motion is not Off and the user has not chosen flat pages.</summary>
+    public bool CanRead3D => Available && Motion != "off" && Prefer3DReading && BeginReadingHandler != null && Phase == StagePhase.None;
     internal Func<PageRect, Task>? AlignHandler;
     internal Func<Guid, PageRect, StageScene, Task>? BeginCloseHandler;
 
@@ -71,11 +83,48 @@ public sealed class StageState
 
     public async Task<bool> BeginOpenAsync(Guid bookId)
     {
+        if (CanRead3D)
+        {
+            ReturnScene = Scene;
+            if (!await BeginReadingHandler!(bookId)) return false;
+            OpeningBookId = bookId; ReadingSpread = true; ReadingFlat = false; Phase = StagePhase.Opening; Changed?.Invoke();
+            return true;
+        }
         if (!CanAnimateBooks || Phase != StagePhase.None) return false;
         ReturnScene = Scene;
         if (!await BeginOpenHandler!(bookId)) return false;
         OpeningBookId = bookId; Phase = StagePhase.Opening; Changed?.Invoke();
         return true;
+    }
+
+    /// <summary>The reader has the document open: the 3D book lands on this page (riffling to it from the front).</summary>
+    public Task ReadingStartAsync(int pageIndex, int totalPages) => ReadingSpread && ReadingStartHandler != null ? ReadingStartHandler(pageIndex, totalPages) : Task.CompletedTask;
+
+    /// <summary>The book lies open on the page: the reader's text layer takes over the spread.</summary>
+    internal void CompleteReadingOpen()
+    {
+        if (!ReadingSpread || Phase != StagePhase.Opening) return;
+        Phase = StagePhase.Reading; Changed?.Invoke();
+    }
+
+    /// <summary>Zoom (Z) crossfades to the flat reader; false returns to the 3D spread.</summary>
+    public void SetReadingFlat(bool flat) { if (!ReadingSpread || ReadingFlat == flat) return; ReadingFlat = flat; Changed?.Invoke(); }
+
+    /// <summary>The document could not be opened: the stage puts the book back and the reader shows its error.</summary>
+    public async Task AbortReadingAsync()
+    {
+        if (!ReadingSpread) return;
+        var scene = ReturnScene ?? StageScene.Hero(null);
+        ReadingSpread = false; ReadingFlat = false; Phase = StagePhase.None; OpeningBookId = null; Changed?.Invoke();
+        if (AbortReadingHandler != null) await AbortReadingHandler(scene);
+    }
+
+    /// <summary>Closes the open book (cover shuts, book returns to its slot); the view leaves at once while the stage finishes.</summary>
+    public async Task BeginCloseReadingAsync()
+    {
+        if (!ReadingSpread || Phase == StagePhase.Closing) return;
+        ReadingFlat = false; Phase = StagePhase.Closing; Changed?.Invoke();
+        if (CloseReadingHandler != null) await CloseReadingHandler(ReturnScene ?? StageScene.Hero(null));
     }
 
     /// <summary>The reader reports where it drew the current page; the stage aligns its spread to it.</summary>
@@ -103,7 +152,7 @@ public sealed class StageState
     public void EndClose()
     {
         if (Phase != StagePhase.Closing) return;
-        Phase = StagePhase.None; OpeningBookId = null; Changed?.Invoke();
+        Phase = StagePhase.None; OpeningBookId = null; ReadingSpread = false; ReadingFlat = false; Changed?.Invoke();
     }
 
     public StageFilter Filter { get; private set; } = new();

@@ -29,6 +29,10 @@ public sealed class StageJsBridge(IJSRuntime js) : IAsyncDisposable
 
     private static object SceneArgs(StageScene scene) => new { kind = scene.Kind, bookId = scene.BookId?.ToString(), rowIndex = scene.RowIndex, rowsVersion = scene.RowsVersion, page = scene.Page };
 
+    public async ValueTask<bool> BeginReadingAsync(Guid id) => await (await Module()).InvokeAsync<bool>("beginReading", id.ToString());
+    public async ValueTask ReadingStartAsync(int pageIndex, int total) => await (await Module()).InvokeVoidAsync("readingStart", pageIndex, total);
+    public async ValueTask CloseReadingAsync(StageScene scene) => await (await Module()).InvokeVoidAsync("closeReading", SceneArgs(scene));
+    public async ValueTask AbortReadingAsync(StageScene scene) => await (await Module()).InvokeVoidAsync("abortReading", SceneArgs(scene));
     public async ValueTask<bool> BeginOpenAsync(Guid id) => await (await Module()).InvokeAsync<bool>("beginOpen", id.ToString());
     public async ValueTask AlignToAsync(PageRect rect) => await (await Module()).InvokeVoidAsync("alignTo", new { x = rect.X, y = rect.Y, width = rect.Width, height = rect.Height });
     public async ValueTask BeginCloseAsync(Guid id, PageRect rect, StageScene scene) =>

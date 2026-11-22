@@ -12,6 +12,7 @@ import { BookFactory } from './book-factory.js';
 import { LruCache, ensureFonts } from './textures.js';
 import { loadSpineLook, loadCoverLook } from './book-look.js';
 import { COVER_SIZES, composeCover, composeSpine } from './cover-composer.js';
+import { Reading } from './reading.js';
 import { designFor } from './cover-design.js';
 import { QualityMonitor, SOFTWARE_RENDERER, percentile } from './quality.js';
 import { cameraPose, featuredPose, shelfPose, poseLambdas, layoutRows, rowY, CAMERA_FOV, SHELF_DISTANCE } from './scenes.js';
@@ -83,6 +84,7 @@ export class Stage {
         this.bookcase.onTextures = () => this.invalidate();
         this.pan = new Pan(); this.pool = []; this.window = null; this.memory = new Map(); this.arriving = new Set();
         this.lastPointerAt = 0; this.suppressClick = false;
+        this.reading = null;                   // 3D reading: the open book (WP6)
         this.looks = new LruCache(LOOK_LIMIT, (look, id) => { this.undressMeshes(id); look.dispose?.(); });
         this.loading = new Map();
         this.accents = new Map();
@@ -373,13 +375,51 @@ export class Stage {
         this.opening = null;
     }
 
+    // ---- 3D reading (WP6) -------------------------------------------------------------------------------------------------------
+
+    /** The book hidden from the shelf and hero while its open copy is drawn. */
+    get hiddenId() { return this.opening?.id ?? this.reading?.id ?? null; }
+
+    /** Starts opening the book as a 3D spread: forward, cover open, lay flat. The reader then reports the page (readingStart). */
+    beginReading(bookId) {
+        const book = this.byId.get(bookId);
+        if (!book) return false;
+        this.endOpening(); this.endReading();
+        const from = this.worldPoseOf(bookId);
+        this.requestLook(bookId); this.requestCover(bookId, 'full');
+        this.reading = new Reading(this, book, this.looks.map.get(bookId));
+        this.reading.placeFrom(from);
+        this.scene = { kind: 'reading', bookId }; this.settledKind = null; this.reportedKey = null;
+        this.cameraLambda = LAMBDA.opening; this.backgroundTarget = null;
+        this.touch(); this.invalidate();
+        return true;
+    }
+
+    /** The document is open: land on this page. The riffle starts as soon as the book lies open. */
+    readingStart(pageIndex, total) { this.reading?.start(pageIndex, total); this.invalidate(); }
+
+    /** Closing: the cover shuts and the book returns to its place in `returnScene`. */
+    closeReading(returnScene) {
+        const reading = this.reading;
+        if (!reading) { this.setScene(returnScene); return; }
+        this.setScene(returnScene);
+        const back = this.scene.kind === 'shelf' ? this.worldPoseOfSlot(reading.id) : featuredPose(this.scene, { idle: 0, pointerX: 0, pointerY: 0 });
+        reading.close(reading.groupPoseFor({ ...back, rx: back.rx ?? 0 }), () => { this.endReading(); this.callbacks.onReadingClosed?.(reading.id); this.invalidate(); });
+        this.invalidate();
+    }
+
+    endReading() {
+        if (!this.reading) return;
+        this.reading.dispose(); this.reading = null;
+    }
+
     /** Current world pose of a book: the featured mesh, else its shelf instance in the focused row. */
     worldPoseOf(bookId) {
         if (this.featured && this.featuredId === bookId && this.featured.visible) {
-            const f = this.featuredState; return { x: f.x, y: f.y, z: f.z, ry: f.ry };
+            const f = this.featuredState; return { x: f.x, y: f.y, z: f.z, ry: f.ry, rx: f.rx };
         }
         const mesh = this.instances.get(`${this.rowIndex}:${bookId}`) ?? [...this.instances.entries()].find(([k]) => k.endsWith(`:${bookId}`))?.[1];
-        if (mesh) { const st = mesh.userData.state; return { x: st.x, y: st.y, z: st.z, ry: st.ry }; }
+        if (mesh) { const st = mesh.userData.state; return { x: st.x, y: st.y, z: st.z, ry: st.ry, rx: st.rx }; }
         return { x: 0, y: FEATURE_Y, z: 0, ry: 0 };
     }
 
@@ -634,15 +674,16 @@ export class Stage {
         // camera
         const target = cameraPose(this.scene, ctx);
         if (!this.cameraState || !this.motion.travel) this.cameraState = { ...target };
-        else remaining = Math.max(remaining, dampObject(this.cameraState, target, this.scene.kind === 'opening' ? LAMBDA.opening : this.cameraLambda, dt));
+        else remaining = Math.max(remaining, dampObject(this.cameraState, target, this.scene.kind === 'opening' || this.scene.kind === 'reading' ? LAMBDA.opening : this.cameraLambda, dt));
         if (this.scene.kind === 'shelf' && !this.pendingScene && cameraRemaining(this.cameraState, target) < 0.3) this.report('shelf');
         const c = this.cameraState;
         if (this.scene.kind === 'shelf' && !this.opening) { c.px = c.lx = this.pan.x; if (panActive) remaining = Math.max(remaining, 1); if (this.syncWindow()) this.invalidate(); }
         // Scenes centre on the main area (right of the sidebar, below the header); opening uses the whole window.
-        const offsetTarget = this.scene.kind === 'opening' || this.opening ? { x: 0, y: 0 } : this.mainOffset();
+        const offsetTarget = this.scene.kind === 'opening' || this.scene.kind === 'reading' || this.opening || this.reading ? { x: 0, y: 0 } : this.mainOffset();
         remaining = Math.max(remaining, this.motion.travel ? dampObject(this.viewOffset, offsetTarget, LAMBDA.camera * 2, dt) : (Object.assign(this.viewOffset, offsetTarget), 0));
         this.applyCamera();
         if (this.opening) remaining = Math.max(remaining, this.updateOpening(dt));
+        if (this.reading) remaining = Math.max(remaining, this.reading.update(dt));
         if (this.backgroundTarget || this.background) {
             const target = this.backgroundTarget ?? this.baseBackground;
             const bg = this.world.background;
@@ -661,7 +702,7 @@ export class Stage {
             const fs = this.featuredState;
             remaining = Math.max(remaining, dampObject(fs, pose, this.motion.travel ? LAMBDA.pointer : 1e3, dt));
             this.applyPose(this.featured, fs);
-            this.featured.visible = (this.scene.kind !== 'shelf' || Math.abs(c.py - fs.y) < 60) && this.opening?.id !== this.featuredId;
+            this.featured.visible = (this.scene.kind !== 'shelf' || Math.abs(c.py - fs.y) < 60) && this.hiddenId !== this.featuredId;
             if (idle) remaining = Math.max(remaining, 1);
         }
 
@@ -681,7 +722,7 @@ export class Stage {
             const state = mesh.userData.state;
             remaining = Math.max(remaining, this.motion.travel ? dampKeys(state, pose, poseLambdas(mode, distance), dt) : (Object.assign(state, pose), 0));
             this.applyPose(mesh, state);
-            mesh.visible = Math.abs(rowY(row) - c.ly) < 90 && !(this.opening && this.opening.id === id && row === this.rowIndex);
+            mesh.visible = Math.abs(rowY(row) - c.ly) < 90 && !(this.hiddenId === id && row === this.rowIndex);
         }
         return remaining > 0;
     }
@@ -730,7 +771,7 @@ export class Stage {
                 return { frames: s.frames, lastFrameAt: s.lastFrameAt, drawCalls: s.drawCalls, textures: s.textures,
                     p95FrameMs: percentile(s.frameTimes, 0.95), p95CpuMs: percentile(s.cpuTimes || [], 0.95),
                     quality: stage.quality.current, scene: stage.scene.kind, renderer: s.renderer, books: stage.books.length,
-                    looks: stage.looks.size, paused: stage.paused, powerSaver: !!stage.powerSaver, contextLosses: stage.contextLosses, handoff: stage.lastHandoff };
+                    looks: stage.looks.size, reading: stage.reading ? { phase: stage.reading.phase, spread: stage.reading.spread, total: stage.reading.total, flights: stage.reading.flights.length, interactive: stage.reading.interactive } : null, paused: stage.paused, powerSaver: !!stage.powerSaver, contextLosses: stage.contextLosses, handoff: stage.lastHandoff };
             },
             get settled() { return stage.raf === 0 && stage.settledKind === stage.scene.kind; },
             resetFrameTimes() { stage.stats.frameTimes = []; stage.stats.cpuTimes = []; },
@@ -839,6 +880,22 @@ export class Stage {
         const live = () => !this.paused && !this.disposed;
         const onControl = event => event.target instanceof Element && !!event.target.closest('button, a[href], input, select, textarea, [role="button"], [role="menu"], .mud-popover');
         on(window, 'resize', () => this.resize());
+        // 3D reading: the stage turns pages; any key or click during the opening skips to the spread (WP6).
+        on(window, 'keydown', event => {
+            const r = this.reading;
+            if (!r || this.disposed || event.timeStamp <= r.createdAt) return;   // the key press that opened the book is not a skip
+            if (['opening', 'waiting', 'riffle'].includes(r.phase) && !['Shift', 'Control', 'Alt', 'Meta'].includes(event.key)) { r.skip(); this.invalidate(); if (event.key !== 'Escape') return; }
+            if (!r.interactive || event.altKey || event.ctrlKey || event.metaKey) return;
+            if (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable="true"], .mud-dialog')) return;
+            const step = { ArrowRight: 1, PageDown: 1, ArrowLeft: -1, PageUp: -1 }[event.key];
+            if (step) { event.preventDefault(); r.turn(step); this.touch(); this.invalidate(); }
+            else if (event.key === 'Home') { event.preventDefault(); r.goToSpread(0); this.invalidate(); }
+            else if (event.key === 'End') { event.preventDefault(); r.goToSpread(Infinity); this.invalidate(); }
+        });
+        on(window, 'pointerdown', event => { if (this.reading && event.timeStamp > this.reading.createdAt && ['opening', 'waiting', 'riffle'].includes(this.reading.phase)) { this.reading.skip(); this.invalidate(); } });
+        on(window, 'folio-turn', event => { this.reading?.turn(event.detail?.step > 0 ? 1 : -1); this.invalidate(); });
+        on(window, 'folio-spread-request', () => { this.reading?.showOverlay(); this.invalidate(); });
+        on(window, 'folio-goto', event => { this.reading?.goToPage(event.detail?.index ?? 0); this.invalidate(); });
         on(document, 'visibilitychange', () => { if (!document.hidden) { this.lastTick = 0; this.invalidate(); } });
         // Click and drag on empty wood or the back panel pans the row; a release with speed keeps gliding (WP3).
         on(this.input, 'pointerdown', event => {
@@ -934,6 +991,7 @@ export class Stage {
         cancelAnimationFrame(this.raf);
         this.unbind?.forEach(f => f());
         this.resizeObserver?.disconnect();
+        this.endReading();
         this.looks.clear();
         this.bookcase.dispose();
         this.factory.dispose();

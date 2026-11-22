@@ -92,7 +92,7 @@
     private string _search = "";
     private StageHost? _stage;
     private FolioErrorBoundary? _boundary, _readerBoundary;
-    private string PhaseClass => Stage.Phase switch { StagePhase.Opening => "stage-opening", StagePhase.Handoff => "stage-handoff", StagePhase.Closing => "stage-closing", _ => "" };
+    private string PhaseClass => Stage.Phase switch { StagePhase.Opening => "stage-opening", StagePhase.Handoff => "stage-handoff", StagePhase.Closing => "stage-closing", StagePhase.Reading => Stage.ReadingFlat ? "stage-reading reading-flat" : "stage-reading", _ => "" };
     private bool _inReader;
     private RouteInfo _route = new();
     private LibraryCounts _counts = new(0, 0, 0, 0, 0);
