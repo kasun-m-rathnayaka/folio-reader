@@ -285,3 +285,21 @@ the cross-browser gates for M2 are proven on Chromium only and need a manual che
   spread, and Esc again closes the book. A deep link or reload opens the 3D book too, from the hero position. Closing returns the
   book to its slot while the library appears.
 - **Shadow of the lifted leaf** is two soft strips under the fold rather than a shadow map: no light or draw-call cost.
+
+## D-028 · Base-only shelf, dark charred wood and spotlights; white pages (after review)
+
+- **Base only.** The bookcase is now one wooden base plank under each row and nothing else: the back panels, uprights, end caps,
+  crown, baked shadow strips and brass plates are gone (`bookcase.js`). Books stand directly on the planks in an open dark space.
+- **Wood.** The generated maps (`scripts/gen-wood.mjs`) now draw dark, charred wood: about 84 fine ridges per 60 cm tile that flow like
+  contour lines and part around knots, near-black with warm brass glints on the ridge tops and glossy ridges over matt grooves.
+  The wood is the same in both themes.
+- **Lights.** Soft spotlights hang in the dark every 72 cm above each row: a faint cone widening downwards (a shader plane behind the
+  books) and a pool of light on the plank (a shader plane on the wood), both additive. They soften to about a third of their strength
+  in the light theme, where they would only wash the page out.
+- **Stripe Press.** The site could not be fetched from this environment (the hosts do not resolve), so the motion follows the reference
+  captured when the plan was written: spine lift, turn to the cover on selection, neighbours parting, recentring, tinted
+  background and title marquee. To compare against the live site, allow `stripe.press` in the environment's network settings.
+- **Pages.** In the 3D book the page paper is pure white, so letterboxing around a PDF page that is not 2:3 is invisible (no yellow
+  band), a flat page is not shaded, and the dog-ear corner marks are hidden (BOOKMARK in the toolbar still bookmarks the page).
+- **Visual baselines** now cover the sidebar, header and reader toolbar, rendered here with a 2% pixel tolerance. The library page body
+  is not compared because the generated covers differ per book id.

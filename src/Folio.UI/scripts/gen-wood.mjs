@@ -1,4 +1,4 @@
-// Generates the bookcase's wood textures (WP3): 1024 × 1024 seamless colour, normal and roughness maps of warm oak.
+// Generates the bookcase base's wood textures (WP3): 1024 × 1024 seamless colour, normal and roughness maps of dark charred wood.
 // Procedural and deterministic: grain from periodic fractal noise, so there is nothing to license or download. They are
 // drop-in replaceable by photographed CC0 sets (Poly Haven, ambientCG) under the same file names.
 // Usage: node scripts/gen-wood.mjs   (writes wwwroot/assets/wood/oak-{color,normal,roughness}.png)
@@ -27,31 +27,44 @@ function fbm(u, v, px, py, seed, octaves = 5) {
     return sum / total;
 }
 
-// Grain runs along x. Long streaks: low frequency along x, high across y; warped so lines wander like real growth rings.
-const height = new Float32Array(SIZE * SIZE), tone = new Float32Array(SIZE * SIZE), pores = new Float32Array(SIZE * SIZE);
+// Dark, charred wood (shou sugi ban): hundreds of fine ridges that flow like contour lines and part around knots, near-black with
+// warm brass glints on the ridge tops. Ridges run along x; every term is periodic, so the maps tile.
+const LINES = 84;
+const knots = [[0.27, 0.34, 0.12, 1.15], [0.74, 0.77, 0.1, 0.9], [0.55, 0.12, 0.08, 0.7], [0.08, 0.7, 0.07, 0.6]];   // u, v, radius, strength
+const wrap = d => d - Math.round(d);
+const height = new Float32Array(SIZE * SIZE), ridge = new Float32Array(SIZE * SIZE), glint = new Float32Array(SIZE * SIZE), pores = new Float32Array(SIZE * SIZE);
 for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) {
     const u = x / SIZE, v = y / SIZE;
-    const warp = fbm(u, v, 3, 3, 11, 4) * 1.1;
-    const ring = fbm(u * 1 + warp * 0.12, v * 1, 2, 1, 21, 3);
-    const rings = 0.5 + 0.5 * Math.sin((v * 7 + warp * 2.5 + ring * 2) * Math.PI * 2);   // growth-ring bands (periodic in v)
-    const streak = fbm(u + warp * 0.03, v, 2, 96, 31, 5);                                                 // fine fibres
-    const fibre = fbm(u, v, 4, 160, 41, 3);
-    const pore = pnoise(u * 96, v * 220, 96, 220, 51);
-    tone[y * SIZE + x] = 0.2 * rings + 0.5 * streak + 0.3 * fibre;
-    height[y * SIZE + x] = 0.5 * streak + 0.3 * fibre + 0.2 * rings;
-    pores[y * SIZE + x] = pore > 0.9 ? (pore - 0.9) / 0.1 : 0;
+    // Gentle wander plus the ridges swelling apart around each knot.
+    let vv = v + (fbm(u, v, 2, 2, 11, 4) - 0.5) * 0.12 + (fbm(u, v, 4, 3, 17, 3) - 0.5) * 0.03;
+    for (const [ku, kv, r, strength] of knots) {
+        const du = wrap(u - ku) * 1.6, dv = wrap(v - kv);
+        const g = Math.exp(-(du * du + dv * dv) / (r * r));
+        vv += strength * g * dv * 0.9;
+    }
+    const phase = (((vv * LINES) % 1) + 1) % 1, tri = 1 - Math.abs(2 * phase - 1);
+    const fibre = fbm(u, v, 3, 120, 31, 3);
+    const profile = Math.pow(tri, 0.8) * (0.8 + 0.2 * fibre);
+    height[y * SIZE + x] = profile;
+    ridge[y * SIZE + x] = tri;
+    glint[y * SIZE + x] = Math.pow(tri, 7) * (0.35 + 0.65 * fbm(u, v, 5, 40, 41, 3));
+    const pore = pnoise(u * 180, v * 260, 180, 260, 51);
+    pores[y * SIZE + x] = pore > 0.93 ? (pore - 0.93) / 0.07 : 0;
 }
 
-const light = [201, 158, 104], dark = [138, 96, 54];   // oak: honey to a deeper brown (average ≈ #B98F5C)
+const deep = [13, 11, 10], mid = [58, 51, 44], brass = [150, 122, 82];
 const color = Buffer.alloc(SIZE * SIZE * 3), normal = Buffer.alloc(SIZE * SIZE * 3), rough = Buffer.alloc(SIZE * SIZE);
 const at = (x, y) => height[((y + SIZE) % SIZE) * SIZE + ((x + SIZE) % SIZE)];
 for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) {
-    const i = y * SIZE + x, t = Math.min(1, Math.max(0, (tone[i] - 0.3) / 0.4)), p = pores[i];
-    for (let c = 0; c < 3; c++) color[i * 3 + c] = Math.round((light[c] + (dark[c] - light[c]) * t) * (1 - 0.3 * p));
-    const dx = (at(x + 1, y) - at(x - 1, y)) * 5.5 + (p ? 0.6 * p : 0), dy = (at(x, y + 1) - at(x, y - 1)) * 5.5 + (p ? 0.6 * p : 0);
+    const i = y * SIZE + x, t = ridge[i], gl = glint[i], p = pores[i];
+    for (let c = 0; c < 3; c++) {
+        const base = deep[c] + (mid[c] - deep[c]) * Math.pow(t, 1.4);
+        color[i * 3 + c] = Math.round(Math.min(255, base + brass[c] * 0.42 * gl + 38 * p));
+    }
+    const dx = (at(x + 1, y) - at(x - 1, y)) * 7, dy = (at(x, y + 1) - at(x, y - 1)) * 7;
     const len = Math.hypot(dx, dy, 1);
     normal[i * 3] = Math.round((-dx / len * 0.5 + 0.5) * 255); normal[i * 3 + 1] = Math.round((dy / len * 0.5 + 0.5) * 255); normal[i * 3 + 2] = Math.round((1 / len * 0.5 + 0.5) * 255);
-    rough[i] = Math.round(255 * Math.min(1, 0.62 + 0.18 * t + 0.2 * p));
+    rough[i] = Math.round(255 * Math.min(1, 0.78 - 0.42 * gl - 0.1 * t + 0.15 * p));      // ridge tops are glossy char, grooves are matt
 }
 
 // Minimal PNG writer (8-bit, no interlace) so the generator needs no dependencies.

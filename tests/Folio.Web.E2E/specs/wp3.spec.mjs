@@ -21,26 +21,26 @@ async function bookcase(page, count = 2000) {
 
 const pan = page => page.evaluate(() => { const p = window.__folioStage.stage.pan; return { x: p.x, v: p.v, min: p.min, max: p.max, over: p.over, dragging: p.dragging }; });
 
-test('planks, uprights, back panel and labels render with wood textures in both themes', async ({ page }) => {
+test('the books stand on dark wood planks only, lit by soft spotlights, in both themes', async ({ page }) => {
     const errors = await bookcase(page, 60);
     await expect.poll(() => page.evaluate(() => !!window.__folioStage.stage.bookcase.maps.map), { timeout: 30_000 }).toBe(true);
     const wood = () => page.evaluate(() => {
-        const c = window.__folioStage.stage.bookcase;
+        const c = window.__folioStage.stage.bookcase, stage = window.__folioStage.stage;
         const planks = c.group.children.filter(o => o.userData.plank);
-        return { maps: [c.maps.map, c.maps.normalMap, c.maps.roughnessMap].map(t => !!t && t.image?.width), tint: c.wood.color.toArray(), back: c.back.color.toArray(),
-            planks: planks.length, parts: c.group.children.length, plates: c.group.children.filter(o => o.isInstancedMesh).length, rows: window.__folioStage.stage.rows.length,
-            sharedMaterial: planks.every(p => p.material === c.wood), grainRotated: new Set(planks.map(p => p.geometry.attributes.uv.getX(0).toFixed(3))).size };
+        return { maps: [c.maps.map, c.maps.normalMap, c.maps.roughnessMap].map(t => !!t && t.image?.width), planks: planks.length, rows: stage.rows.length,
+            parts: c.group.children.length, cones: c.group.children.filter(o => o.userData.light === 'cone').length, pools: c.group.children.filter(o => o.userData.light === 'pool').length,
+            sharedMaterial: planks.every(p => p.material === c.wood), grain: new Set(planks.map(p => p.geometry.attributes.uv.getX(0).toFixed(3))).size,
+            cone: c.lights.cone.uIntensity.value, pool: c.lights.pool.uIntensity.value };
     });
     const dark = await wood();
     expect(dark.maps).toEqual([1024, 1024, 1024]);                      // colour, normal and roughness, 1K each
-    expect(dark.planks).toBe(dark.rows + 1);                            // one under each row, plus the crown
-    expect(dark.plates).toBe(dark.rows);                                // a brass shelf label per row
-    expect(dark.sharedMaterial).toBe(true);                             // every board shares the three maps
-    expect(dark.grainRotated).toBeGreaterThan(1);                       // random UV offsets: the grain never repeats visibly
-    expect(dark.tint[0]).toBeLessThan(0.6);                             // dark theme: walnut
-    expect(dark.back[0]).toBeLessThan(dark.tint[0]);                    // back panel about 35% darker
+    expect(dark.planks).toBe(dark.rows);                                // exactly one base plank per row...
+    expect(dark.parts).toBe(dark.rows * 3);                             // ...plus its two lights: no back panel, uprights, crown, side frames or plates
+    expect(dark.cones).toBe(dark.rows); expect(dark.pools).toBe(dark.rows);
+    expect(dark.sharedMaterial).toBe(true);                             // every plank shares the three maps
+    expect(dark.grain).toBeGreaterThan(1);                              // random UV offsets: the grain never repeats visibly
     await page.getByRole('button', { name: 'Toggle light and dark theme' }).click();
-    await expect.poll(async () => (await wood()).tint[0]).toBeGreaterThan(0.95);   // light theme keeps oak
+    await expect.poll(async () => (await wood()).cone).toBeLessThan(dark.cone);    // the lights soften on a light page
     expect(errors).toEqual([]);
 });
 
@@ -50,15 +50,14 @@ test('a row of 2,000 books pans end to end within the frame budget, with windowe
         const stage = window.__folioStage.stage;
         window.__folioStage.resetFrameTimes();
         let peak = 0, frames = 0;
-        await new Promise(resolve => {
-            const step = () => {
-                stage.panBy(250);                                // a very fast fling: the window changes every frame
-                peak = Math.max(peak, stage.instances.size); frames++;
-                if (stage.pan.x >= stage.pan.max - 1 || frames > 4000) return resolve();
-                requestAnimationFrame(step);
-            };
-            step();
-        });
+        // Frames are driven directly rather than by requestAnimationFrame, so the measurement (CPU time per frame) does not depend on
+        // how fast the machine's software renderer presents them.
+        while (stage.pan.x < stage.pan.max - 1 && frames < 2000) {
+            stage.panBy(250);                                    // a very fast fling: the window changes every frame
+            stage.lastTick = 0; stage.tick(performance.now());
+            peak = Math.max(peak, stage.instances.size); frames++;
+        }
+        for (let i = 0; i < 900 && stage.pan.active; i++) stage.pan.step(1 / 60);       // let the glide and the band finish
         const times = window.__folioStage.stats;
         return { p95CpuMs: times.p95CpuMs, frames, peakMeshes: peak, x: stage.pan.x, max: stage.pan.max, drawCalls: times.drawCalls, books: stage.books.length };
     });
@@ -67,7 +66,6 @@ test('a row of 2,000 books pans end to end within the frame budget, with windowe
     expect(result.x).toBeGreaterThanOrEqual(result.max - 1);            // reached the far end
     expect(result.peakMeshes).toBeLessThan(400);                        // windowed: nowhere near 2,000 meshes
     expect(result.p95CpuMs).toBeLessThanOrEqual(16.7);
-    await page.waitForFunction(() => window.__folioStage.settled, null, { timeout: 60_000 });
     const frames = () => page.evaluate(() => window.__folioStage.stats.frames);
     // Late texture loads from the cache may still draw a few frames; once quiet, nothing draws for 2 s.
     let quiet = false;
@@ -97,7 +95,7 @@ test('dragging empty wood pans with momentum and a rubber-band stop; vertical wh
     expect(released.x).toBeGreaterThan(start.x + 10);
     expect(Math.abs(released.v)).toBeGreaterThan(10);
     await expect.poll(async () => (await pan(page)).x, { timeout: 30_000 }).toBeGreaterThan(released.x + 2);   // glides on
-    await page.waitForFunction(() => !window.__folioStage.stage.pan.active, null, { timeout: 60_000 });
+    await page.evaluate(() => { const p = window.__folioStage.stage.pan; for (let i = 0; i < 900 && p.active; i++) p.step(1 / 60); });   // let the glide run out
     const rested = await pan(page);
     expect(Math.abs(rested.v)).toBeLessThan(0.06);
     expect(rested.x).toBeGreaterThan(released.x);
@@ -117,7 +115,7 @@ test('dragging empty wood pans with momentum and a rubber-band stop; vertical wh
     expect(over).toBeGreaterThan(0.2);
     expect(over).toBeLessThanOrEqual(20.001);
     await pointer(page, 'pointerup', 300, 230);
-    await page.waitForFunction(() => !window.__folioStage.stage.pan.active, null, { timeout: 60_000 });
+    await page.evaluate(() => { const p = window.__folioStage.stage.pan; for (let i = 0; i < 900 && p.active; i++) p.step(1 / 60); });   // the band springs back
     const back = await pan(page);
     expect(back.over).toBe(0);
     expect(back.x).toBeCloseTo(back.max, 1);

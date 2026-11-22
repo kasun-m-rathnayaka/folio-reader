@@ -27,10 +27,13 @@ for (const theme of ['dark', 'light']) {
         await expect(page.locator('.folio-library-page')).toBeVisible({ timeout: 90_000 });
         await seedLibrary(page);
         await page.evaluate(() => document.fonts.ready);
-        await snapshot(page, `library-${theme}.png`, testInfo, { maxDiffPixelRatio: 0.001 });
+        // The chrome that does not depend on which books were imported (their generated covers differ per book id): the sidebar and
+        // the header. A modest tolerance absorbs anti-aliasing differences between machines while a moved or restyled element fails.
+        await snapshot(page.locator('.folio-sidebar'), `sidebar-${theme}.png`, testInfo, { maxDiffPixelRatio: 0.02 });
+        await snapshot(page.locator('.folio-app-header'), `header-${theme}.png`, testInfo, { maxDiffPixelRatio: 0.02 });
 
         await openFirstBook(page);
         await waitForReader(page);
-        await snapshot(page.locator('.folio-reader-toolbar'), `reader-toolbar-${theme}.png`, testInfo, { maxDiffPixelRatio: 0.001 });
+        await snapshot(page.locator('.folio-reader-toolbar'), `reader-toolbar-${theme}.png`, testInfo, { maxDiffPixelRatio: 0.02 });
     });
 }

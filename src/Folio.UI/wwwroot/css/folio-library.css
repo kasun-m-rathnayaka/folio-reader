@@ -223,6 +223,7 @@ select { border-radius:2px; background:var(--folio-surface); border-color:var(--
 .reading-3d .folio-reader-workspace, .reading-3d .folio-reader-viewport, .reading-3d .folio-reader-container { background:transparent; pointer-events:none; }
 .reading-3d .folio-reader-container { overflow:hidden; padding:0; }
 .reading-3d .folio-page-wrapper { pointer-events:auto; }
+.reading-3d .folio-dog-ear { display:none; }          /* the page corners stay clean; BOOKMARK in the toolbar bookmarks the page */
 .reading-3d .folio-canvas-layer { opacity:0; transition:opacity 150ms linear; }
 .reading-3d .folio-page-wrapper .folio-text-layer { cursor:text; }
 .reading-3d .folio-reader-sidebar, .reading-3d .folio-sidebar-panel { pointer-events:auto; }

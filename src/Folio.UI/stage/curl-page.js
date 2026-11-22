@@ -72,8 +72,8 @@ void main() {
     vec3 color = front ? sampleFit(uFront, uFrontFit, vUv, uHasFront) : sampleFit(uBack, uBackFit, vec2(1.0 - vUv.x, vUv.y), uHasBack);
     vec3 n = normalize(vNormal);
     if (!front) n = -n;
-    float light = 0.62 + 0.38 * max(dot(n, normalize(vec3(-0.35, 0.45, 0.82))), 0.0);
-    // A page lifted towards the light is a touch brighter; the underside of a curl is shaded.
+    // A flat page faces the camera and stays pure white; only a curling page picks up shading.
+    float light = 0.7 + 0.3 * max(dot(n, vec3(0.0, 0.0, 1.0)), 0.0);
     gl_FragColor = vec4(color * light * vShade * uFade, 1.0);
     #include <colorspace_fragment>
 }`;
@@ -89,7 +89,7 @@ export function createPageMaterial() {
             uFold: { value: 1e6 }, uRadius: { value: 0 }, uGutter: { value: 0 },
             uFront: { value: blank }, uBack: { value: blank }, uHasFront: { value: 0 }, uHasBack: { value: 0 },
             uFrontFit: { value: new THREE.Vector4(1, 1, 0, 0) }, uBackFit: { value: new THREE.Vector4(1, 1, 0, 0) },
-            uPaper: { value: new THREE.Color(0xF3EEE2) }, uFade: { value: 1 },
+            uPaper: { value: new THREE.Color(0xFFFFFF) }, uFade: { value: 1 },
         },
     });
 }
