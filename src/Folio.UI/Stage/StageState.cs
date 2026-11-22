@@ -91,7 +91,7 @@ public sealed class StageState
             return true;
         }
         if (!CanAnimateBooks || Phase != StagePhase.None) return false;
-        ReturnScene = Scene;
+        ReturnScene = Scene; ReaderPageReported = false;
         if (!await BeginOpenHandler!(bookId)) return false;
         OpeningBookId = bookId; Phase = StagePhase.Opening; Changed?.Invoke();
         return true;
@@ -128,7 +128,15 @@ public sealed class StageState
     }
 
     /// <summary>The reader reports where it drew the current page; the stage aligns its spread to it.</summary>
-    public Task ReportReaderPageAsync(PageRect rect) => Phase == StagePhase.Opening && AlignHandler != null ? AlignHandler(rect) : Task.CompletedTask;
+    public Task ReportReaderPageAsync(PageRect rect)
+    {
+        if (Phase != StagePhase.Opening || AlignHandler == null) return Task.CompletedTask;
+        ReaderPageReported = true;
+        return AlignHandler(rect);
+    }
+
+    /// <summary>True once the reader has told the opening book where its page is; the stage then finishes on its own clock.</summary>
+    public bool ReaderPageReported { get; private set; }
 
     /// <summary>The spread is aligned: crossfade to the reader (120 ms), then the stage pauses.</summary>
     public async Task CompleteHandoffAsync()

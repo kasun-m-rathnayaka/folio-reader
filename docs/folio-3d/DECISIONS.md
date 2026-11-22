@@ -319,3 +319,16 @@ the cross-browser gates for M2 are proven on Chromium only and need a manual che
   size and maps it onto those corners with a CSS `matrix3d` (a projective transform, `squareToQuad`). Selections map back through the
   inverse transform, so highlights are stored in the page's own 0–1 space exactly as in the flat reader. Corners match exactly; inside
   the page the bow is approximated by the plane through its corners.
+
+## D-030 · Spine paints are queued; CI measures CPU without software pixel fill
+
+- **Spine queue.** Larger 128 px spines (D-029) made each paint about four times dearer, and a fast fling used to start a paint for
+  every book that passed through the window: after a 2,000-book fling about 1,900 paints ran back to back. Paints now go through a
+  queue rebuilt from the books near the camera on every window change, two at a time, one task each; books that have left the window
+  are dropped. The presented and opening books jump the queue. This keeps the main thread free on an integrated GPU's shared CPU.
+- **Opening safety net.** The flat-pages opening ends after 10 s if the reader never reports its page. Once the reader has reported
+  it, the stage lands the book on its own clock and hands off itself, so the net waits up to 30 s more before forcing the crossfade.
+  On a slow machine this avoids cutting a working opening short.
+- **CPU gates on CI.** CI has no GPU, so Chromium rasterises in software and blocks the main thread on pixel fill once frames queue
+  up; with the closer camera that dominated the "CPU per frame" gates. The 300-book and 2,000-book checks now render at 1/8 of the
+  pixel ratio while measuring (`__folioStage.rasterScale`, test mode only). The scene, windowing and draw calls are unchanged.

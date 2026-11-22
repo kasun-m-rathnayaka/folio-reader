@@ -49,6 +49,7 @@ test('a row of 2,000 books pans end to end within the frame budget, with windowe
     const result = await page.evaluate(async () => {
         const stage = window.__folioStage.stage;
         window.__folioStage.resetFrameTimes();
+        window.__folioStage.rasterScale(0.125);                  // software GL: keep pixel fill off the main-thread measurement
         let peak = 0, frames = 0;
         // Frames are driven directly rather than by requestAnimationFrame, so the measurement (CPU time per frame) does not depend on
         // how fast the machine's software renderer presents them.
@@ -59,6 +60,7 @@ test('a row of 2,000 books pans end to end within the frame budget, with windowe
         }
         for (let i = 0; i < 900 && stage.pan.active; i++) stage.pan.step(1 / 60);       // let the glide and the band finish
         const times = window.__folioStage.stats;
+        window.__folioStage.rasterScale(1);
         return { p95CpuMs: times.p95CpuMs, frames, peakMeshes: peak, x: stage.pan.x, max: stage.pan.max, drawCalls: times.drawCalls, books: stage.books.length };
     });
     console.log('[metrics] pan-2000', JSON.stringify(result));
@@ -66,6 +68,8 @@ test('a row of 2,000 books pans end to end within the frame budget, with windowe
     expect(result.x).toBeGreaterThanOrEqual(result.max - 1);            // reached the far end
     expect(result.peakMeshes).toBeLessThan(400);                        // windowed: nowhere near 2,000 meshes
     expect(result.p95CpuMs).toBeLessThanOrEqual(16.7);
+    // Spines for the books now in view are painted a couple at a time after the fling; wait for that queue to drain.
+    await page.waitForFunction(() => { const s = window.__folioStage.stage; return s.loading.size === 0 && s.lookQueue.length === 0; }, null, { timeout: 90_000, polling: 500 });
     const frames = () => page.evaluate(() => window.__folioStage.stats.frames);
     // Late texture loads from the cache may still draw a few frames; once quiet, nothing draws for 2 s.
     let quiet = false;

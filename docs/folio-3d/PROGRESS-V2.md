@@ -58,9 +58,12 @@ Gates marked *(CI)* are proven by GitHub Actions; *(human)* needs real hardware.
 
 ## Review changes after WP6
 - Shelf: base wood only (no back, top or side frames), dark charred-wood texture, soft spotlights (D-028).
-- Reference quality from the Stripe Press screenshots: large books under a large serif marquee, 1024 px spines, pill buttons; the
+- Reference quality from the Stripe Press screenshots: large books under a large serif marquee, 128 × 1024 px spines, pill buttons; the
   open book leans back with bowed pages, near-white page edges and the book's colour behind it; text layer mapped onto the tilted
   page (D-029). Pages are pure white with no corner marks.
+- CI fix for the reference-quality commit: spine paints are queued two at a time and stale ones dropped after a fling; the flat
+  opening's safety net waits for the stage once the reader has reported its page; the CPU-per-frame gates render at a reduced pixel
+  ratio on software GL (D-030).
 
 ## Final report
 

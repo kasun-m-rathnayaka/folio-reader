@@ -84,7 +84,9 @@ test('300 books: frame time on the shelf scene', async ({ page }, testInfo) => {
         stage.setLibrary(books, shelves);
         stage.setScene({ kind: 'shelf', bookId: 'b150' });
         await new Promise(r => setTimeout(r, 1500));
+        window.__folioStage.rasterScale(0.125);                  // software GL: keep pixel fill off the main-thread measurement
         const p95FrameMs = await window.__folioStage.measure(5000);
+        window.__folioStage.rasterScale(1);
         return { p95FrameMs, ...window.__folioStage.stats };
     });
     const metrics = { books: 300, p95FrameMs: result.p95FrameMs, p95CpuMs: result.p95CpuMs, drawCalls: result.drawCalls, textures: result.textures, renderer: result.renderer, looks: result.looks };

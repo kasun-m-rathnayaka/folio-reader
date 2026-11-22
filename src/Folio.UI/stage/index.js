@@ -24,6 +24,7 @@ import { FEATURE_Y } from './scenes.js';
 const DWELL_MS = 250;         // a pointer resting this long on a book presents it
 const IDLE_STOP_MS = 20000;   // idle turn stops 20 s after the last input
 const LOOK_LIMIT = 120;       // ~120 books keep their detailed textures
+const LOOK_CONCURRENCY = 2;   // spine paints in flight at once
 const POINTER_MAX = { hero: 4 };
 
 /** Checks whether this device should draw 3D. Returns null when it can, else the fallback reason. */
@@ -87,6 +88,7 @@ export class Stage {
         this.reading = null;                   // 3D reading: the open book (WP6)
         this.looks = new LruCache(LOOK_LIMIT, (look, id) => { this.undressMeshes(id); look.dispose?.(); });
         this.loading = new Map();
+        this.lookQueue = []; this.lookWanted = new Set();     // spine paints wait here, nearest first; stale ones are dropped
         this.accents = new Map();
         this.featured = null; this.featuredId = null;
         this.featuredState = { x: -13, y: -3, z: 0, ry: 0.48, rx: 0, rz: 0 };
@@ -558,6 +560,8 @@ export class Stage {
     refreshLooks() {
         const priority = [];
         if (this.featuredId) priority.push(this.featuredId);
+        if (this.reading?.id) priority.push(this.reading.id);
+        if (this.scene.kind === 'shelf' && this.focusId) priority.push(this.focusId);
         // Detailed textures go to the books nearest the camera: the current row first, then its neighbours (WP3).
         const near = [...this.instances.keys()].map(key => {
             const split = key.indexOf(':'), row = +key.slice(0, split), id = key.slice(split + 1);
@@ -565,13 +569,36 @@ export class Stage {
         }).sort((a, b) => a.current - b.current || a.d - b.d);
         for (const entry of near) priority.push(entry.id);
         const ids = [...new Set(priority)].slice(0, LOOK_LIMIT);
-        ids.forEach(id => this.requestLook(id));
+        // The queue is rebuilt from what is near the camera now, so a fast fling never leaves hundreds of paints behind it.
+        this.lookWanted = new Set(ids);
+        this.lookQueue = ids.filter(id => !this.looks.has(id) && !this.loading.has(id));
+        for (const id of ids) if (this.looks.has(id)) this.looks.get(id);
+        this.pumpLooks();
         for (const [key, mesh] of this.instances) this.applyLook(mesh, key.slice(key.indexOf(':') + 1));
     }
 
+    /** Asks for a book's spine look ahead of the others (the presented or opening book). */
     requestLook(id) {
         if (this.looks.has(id)) { this.looks.get(id); return; }
-        if (this.loading.has(id)) return;
+        if (this.loading.has(id) || !this.byId.has(id)) return;
+        this.lookWanted.add(id);
+        this.lookQueue = [id, ...this.lookQueue.filter(other => other !== id)];
+        this.pumpLooks();
+    }
+
+    /**
+     * Paints at most LOOK_CONCURRENCY spines at a time, one main-thread task each, and skips books that have left the window
+     * since they were queued. Painting is the costly part on an integrated GPU's shared CPU, so it never runs as one long burst.
+     */
+    pumpLooks() {
+        while (this.loading.size < LOOK_CONCURRENCY && this.lookQueue.length && !this.disposed) {
+            const id = this.lookQueue.shift();
+            if (!this.lookWanted.has(id) || this.looks.has(id) || this.loading.has(id)) continue;
+            this.loadLook(id);
+        }
+    }
+
+    loadLook(id) {
         const book = this.byId.get(id); if (!book) return;
         const task = (async () => {
             await ensureFonts();
@@ -590,7 +617,7 @@ export class Stage {
             if ((this.scene.kind === 'shelf' && id === this.focusId) || this.reading?.id === id) this.backgroundTarget = this.accentBackground(id);
             if (this.wantsCover(id)) this.requestCover(id);
             this.invalidate();
-        })().finally(() => this.loading.delete(id));
+        })().finally(() => { this.loading.delete(id); setTimeout(() => this.pumpLooks(), 0); });
         this.loading.set(id, task);
     }
 
@@ -776,6 +803,12 @@ export class Stage {
             },
             get settled() { return stage.raf === 0 && stage.settledKind === stage.scene.kind; },
             resetFrameTimes() { stage.stats.frameTimes = []; stage.stats.cpuTimes = []; },
+            /**
+             * Test hook: draws into a smaller buffer (scale × the quality step's pixel ratio), or back to normal with 1. CI has no
+             * GPU, so its software rasteriser would otherwise bill pixel fill to the main thread; the scene, window and draw calls
+             * are unchanged, so the per-frame CPU gate still measures the stage's own work.
+             */
+            rasterScale(scale = 1) { stage.renderer.setPixelRatio(stage.quality.current.dpr * scale); stage.resize(); },
             /** Test hook: paints a cover (optionally forcing a template) and returns it with its design as data URLs. */
             composeCover(book, { template = null, width = 512, dominant = null } = {}) {
                 const design = { ...designFor(book, dominant), ...(template ? { template } : {}) };

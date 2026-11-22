@@ -13,6 +13,7 @@ public sealed class FolioNavigator(NavigationManager navigation, IJSRuntime js, 
 {
     // Last resort only: the stage hands off in < 900 ms, and a reader error ends the transition at once (ReaderView).
     private const int HandoffTimeoutMs = 10_000;
+    private const int AlignTimeoutMs = 30_000;
     private string? _returnUrl;
 
     public string RelativePath => navigation.ToBaseRelativePath(navigation.Uri);
@@ -28,11 +29,20 @@ public sealed class FolioNavigator(NavigationManager navigation, IJSRuntime js, 
         {
             navigation.NavigateTo(url);
             // If the reader never reports its page (missing PDF, password), finish the crossfade anyway.
-            if (!stage.ReadingSpread) _ = Task.Delay(HandoffTimeoutMs).ContinueWith(_ => stage.CompleteHandoffAsync(), TaskScheduler.Default);
+            if (!stage.ReadingSpread) _ = Task.Run(OpeningSafetyNetAsync);
             return;
         }
         try { await js.InvokeVoidAsync("folioShell.navigateWithTransition", url, sourceElementId, ".folio-reader-viewport"); }
         catch (JSException) { navigation.NavigateTo(url); }
+    }
+
+    private async Task OpeningSafetyNetAsync()
+    {
+        await Task.Delay(HandoffTimeoutMs);
+        // Once the reader has reported its page, the stage is landing the book on it and hands off by itself; on a slow machine
+        // that can take longer, so wait for it before forcing the crossfade.
+        if (stage.ReaderPageReported) await Task.Delay(AlignTimeoutMs);
+        await stage.CompleteHandoffAsync();
     }
 
     /// <summary>Leaves the reader for the view it was opened from (or the library home after a deep link).</summary>
