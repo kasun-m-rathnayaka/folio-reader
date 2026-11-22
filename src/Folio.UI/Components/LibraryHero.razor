@@ -19,7 +19,6 @@
                 <p class="folio-hero-progress"><span class="folio-mono">PAGE @((book.ReadingPosition?.PageIndex ?? 0) + 1) / @book.PageCount</span><span class="folio-progress-track"><span style="width:@BookGeometry.ProgressPercent(book)%"></span></span></p>
                 <div class="folio-hero-actions">
                     <BracketButton Label="OPEN BOOK" Hint="Enter" AriaLabel="@($"Open {book.Title}")" OnClick="() => OnOpen.InvokeAsync(book)" />
-                    <BracketButton Label="VIEW DETAILS" Hint="D" AriaLabel="@($"View details of {book.Title}")" OnClick="() => OnDetails.InvokeAsync(book)" />
                 </div>
                 @Footer
                 @if (Books.Count > 1)
@@ -46,7 +45,6 @@
         await JS.InvokeVoidAsync("folioShell.centerMarquee", _marquee);
     }
     [Parameter] public EventCallback<Book> OnOpen { get; set; }
-    [Parameter] public EventCallback<Book> OnDetails { get; set; }
     /// <summary>False when the 3D stage draws the book behind this overlay.</summary>
     [Parameter] public bool ShowBook { get; set; } = true;
     [Parameter] public EventCallback<Book> OnCurrentChanged { get; set; }

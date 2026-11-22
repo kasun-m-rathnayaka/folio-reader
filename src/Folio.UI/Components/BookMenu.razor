@@ -1,0 +1,62 @@
+@* Book actions that used to live on the details page: Edit, Move to shelf and Move to Trash. Opened with [ ⋯ ] in the
+   bottom bar, by right-clicking a book (3D or 2D) or with the context-menu key. *@
+@inject ILibraryService Library
+@inject IDialogService Dialogs
+@inject NotificationService Notifications
+@if (Book != null)
+{
+    <MudMenu @ref="_menu" PopoverClass="folio-action-menu" AnchorOrigin="Origin.TopRight" TransformOrigin="Origin.BottomRight" OpenChanged="OpenChanged">
+        <ActivatorContent><button type="button" class="folio-bracket folio-book-menu-trigger" aria-label="@($"Actions for {Book.Title}")" aria-haspopup="menu"><span class="folio-bracket-edge" aria-hidden="true">[</span><span class="folio-bracket-label">⋯</span><span class="folio-bracket-edge" aria-hidden="true">]</span></button></ActivatorContent>
+        <ChildContent>
+            <MudMenuItem Icon="@Icons.Material.Outlined.Edit" OnClick="Edit">Edit details</MudMenuItem>
+            <MudDivider />
+            @if (_shelves.Count == 0) { <MudMenuItem Disabled="true">Create a shelf to organize books</MudMenuItem> }
+            @foreach (var shelf in _shelves)
+            {
+                var on = _book?.BookShelves.Any(s => s.ShelfId == shelf.Id) == true;
+                <MudMenuItem Icon="@(on ? Icons.Material.Filled.CheckBox : Icons.Material.Outlined.CheckBoxOutlineBlank)" OnClick="() => ToggleShelf(shelf, !on)">@shelf.Name</MudMenuItem>
+            }
+            <MudDivider />
+            <MudMenuItem Class="folio-menu-danger" Icon="@Icons.Material.Outlined.Delete" OnClick="Trash">Move to Trash</MudMenuItem>
+        </ChildContent>
+    </MudMenu>
+}
+@code {
+    [Parameter] public Book? Book { get; set; }
+    /// <summary>Raised after the book or its shelves changed, so the library can reload.</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+    private MudMenu? _menu;
+    private Book? _book;
+    private IReadOnlyList<Shelf> _shelves = [];
+
+    /// <summary>Opens the menu from code (right-click, context-menu key).</summary>
+    public async Task OpenAsync() { if (_menu != null) await _menu.OpenMenuAsync(new MouseEventArgs()); }
+
+    private async Task OpenChanged(bool open)
+    {
+        if (!open || Book == null) return;
+        _book = await Library.GetBookAsync(Book.Id);
+        _shelves = await Library.GetShelvesAsync();
+        StateHasChanged();
+    }
+    private async Task Edit()
+    {
+        if (Book == null) return;
+        var dialog = await Dialogs.ShowAsync<EditBookDialog>("Book details", new DialogParameters<EditBookDialog> { { x => x.Book, _book ?? Book } }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small });
+        if (await dialog.Result is { Canceled: false }) await OnChanged.InvokeAsync();
+    }
+    private async Task ToggleShelf(Shelf shelf, bool include)
+    {
+        if (Book == null) return;
+        await Library.SetShelfAsync(Book.Id, shelf.Id, include);
+        Notifications.Add(include ? $"Added to {shelf.Name}." : $"Removed from {shelf.Name}.", Severity.Info);
+        await OnChanged.InvokeAsync();
+    }
+    private async Task Trash()
+    {
+        if (Book == null) return;
+        await Library.SetTrashAsync(Book.Id, true);
+        Notifications.Add("Moved to Trash. Highlights, bookmarks and your position are kept.", Severity.Info);
+        await OnChanged.InvokeAsync();
+    }
+}

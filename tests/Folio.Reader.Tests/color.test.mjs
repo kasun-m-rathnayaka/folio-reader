@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { contrast, readableAccent, detailsTint, dominantColor, parseHex, toHex } from '../../src/Folio.UI/wwwroot/js/folio-color.mjs';
+import { contrast, readableAccent, accentTint, dominantColor, parseHex, toHex } from '../../src/Folio.UI/wwwroot/js/folio-color.mjs';
 
 test('WCAG contrast matches known values', () => {
     assert.equal(Math.round(contrast('#000000', '#FFFFFF') * 10) / 10, 21);
@@ -20,13 +20,13 @@ test('readable accent reaches 4.5:1 on both themes', () => {
 });
 
 test('details tint keeps text and muted text at 4.5:1 or falls back', () => {
-    const dark = detailsTint('#C0392B', '#0B0B0C', ['#EDEBE6', '#9A968E']);
+    const dark = accentTint('#C0392B', '#0B0B0C', ['#EDEBE6', '#9A968E']);
     assert.ok(dark);
     for (const text of ['#EDEBE6', '#9A968E']) assert.ok(contrast(text, dark) >= 4.5);
-    const light = detailsTint('#1B2A6B', '#F3F0E8', ['#1A1917', '#5E5A53']);
+    const light = accentTint('#1B2A6B', '#F3F0E8', ['#1A1917', '#5E5A53']);
     assert.ok(light);
     for (const text of ['#1A1917', '#5E5A53']) assert.ok(contrast(text, light) >= 4.5);
-    assert.equal(detailsTint('#FFFFFF', '#777777', ['#808080']), null);
+    assert.equal(accentTint('#FFFFFF', '#777777', ['#808080']), null);
 });
 
 test('dominant colour prefers saturated areas over paper white', () => {

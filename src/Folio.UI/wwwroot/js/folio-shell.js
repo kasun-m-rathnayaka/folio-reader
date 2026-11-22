@@ -70,19 +70,6 @@ window.folioShell = {
             return (await this.colorModule()).dominantColor(context.getImageData(0, 0, 48, 48).data);
         } catch { return null; }
     },
-    // DET-1: tint the details page with the cover's colour while text keeps 4.5:1; otherwise keep the neutral surface.
-    async applyBookTint(element, coverUrl) {
-        if (!element) return;
-        const color = await this.colorModule();
-        const style = getComputedStyle(document.documentElement);
-        const read = name => style.getPropertyValue(name).trim();
-        const background = read('--folio-bg'), text = read('--folio-text'), muted = read('--folio-text-muted');
-        const dominant = await this.dominantColor(coverUrl);
-        if (!dominant) { element.style.removeProperty('--folio-accent'); element.style.removeProperty('--folio-details-tint'); return; }
-        element.style.setProperty('--folio-accent', color.readableAccent(dominant, background));
-        const tint = color.detailsTint(dominant, background, [text, muted]);
-        if (tint) element.style.setProperty('--folio-details-tint', tint); else element.style.removeProperty('--folio-details-tint');
-    },
     observeGrid(helper) {
         this.disconnectGrid();
         const grid = document.getElementById('folio-library-grid');
@@ -102,13 +89,11 @@ window.addEventListener('keydown', event => {
     if (!target || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || window.folioReader?.pdfDoc) return;
     const element = event.target instanceof Element ? event.target : null;
     if (element?.closest('input, textarea, select, [contenteditable="true"], .mud-dialog, .mud-popover-open, [role="menu"]')) return;
-    const keys = ['Enter', 'Escape', 'd', 'D', ' ', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', '?', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+    const keys = ['Enter', 'Escape', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', '?', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
     if (!keys.includes(event.key)) return;
-    // Space on a book in the focus layer means Details (SPEC: interactions), not the button's own activation.
-    const spaceDetails = event.key === ' ' && element?.closest('[data-space-details]');
-    if (!spaceDetails && (event.key === 'Enter' || event.key === ' ') && element?.closest('button, a[href], [role="button"], summary')) return;
+    if (event.key === 'Enter' && element?.closest('button, a[href], [role="button"], summary')) return;
     if (event.key.startsWith('Arrow') && element?.closest('.folio-shelves-list, .folio-books-scroll') && !element.closest('button')) return;
-    if (event.key === ' ' || event.key.startsWith('Arrow')) event.preventDefault();
+    if (event.key.startsWith('Arrow')) event.preventDefault();
     target.invokeMethodAsync('OnSceneKey', event.key, event.shiftKey).catch(() => {});
 });
 window.addEventListener('keydown', event => {

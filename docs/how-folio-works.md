@@ -120,7 +120,6 @@ it into an empty profile; Folio asks for persistent storage and reminds you to b
 |---|---|
 | Navigation, header, import UI, the persistent stage | `MainLayout`, `FolioNavigator`, `FolioRoutes` |
 | Library pages (hero, shelves, 2D library) | `LibraryPage`, `LibraryView`, `LibraryHero`, `CssBook` |
-| Book details | `BookDetailsPage` |
 | 3D scenes, motion, textures | `src/Folio.UI/stage/*` then `npm run build:stage` |
 | Colours, type, chrome | `m3-tokens.css` (tokens, fonts), `folio-library.css` (components) |
 | Reader | `ReaderView`, `ReaderToolbar`, `folio-reader.js` |

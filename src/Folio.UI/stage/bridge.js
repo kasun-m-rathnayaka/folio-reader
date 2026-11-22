@@ -4,7 +4,7 @@ import { Stage } from './index.js';
 
 let stage = null, dotnet = null;
 const call = (method, ...args) => dotnet?.invokeMethodAsync(method, ...args).catch(error => console.warn(`[FolioStage] ${method}`, error));
-const SCENES = new Set(['hero', 'shelf', 'details', 'opening']);
+const SCENES = new Set(['hero', 'shelf', 'opening']);
 const LEVELS = new Set(['full', 'reduced', 'off']);
 const QUALITIES = new Set(['auto', 'high', 'low']);
 const str = (v, max = 400) => typeof v === 'string' ? v.slice(0, max) : null;

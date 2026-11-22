@@ -1,4 +1,4 @@
-<article class="folio-book-card @(ListMode ? "list-mode" : "")" data-book-id="@Book.Id" @onmouseenter="() => OnFocused.InvokeAsync(Book)" @onfocusin="() => OnFocused.InvokeAsync(Book)">
+<article class="folio-book-card @(ListMode ? "list-mode" : "")" data-book-id="@Book.Id" @oncontextmenu="OpenMenu" @oncontextmenu:preventDefault="true" @onmouseenter="() => OnFocused.InvokeAsync(Book)" @onfocusin="() => OnFocused.InvokeAsync(Book)">
     <button class="folio-book-open" @onclick="() => OnOpen.InvokeAsync(Book)" disabled="@Trash" aria-label="@BookGeometry.AccessibleName(Book)">
         <CssBook Book="Book" Height="@(ListMode ? 64 : 176)" Pose="@(ListMode ? CssBook.BookPose.Front : CssBook.BookPose.ThreeQuarter)" Interactive="@(!ListMode && !Trash)" />
         <div class="folio-book-details"><h3 title="@Book.Title">@Book.Title</h3><p>@(string.IsNullOrWhiteSpace(Book.Author) ? "Unknown author" : Book.Author)</p>
@@ -6,7 +6,7 @@
             @if (Book.Status == ReadingStatus.Reading) { <div class="folio-progress-track"><span style="width: @Progress%;"></span></div> }
         </div>
     </button>
-    <div class="folio-book-menu"><MudMenu PopoverClass="folio-action-menu" AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft">
+    <div class="folio-book-menu"><MudMenu @ref="_menu" PopoverClass="folio-action-menu" AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft">
         <ActivatorContent><button type="button" class="folio-icon-button folio-book-menu-button" aria-label="@($"Actions for {Book.Title}")" aria-haspopup="menu"><MudIcon Icon="@Icons.Material.Filled.MoreHoriz" Size="Size.Small" /></button></ActivatorContent>
         <ChildContent>
         @if (Trash)
@@ -17,7 +17,6 @@
         else
         {
             <MudMenuItem Icon="@Icons.Material.Outlined.AutoStories" OnClick="() => OnOpen.InvokeAsync(Book)">Read book</MudMenuItem>
-            <MudMenuItem Icon="@Icons.Material.Outlined.Info" OnClick="() => OnDetails.InvokeAsync(Book)">View details</MudMenuItem>
             <MudMenuItem Icon="@Icons.Material.Outlined.Edit" OnClick="() => OnEdit.InvokeAsync(Book)">Edit details &amp; shelves</MudMenuItem>
             <MudDivider />
             <MudMenuItem Icon="@Icons.Material.Outlined.BookmarkBorder" Class="@(Book.Status == ReadingStatus.WantToRead ? "folio-menu-selected" : "")" OnClick="() => OnStatusChanged.InvokeAsync((Book, ReadingStatus.WantToRead))">Want to read</MudMenuItem>
@@ -37,7 +36,9 @@
     [Parameter] public EventCallback<Book> OnRemove { get; set; }
     [Parameter] public EventCallback<Book> OnEdit { get; set; }
     [Parameter] public EventCallback<Book> OnDelete { get; set; }
-    [Parameter] public EventCallback<Book> OnDetails { get; set; }
+    private MudMenu? _menu;
+    /// <summary>Right-click or the context-menu key opens the same menu as the [ ⋯ ] button.</summary>
+    private async Task OpenMenu(MouseEventArgs e) { if (_menu != null) await _menu.OpenMenuAsync(e); }
     [Parameter] public EventCallback<Book> OnFocused { get; set; }
     private string StatusText => Book.Status switch { ReadingStatus.WantToRead => "Want to read", ReadingStatus.Reading => "Reading", _ => "Finished" };
     private int Progress => BookGeometry.ProgressPercent(Book);

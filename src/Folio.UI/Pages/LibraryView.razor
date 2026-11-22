@@ -9,7 +9,7 @@
 <section class="folio-library-page">
     @if (ShowHero && !_isTrash && StatusFilter == null && Shelf == null && string.IsNullOrWhiteSpace(SearchQuery) && _recent.Count > 0)
     {
-        <LibraryHero @ref="_hero" Books="@_recent" OnOpen="OnOpenBook" OnDetails="OnDetails" />
+        <LibraryHero @ref="_hero" Books="@_recent" OnOpen="OnOpenBook" />
     }
     else
     {
@@ -42,12 +42,12 @@
     <div id="folio-library-grid" class="folio-books-scroll" style="display: @(_total > 0 && !_loading && _error == null ? "block" : "none");">
         <Virtualize @ref="_virtual" TItem="LibraryRow" ItemsProvider="LoadRows" ItemSize="@(_grid ? 340 : 88)" OverscanCount="2">
             <ItemContent Context="row"><div class="@(_grid ? "folio-book-row" : "folio-book-list-row")" style="@(_grid ? $"grid-template-columns: repeat({_columns}, minmax(0, 1fr));" : "")">
-                @foreach (var book in row.Books) { <BookCard @key="book.Id" Book="book" ListMode="@(!_grid)" Trash="@_isTrash" OnOpen="OnOpenBook" OnDetails="OnDetails" OnFocused="Focus" OnStatusChanged="StatusChanged" OnRemove="Remove" OnEdit="Edit" OnDelete="Delete" /> }
+                @foreach (var book in row.Books) { <BookCard @key="book.Id" Book="book" ListMode="@(!_grid)" Trash="@_isTrash" OnOpen="OnOpenBook" OnFocused="Focus" OnStatusChanged="StatusChanged" OnRemove="Remove" OnEdit="Edit" OnDelete="Delete" /> }
             </div></ItemContent>
             <Placeholder><div class="folio-row-placeholder" style="height: @(_grid ? "340px" : "88px");"><span>Loading books…</span></div></Placeholder>
         </Virtualize>
     </div>
-    @if (!_isTrash && _total > 0) { <LibraryBottomBar Book="@(_focused ?? _hero?.Current)" OnOpen="OnOpenBook" OnDetails="OnDetails" /> }
+    @if (!_isTrash && _total > 0) { <LibraryBottomBar Book="@(_focused ?? _hero?.Current)" OnOpen="OnOpenBook" OnChanged="ChangedFromMenu" /> }
 </section>
 @code {
     [Parameter] public string? SearchQuery { get; set; }
@@ -57,7 +57,6 @@
     [Parameter] public EventCallback<Book> OnOpenBook { get; set; }
     [Parameter] public EventCallback OnImport { get; set; }
     [Parameter] public EventCallback OnChanged { get; set; }
-    [Parameter] public EventCallback<Book> OnDetails { get; set; }
     /// <summary>Show the "continue reading" hero above the books (library home).</summary>
     [Parameter] public bool ShowHero { get; set; }
     private LibraryHero? _hero;
@@ -101,6 +100,7 @@
     }
     [JSInvokable] public async Task OnColumnsChanged(int columns) { columns = Math.Clamp(columns, 1, 8); if (_columns == columns) return; _columns = columns; if (_virtual != null) await _virtual.RefreshDataAsync(); await InvokeAsync(StateHasChanged); }
     private async Task SetGrid(bool grid) { _grid = grid; Preferences.Save(Preferences.Current with { GridView = grid }); await RefreshAsync(); }
+    private async Task ChangedFromMenu() { await RefreshAsync(); await OnChanged.InvokeAsync(); }
     private async Task StatusChanged((Book Book, ReadingStatus Status) change) { await Library.SetStatusAsync(change.Book.Id, change.Status); await RefreshAsync(); await OnChanged.InvokeAsync(); }
     private async Task Remove(Book book) { await Library.SetTrashAsync(book.Id, !_isTrash); Notifications.Add(_isTrash ? "Book restored with its notes and position." : "Moved to Trash. Your notes and position are kept.", Severity.Info); await RefreshAsync(); await OnChanged.InvokeAsync(); }
     private async Task Edit(Book book) { var dialog = await Dialogs.ShowAsync<EditBookDialog>("Book details", new DialogParameters<EditBookDialog> { { x => x.Book, book } }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small }); if (await dialog.Result is { Canceled: false }) { await RefreshAsync(); await OnChanged.InvokeAsync(); } }

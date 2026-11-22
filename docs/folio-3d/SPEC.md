@@ -64,8 +64,8 @@ P0 items ship in this release; P1 items ship if their milestone has room; P2 ite
 
 | ID | Requirement | Priority |
 | --- | --- | --- |
-| DET-1 | Details turns the book to face the reader and tints the page with the cover's colour, adjusted to keep text at 4.5:1 contrast. Shows title, author, pages, date added, progress, shelves and tags, with Read, Edit, Move to shelf and Move to Trash. | P0 |
-| DET-2 | Shows counts of highlights and bookmarks for that book. | P1 |
+| DET-1 | **Removed in SPEC-V2 (WP1).** The details page and scene are gone. Its Edit, Move to shelf and Move to Trash actions live in a book menu (`[ ⋯ ]` in the bottom bar, right-click or the context-menu key). The cover-colour tint now follows the presented book (SPEC-V2, WP4). | — |
+| DET-2 | **Removed in SPEC-V2 (WP1).** | — |
 
 ### Opening and closing a book (OPN)
 

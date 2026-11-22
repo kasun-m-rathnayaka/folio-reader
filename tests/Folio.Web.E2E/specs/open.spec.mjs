@@ -28,21 +28,19 @@ async function expectHandoff(page, testInfo, name) {
     return { handoff, readyAfterMs };
 }
 
-test('opening from details lands on the reader page and closing returns', async ({ page }, testInfo) => {
+test('opening from the hero lands on the reader page and closing returns', async ({ page }, testInfo) => {
     const errors = await library(page);
-    await page.locator('.folio-hero').getByRole('button', { name: /^View details of / }).click();
-    await expect(page.locator('.folio-details.is-3d')).toBeVisible();
-    const details = pathOf(page);
+    const home = pathOf(page);
     await page.keyboard.press('Enter');
-    await expectHandoff(page, testInfo, 'details');
+    await expectHandoff(page, testInfo, 'hero');
     // The reader takes input after the 120 ms crossfade. Its real-time latency is recorded above; on software GL the main
     // thread is saturated, so the 300 ms target is confirmed on hardware at M8 (DECISIONS D-020).
     await page.keyboard.press('ArrowRight');
     await expect(page.locator('.folio-page-indicator')).toContainText('2');
 
     await page.keyboard.press('Escape');
-    await expect.poll(() => pathOf(page)).toBe(details);
-    await expect(page.locator('.folio-details')).toBeVisible();
+    await expect.poll(() => pathOf(page)).toBe(home);
+    await expect(page.locator('.folio-stage-hero')).toBeVisible();
     await expect.poll(() => page.evaluate(() => document.querySelector('.folio-app').className.includes('stage-closing'))).toBe(false);
     expect(errors).toEqual([]);
 });

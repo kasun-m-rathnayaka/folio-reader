@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { openLibrary, seedLibrary, waitForReader, openFirstDetails, importFiles, fixture } from './helpers.mjs';
+import { openLibrary, seedLibrary, waitForReader, openFirstBookMenu, openFirstBook, importFiles, fixture } from './helpers.mjs';
 
-// M3 gate: no serious or critical axe issues on the library, details, settings and reader; reduced motion disables
+// M3 gate: no serious or critical axe issues on the library, book menu, settings and reader; reduced motion disables
 // transitions.
 async function scan(page, name) {
     const result = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze();
@@ -11,15 +11,15 @@ async function scan(page, name) {
 }
 
 for (const colorScheme of ['dark', 'light']) {
-    test(`axe: library, details, settings, reader (${colorScheme})`, async ({ page }) => {
+    test(`axe: library, book menu, settings, reader (${colorScheme})`, async ({ page }) => {
         await openLibrary(page);
         if (colorScheme === 'light') await page.getByRole('button', { name: 'Toggle light and dark theme' }).click();
         await seedLibrary(page);
         await scan(page, 'library');
-        await openFirstDetails(page);
-        await expect(page.locator('.folio-details')).toBeVisible();
-        await scan(page, 'details');
-        await page.getByRole('button', { name: /^Read / }).click();
+        await openFirstBookMenu(page);
+        await scan(page, 'book menu');
+        await page.keyboard.press('Escape');
+        await openFirstBook(page);
         await waitForReader(page);
         await scan(page, 'reader');
         await page.getByRole('button', { name: 'Back to library' }).click();
@@ -42,7 +42,7 @@ test('reduced motion: system preference resolves to reduced and books do not ani
 });
 
 // M8: the 3D views carry the same HTML semantics (canvas aria-hidden, focus layer, live region).
-test('axe: 3D hero, shelf and details', async ({ page, browserName }) => {
+test('axe: 3D hero and shelf', async ({ page, browserName }) => {
     test.skip(browserName !== 'chromium', 'Stage checks run on Chromium');
     await openLibrary(page, '/?stageTest=1');
     await importFiles(page, ['01_single_column_book_300p.pdf', '02_two_column_paper.pdf'].map(fixture));
@@ -55,7 +55,4 @@ test('axe: 3D hero, shelf and details', async ({ page, browserName }) => {
     await page.keyboard.press('ArrowRight');
     await expect(page.locator('.folio-focus-book:focus')).toHaveCount(1);
     await scan(page, 'shelf (3D)');
-    await page.keyboard.press('d');
-    await expect(page.locator('.folio-details.is-3d')).toBeVisible();
-    await scan(page, 'details (3D)');
 });

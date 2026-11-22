@@ -193,3 +193,33 @@ the cross-browser gates for M2 are proven on Chromium only and need a manual che
   focus, since a `#fragment` link would resolve against the base and navigate home.
 - CI runs every end-to-end spec on Chromium and a cross-engine spec on Firefox and WebKit, which runs the core flow where
   the engine has the storage Folio needs and otherwise checks the plain explanation and skips with the reason (D-021).
+
+## D-024 · Fixes and Stripe Press motion plan (SPEC-V2): branches, safety net and the details crash
+
+- SPEC-V2 asks for one branch and one PR per work package. This session may push to a single branch only (D-001), so
+  the work packages are separate commits on `kasunr/sleepy-hypatia-kzdvvv`, each prefixed `WP<N>:`, with progress in
+  `PROGRESS-V2.md`. PR #1 was merged, so the branch restarted from `main` (`f404ddd`) and new commits feed a new PR when
+  one is requested.
+- SPEC-V2 asks for commit messages with no AI attribution or trailers; commits in this series follow that.
+- WP0: `FolioErrorBoundary` wraps every routed view (both the library and the reader render paths) and logs through
+  `ILogger`; a new address recovers it. The desktop `index.html` has the `blazor-error-ui` bar, and the WPF dispatcher and
+  unobserved-task exceptions are logged and handled. `/__fault` (no links, no data) throws on render so the end-to-end
+  suite can prove the boundary works (`safety-net.spec.mjs`).
+- Cause of the details crash: the desktop log from the user's machine is not available in this container, so it could not
+  be read, and the failure does not reproduce on the web host (the details path is exercised by CI on Chromium). The
+  difference between hosts on that path is the desktop-only WebView2 cover host (`https://folio.covers`, read through a
+  canvas by `applyBookTint`), so an unhandled exception there is the likeliest source. The page, the scene and that
+  JavaScript are removed in WP1, and the boundary now logs any similar fault to `%LocalAppData%\Folio\logs`.
+
+## D-025 · View Details removed (WP1)
+
+- Deleted `BookDetailsPage`, the `details` stage scene and camera/pose cases, `StageScene.Details`, `applyBookTint`, the
+  `D`/Space shortcuts and the Details buttons. `/book/{id}` is kept as `BookRedirectPage`: it redirects (replace) to
+  `shelf?book={id}`, which brings that book into focus on the shelf.
+- `BookMenu` holds Edit details, Move to shelf (toggles) and Move to Trash. It opens from `[ ⋯ ]` in the bottom bar and from
+  right-click or the context-menu key on a book (3D focus layer, the stage canvas, and 2D cards).
+- A click in the stage now presents a book (`present`); a click on the presented (or hero) book opens it (`open`).
+- `detailsTint` became `accentTint` (still contrast-checked); the stage uses it for the presented book's background (WP4).
+- The reading-status buttons on the shelf scene stay for now: they filter the row (LIB-6) and are not duplicated by the
+  sidebar's links, which change the route rather than the filter on the current shelf. Revisit if the user asks.
+

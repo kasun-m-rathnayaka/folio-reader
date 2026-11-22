@@ -1,5 +1,5 @@
 // Target poses per scene (SPEC: scenes). The stage damps every book and the camera toward these each frame.
-// The featured book (hero, details, opening) lives at the top of the world; shelf rows hang below it, so moving from
+// The featured book (hero, opening) lives at the top of the world; shelf rows hang below it, so moving from
 // the hero to the shelf is one continuous camera travel downwards (LIB-3).
 import { BOOK_HEIGHT, ROW_SPACING, PULL_OUT, rowPositions, cameraX } from './layout.js';
 
@@ -23,9 +23,6 @@ export function cameraPose(scene, ctx) {
             const x = layout ? cameraX(focus, layout.width, ctx.halfViewWidth ?? 30) : 0;
             return { px: x, py: y + 6, pz: SHELF_DISTANCE, lx: x, ly: y + 1, lz: 0 };
         }
-        case 'details':
-            // Book left of the HTML panel: look slightly right of it.
-            return { px: 9, py: FEATURE_Y + 0.5, pz: 60, lx: 9, ly: FEATURE_Y, lz: 0 };
         case 'opening':
             return { px: 0, py: FEATURE_Y, pz: 40, lx: 0, ly: FEATURE_Y, lz: 0 };
         default: // hero: close, slightly low, 3/4 view; the book sits left of the HTML copy
@@ -36,8 +33,6 @@ export function cameraPose(scene, ctx) {
 /** Pose of the featured book. `t` carries idle turn and pointer tilt (radians). */
 export function featuredPose(scene, t) {
     switch (scene.kind) {
-        case 'details':
-            return { x: 0, y: FEATURE_Y, z: 0, ry: -4 * DEG + t.pointerY * 0.75, rx: t.pointerX * 0.75, rz: 0 };
         case 'opening':
             return { x: 0, y: FEATURE_Y, z: 8, ry: 0, rx: 0, rz: 0 };
         default:

@@ -35,7 +35,7 @@ export function readableAccent(color, background, minRatio = 4.5) {
  * The details page background: the page colour tinted toward the book's accent, as strongly as possible while every
  * listed text colour keeps minRatio. Returns null when no tint passes, so callers fall back to the neutral surface.
  */
-export function detailsTint(accent, background, textColors, minRatio = 4.5) {
+export function accentTint(accent, background, textColors, minRatio = 4.5) {
     const a = parseHex(accent), bg = parseHex(background), texts = textColors.map(parseHex);
     for (let t = 0.32; t >= 0.04; t -= 0.04) {
         const tint = mix(bg, a, t);

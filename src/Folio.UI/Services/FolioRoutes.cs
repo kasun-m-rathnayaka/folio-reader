@@ -14,9 +14,9 @@ public static class FolioRoutes
     public const string Trash = "trash";
     public const string Settings = "settings";
 
-    public static string Shelf(Guid? shelfId = null, ReadingStatus? status = null, string? query = null) =>
-        WithQuery(shelfId is { } id ? $"shelf/{id}" : "shelf", ("status", status?.ToString()), ("q", query));
-    public static string Book(Guid bookId) => $"book/{bookId}";
+    /// <param name="book">A book to bring into focus (old <c>/book/{id}</c> links redirect here).</param>
+    public static string Shelf(Guid? shelfId = null, ReadingStatus? status = null, string? query = null, Guid? book = null) =>
+        WithQuery(shelfId is { } id ? $"shelf/{id}" : "shelf", ("status", status?.ToString()), ("q", query), ("book", book?.ToString()));
     public static string Read(Guid bookId, int? pageIndex = null) =>
         WithQuery($"book/{bookId}/read", ("page", pageIndex is { } p ? (p + 1).ToString(CultureInfo.InvariantCulture) : null));
     public static string Search(string query) => WithQuery("search", ("q", query));

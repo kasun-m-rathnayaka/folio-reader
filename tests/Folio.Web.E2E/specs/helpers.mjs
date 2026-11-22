@@ -46,9 +46,20 @@ export async function waitForReader(page) {
 
 export const pathOf = page => new URL(page.url()).pathname + new URL(page.url()).search;
 
-/** Focuses the first book card and opens its details from the bottom bar's VIEW DETAILS. */
-export async function openFirstDetails(page) {
+/** Hovers the first 2D book card so the bottom bar acts on it, then opens the book menu [ ⋯ ]. */
+export async function openFirstBookMenu(page) {
     await page.locator('.folio-book-card').first().hover();
-    await page.locator('.folio-bottom-bar').getByRole('button', { name: /^View details of / }).click();
-    await page.locator('.folio-details').waitFor();
+    await openBookMenu(page);
+}
+
+/** Opens the bottom bar's book menu for the focused book (Edit, Move to shelf, Move to Trash). */
+export async function openBookMenu(page) {
+    await page.locator('.folio-bottom-bar').getByRole('button', { name: /^Actions for / }).click();
+    await page.locator('.mud-popover-open .mud-menu-item').first().waitFor();
+}
+
+/** Hovers the first 2D book card and opens it from the bottom bar. */
+export async function openFirstBook(page) {
+    await page.locator('.folio-book-card').first().hover();
+    await page.locator('.folio-bottom-bar').getByRole('button', { name: /^Open / }).click();
 }

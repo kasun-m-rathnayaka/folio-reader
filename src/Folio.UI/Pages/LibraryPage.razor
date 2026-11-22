@@ -16,10 +16,10 @@
 {
     @* Hero scene (LIB-1, LIB-2): the stage draws the book; this layer carries everything readable and focusable. *@
     <section class="folio-stage-page folio-stage-hero">
-        <LibraryHero @ref="_hero" Books="@HeroBooks" ShowBook="false" OnOpen="Open" OnDetails="Details" OnCurrentChanged="HeroChanged">
+        <LibraryHero @ref="_hero" Books="@HeroBooks" ShowBook="false" OnOpen="Open" OnCurrentChanged="HeroChanged">
             <Footer><BracketButton Label="BROWSE SHELVES" Plus="false" Hint="↓" AriaLabel="Browse shelves" Class="folio-browse" OnClick="() => Navigator.Go(FolioRoutes.Shelf())" /></Footer>
         </LibraryHero>
-        <LibraryBottomBar Book="@(_hero?.Current ?? HeroBooks.FirstOrDefault())" OnOpen="Open" OnDetails="Details" />
+        <LibraryBottomBar @ref="_heroBar" Book="@(_hero?.Current ?? HeroBooks.FirstOrDefault())" OnOpen="Open" OnChanged="MenuChanged" />
         <div class="folio-sr-only" role="status" aria-live="polite">@_announcement</div>
     </section>
 }
@@ -62,20 +62,20 @@ else if (Mode == View.Shelf)
             @foreach (var book in _row)
             {
                 <li @key="book.Id">
-                    <button type="button" id="@BookButtonId(book.Id)" class="folio-focus-book @(book.Id == _focusId ? "is-focused" : "")" data-space-details="true"
-                        aria-label="@BookGeometry.AccessibleName(book)" @onfocus="() => Focus(book.Id)" @onclick="() => Open(book)">@book.Title</button>
-                    <button type="button" class="folio-focus-details" aria-label="@($"Details, {book.Title}")" @onfocus="() => Focus(book.Id)" @onclick="() => Details(book)">Details</button>
+                    <button type="button" id="@BookButtonId(book.Id)" class="folio-focus-book @(book.Id == _focusId ? "is-focused" : "")" aria-haspopup="menu"
+                        aria-label="@BookGeometry.AccessibleName(book)" @onfocus="() => Focus(book.Id)" @onclick="() => Open(book)"
+                        @oncontextmenu="() => OpenMenuFor(book.Id)" @oncontextmenu:preventDefault="true">@book.Title</button>
                 </li>
             }
         </ul>
-        <LibraryBottomBar Book="@FocusedBook" EmptyLabel="[ ← → TO BROWSE · ↑ ↓ FOR SHELVES ]" OnOpen="Open" OnDetails="Details" />
+        <LibraryBottomBar @ref="_shelfBar" Book="@FocusedBook" EmptyLabel="[ ← → TO BROWSE · ↑ ↓ FOR SHELVES ]" OnOpen="Open" OnChanged="MenuChanged" />
         <div class="folio-sr-only" role="status" aria-live="polite">@_announcement</div>
     </section>
 }
 else if (Mode == View.TwoD)
 {
     <LibraryView @ref="_view" SearchQuery="@Q" StatusFilter="@_status" Shelf="@_shelf" Trash="@_trash" ShowHero="@_home"
-        OnOpenBook="Open" OnDetails="Details" OnImport="Import" OnChanged="Changed" />
+        OnOpenBook="Open" OnImport="Import" OnChanged="Changed" />
 }
 
 @code {
@@ -86,9 +86,12 @@ else if (Mode == View.TwoD)
     [SupplyParameterFromQuery(Name = "q")] public string? Q { get; set; }
     [SupplyParameterFromQuery(Name = "status")] public string? Status { get; set; }
     [SupplyParameterFromQuery(Name = "sort")] public string? Sort { get; set; }
+    /// <summary>A book to bring into focus on arrival (old /book/{id} links redirect here).</summary>
+    [SupplyParameterFromQuery(Name = "book")] public Guid? FocusBook { get; set; }
     [CascadingParameter] public Layout.MainLayout? Layout { get; set; }
     private LibraryView? _view;
     private LibraryHero? _hero;
+    private LibraryBottomBar? _heroBar, _shelfBar;
     private IAsyncDisposable? _keys;
     private IReadOnlyList<Book> _recent = [], _all = [], _row = [];
     private IReadOnlyList<Shelf> _shelves = [];
@@ -98,6 +101,7 @@ else if (Mode == View.TwoD)
     private Guid? _focusId;
     private bool _trash, _home, _shelfRoute, _loaded, _layerFocused;
     private string? _announcement;
+    private Guid? _arrivedFor;
 
     private View Mode => !_loaded || (Stage.Starting && !_trash) ? View.Waiting
         : Stage.Available && _home && string.IsNullOrWhiteSpace(Q) && HeroBooks.Count > 0 ? View.Hero
@@ -147,7 +151,8 @@ else if (Mode == View.TwoD)
             _recent = _home ? await Library.GetRecentAsync() : [];
             _all = await Library.GetAllAsync(_filter.Sort);
             _row = StageFilter.Row(_filter.Apply(_all), ShelfId);
-            if (_focusId == null || _row.All(b => b.Id != _focusId)) _focusId = _row.FirstOrDefault()?.Id;
+            if (FocusBook is { } wanted && _row.Any(b => b.Id == wanted) && _arrivedFor != wanted) { _focusId = wanted; _arrivedFor = wanted; }
+            else if (_focusId == null || _row.All(b => b.Id != _focusId)) _focusId = _row.FirstOrDefault()?.Id;
         }
         _loaded = true;
         UpdateStage();
@@ -219,9 +224,25 @@ else if (Mode == View.TwoD)
 
     private async Task StageActivated(Guid id, string action)
     {
-        if (action == "open") await Navigator.OpenBookAsync(id);
-        else Navigator.Go(FolioRoutes.Book(id));
+        switch (action)
+        {
+            case "open": await Navigator.OpenBookAsync(id); break;
+            case "menu": await OpenMenuFor(id); break;
+            default: // "present": a click brings the book forward
+                await InvokeAsync(() => { if (_row.Any(b => b.Id == id)) { Focus(id); StateHasChanged(); } });
+                break;
+        }
     }
+
+    /// <summary>Right-click or the context-menu key: focus the book, then open its menu (Edit, Move to shelf, Trash).</summary>
+    private async Task OpenMenuFor(Guid id)
+    {
+        if (_row.All(b => b.Id != id) && HeroBooks.All(b => b.Id != id)) return;
+        if (Mode == View.Shelf) { Focus(id); StateHasChanged(); await Task.Yield(); await (_shelfBar?.OpenMenuAsync() ?? Task.CompletedTask); }
+        else if (Mode == View.Hero) await (_heroBar?.OpenMenuAsync() ?? Task.CompletedTask);
+    }
+
+    private Task MenuChanged() => Layout?.NotifyLibraryChangedAsync() ?? Task.CompletedTask;
 
     private Task StageScroll(string direction) => InvokeAsync(() => StepRow(direction == "down" ? 1 : -1));
 
@@ -243,7 +264,6 @@ else if (Mode == View.TwoD)
         switch (key)
         {
             case "Enter" when book != null: await Open(book); break;
-            case "d" or "D" or " " when book != null: Details(book); break;
             case "ArrowLeft" or "ArrowRight":
                 var delta = key == "ArrowLeft" ? -1 : 1;
                 if (Mode == View.Shelf) await MoveFocus(delta);
@@ -267,7 +287,6 @@ else if (Mode == View.TwoD)
 
     private Task Open(Book book) => Open(book.Id);
     private Task Open(Guid id) => Navigator.OpenBookAsync(id, null, Mode == View.TwoD ? $"[data-book-id=\"{id}\"] .folio-cssbook" : null);
-    private void Details(Book book) => Navigator.Go(FolioRoutes.Book(book.Id));
     private Task Import() => Layout?.ImportBooks() ?? Task.CompletedTask;
     private Task Changed() => Layout?.RefreshNavigation() ?? Task.CompletedTask;
     private async Task Reload()

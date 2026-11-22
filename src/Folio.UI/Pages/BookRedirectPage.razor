@@ -1,0 +1,7 @@
+@page "/book/{BookId:guid}"
+@inject FolioNavigator Navigator
+@* The details page was removed (WP1). Old links land on the shelf with that book in focus. *@
+@code {
+    [Parameter] public Guid BookId { get; set; }
+    protected override void OnInitialized() => Navigator.Go(FolioRoutes.Shelf(book: BookId), replace: true);
+}

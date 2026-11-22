@@ -1,4 +1,4 @@
-@* Bottom bar (SPEC: chrome): the focused book's title at the left, OPEN BOOK and VIEW DETAILS at the right. *@
+@* Bottom bar (SPEC: chrome): the focused book's title at the left, OPEN BOOK and the book menu [ ⋯ ] at the right. *@
 <footer class="folio-bottom-bar" aria-label="Focused book">
     <div class="folio-bottom-title" aria-live="polite">
         @if (Book != null) { <span class="folio-eyebrow">[ FOCUSED ]</span><span class="folio-bottom-book">@Book.Title</span> }
@@ -8,7 +8,7 @@
     {
         <div class="folio-bottom-actions">
             <BracketButton Label="OPEN BOOK" Hint="Enter" AriaLabel="@($"Open {Book.Title}")" OnClick="() => OnOpen.InvokeAsync(Book)" />
-            <BracketButton Label="VIEW DETAILS" Hint="D" AriaLabel="@($"View details of {Book.Title}")" OnClick="() => OnDetails.InvokeAsync(Book)" />
+            <BookMenu @ref="_menu" Book="Book" OnChanged="OnChanged" />
         </div>
     }
 </footer>
@@ -16,5 +16,7 @@
     [Parameter] public Book? Book { get; set; }
     [Parameter] public string EmptyLabel { get; set; } = "[ HOVER OR FOCUS A BOOK ]";
     [Parameter] public EventCallback<Book> OnOpen { get; set; }
-    [Parameter] public EventCallback<Book> OnDetails { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+    private BookMenu? _menu;
+    public Task OpenMenuAsync() => _menu?.OpenAsync() ?? Task.CompletedTask;
 }

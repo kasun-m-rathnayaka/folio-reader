@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { openLibrary, importFiles, fixture, waitForReader, pathOf } from './helpers.mjs';
+import { openLibrary, importFiles, fixture, waitForReader, pathOf, openBookMenu } from './helpers.mjs';
 
 // M5 gates, in stage test mode on Chromium (see stage.spec.mjs).
 test.skip(({ browserName }) => browserName !== 'chromium', 'Stage checks run on Chromium');
@@ -13,11 +13,12 @@ async function createShelf(page, name) {
 }
 
 async function putOnShelf(page, bookId, shelf) {
+    // The old details address redirects to the shelf with the book in focus; its book menu holds Move to shelf.
     await page.evaluate(url => window.Blazor.navigateTo(url), `/book/${bookId}`);
-    await page.locator('.folio-details').waitFor();
-    await page.getByRole('button', { name: 'Move to shelf' }).click();
-    await page.locator('.mud-menu-item', { hasText: shelf }).click();
-    await expect(page.locator('.folio-details-meta')).toContainText(shelf);
+    await expect(page.locator(`#folio-book-${bookId.replaceAll('-', '')}.is-focused`)).toBeVisible();
+    await openBookMenu(page);
+    await page.locator('.mud-popover-open .mud-menu-item', { hasText: shelf }).click();
+    await expect(page.locator('.mud-popover-open')).toHaveCount(0);
 }
 
 async function collectRow(page, count) {

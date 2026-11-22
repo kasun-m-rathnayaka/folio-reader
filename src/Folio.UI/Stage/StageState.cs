@@ -31,7 +31,6 @@ public sealed record StageScene(string Kind, Guid? BookId = null, Guid? ShelfId 
 {
     public static StageScene Hero(Guid? bookId) => new("hero", bookId);
     public static StageScene Shelf(Guid? shelfId, Guid? focusId = null) => new("shelf", focusId, shelfId);
-    public static StageScene Details(Guid bookId) => new("details", bookId);
 }
 
 /// <summary>

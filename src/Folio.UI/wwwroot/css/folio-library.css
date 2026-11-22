@@ -117,20 +117,8 @@ select { border-radius:2px; background:var(--folio-surface); border-color:var(--
 .folio-bottom-bar { position:absolute; left:0; right:0; bottom:0; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:10px 32px; background:color-mix(in srgb, var(--folio-bg) 88%, transparent); backdrop-filter:blur(10px); border-top:1px solid var(--folio-hairline); z-index:5; }
 .folio-bottom-title { display:flex; align-items:baseline; gap:12px; min-width:0; }
 .folio-bottom-book { font-family:var(--folio-font-display); font-size:20px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.folio-bottom-actions { display:flex; gap:14px; flex-shrink:0; }
-
-/* ---- details (DET-1, DET-2) ------------------------------------------------------------------------------------ */
-.folio-details { --folio-details-tint:var(--folio-bg); height:100%; overflow:auto; display:grid; grid-template-columns:minmax(300px, 1fr) minmax(320px, 520px); gap:48px; align-items:center; padding:40px 56px; background:var(--folio-details-tint); transition:background-color 500ms var(--folio-ease); }
-.folio-details-stage { display:grid; place-items:center; }
-.folio-details-cover { background:none; border:0; padding:0; }
-.folio-details-panel { border-left:1px solid var(--folio-hairline); padding-left:36px; }
-.folio-details-panel h1 { font-size:40px; }
-.folio-details-author { font-size:15px; color:var(--folio-text-muted); margin-bottom:24px; }
-.folio-details-meta { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:14px 24px; margin:0 0 26px; padding:18px 0; border-top:1px solid var(--folio-hairline); border-bottom:1px solid var(--folio-hairline); }
-.folio-details-meta dt { font-family:var(--folio-font-mono); text-transform:uppercase; letter-spacing:.08em; font-size:10px; color:var(--folio-text-muted); margin-bottom:3px; }
-.folio-details-meta dd { margin:0; font-size:14px; overflow-wrap:anywhere; }
-.folio-details-actions { display:flex; flex-wrap:wrap; gap:6px 18px; align-items:center; }
-.folio-details-back { margin-top:20px; color:var(--folio-text-muted); }
+.folio-bottom-actions { display:flex; align-items:center; gap:14px; flex-shrink:0; }
+.folio-book-menu-trigger { pointer-events:auto; }
 
 /* ---- settings ---------------------------------------------------------------------------------------------------- */
 .folio-settings-group { background:transparent; }
@@ -156,8 +144,6 @@ select { border-radius:2px; background:var(--folio-surface); border-color:var(--
 :root[data-motion="reduced"]::view-transition-old(root), :root[data-motion="reduced"]::view-transition-new(root) { animation-duration:150ms; }
 
 @media (max-width:900px) {
-  .folio-details { grid-template-columns:1fr; padding:24px; gap:24px; }
-  .folio-details-panel { border-left:0; padding-left:0; }
   .folio-hero-body { flex-direction:column; align-items:flex-start; gap:20px; }
   .folio-bottom-bar { padding:8px 16px; }
   .folio-bottom-book { font-size:16px; }
@@ -213,10 +199,6 @@ select { border-radius:2px; background:var(--folio-surface); border-color:var(--
 .stage-handoff .folio-stage.is-visible { opacity:0; transition:opacity 120ms linear; }
 .stage-closing .folio-stage.is-visible { animation:folio-fade-in 120ms linear; }
 @keyframes folio-fade-in { from { opacity:0; } to { opacity:1; } }
-
-/* ---- 3D details (DET-1): the stage draws the book and the tint; the panel floats on it ------------------------------ */
-.folio-details.is-3d { background:transparent; }
-.folio-details.is-3d .folio-details-stage { visibility:hidden; }
 
 /* ---- backup (WEB-4) ---------------------------------------------------------------------------------------------------- */
 .folio-settings-actions { display:flex; flex-wrap:wrap; gap:8px 18px; margin:6px 0 10px; }

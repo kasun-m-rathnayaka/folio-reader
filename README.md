@@ -17,7 +17,7 @@ removed in Folio 3D; existing library data stays readable.
 - The home screen shows the book you read last, turning slowly. **Scroll**, swipe or press **↓** for your shelves:
   "All books" first, then each shelf. **← →** move along a shelf, **↑ ↓** between shelves, **1–9** jump to a shelf.
 - Hover or focus a book to pull it out. **Enter** (or `[ OPEN BOOK + ]`) opens it: the book comes forward, its cover
-  swings open and the page hands off to the reader. **D**/**Space** (or `[ VIEW DETAILS + ]`) shows its details. **Esc**
+  swings open and the page hands off to the reader. Right-click (or the menu key, or `[ ⋯ ]`) opens the book menu: edit, move to shelf, move to Trash. **Esc**
   goes back.
 - Settings: **Motion** (match system, Full, Reduced, Off), **Library style** (3D or 2D) and **3D quality** (Auto, High,
   Low). Without WebGL2, on software rendering, or when 3D is too slow, Folio uses the 2D library automatically. On

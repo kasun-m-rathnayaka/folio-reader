@@ -9,14 +9,14 @@ import { BookFactory } from './book-factory.js';
 import { LruCache, loadCover, ensureFonts } from './textures.js';
 import { QualityMonitor, SOFTWARE_RENDERER, percentile } from './quality.js';
 import { cameraPose, featuredPose, shelfPose, layoutRows, rowY, CAMERA_FOV, SHELF_DISTANCE } from './scenes.js';
-import { readableAccent, detailsTint, parseHex } from '../wwwroot/js/folio-color.mjs';
+import { readableAccent, accentTint, parseHex } from '../wwwroot/js/folio-color.mjs';
 import { alignmentPose, cornerError, OPENING } from './opening.js';
 import { BOOK_WIDTH, BOOK_HEIGHT, thicknessCm } from './layout.js';
 import { FEATURE_Y } from './scenes.js';
 
 const IDLE_STOP_MS = 20000;   // idle turn stops 20 s after the last input
 const LOOK_LIMIT = 120;       // ~120 books keep their detailed textures
-const POINTER_MAX = { hero: 4, details: 3 };
+const POINTER_MAX = { hero: 4 };
 
 /** Checks whether this device should draw 3D. Returns null when it can, else the fallback reason. */
 export function probeWebGL(canvas, { allowSoftware = false } = {}) {
@@ -73,7 +73,7 @@ export class Stage {
         this.mainRect = null;
         this.opening = null;                  // open/close sequence state (OPN-1, OPN-2)
         this.lastHandoff = null;
-        this.backgroundTarget = null;         // details tint (DET-1)
+        this.backgroundTarget = null;         // accent tint of the presented book (WP4)
 
         this.quality = new QualityMonitor({
             level: options.quality || 'auto', devicePixelRatio: window.devicePixelRatio,
@@ -153,7 +153,7 @@ export class Stage {
         if (next.bookId) this.focusId = next.bookId;
         if (next.kind !== 'shelf') this.setFeatured(next.bookId || this.featuredId || this.books[0]?.id || null);
         this.scene = next; this.settledKind = null;
-        this.backgroundTarget = next.kind === 'details' ? this.detailsBackground(next.bookId) : null;
+        this.backgroundTarget = null;
         this.touch();
         this.refreshLooks();
         if (!this.motion.travel && this.cameraState) this.snap();
@@ -174,13 +174,13 @@ export class Stage {
         this.applyQuality(this.quality.current); this.invalidate();
     }
 
-    /** DET-1: the page tinted toward the cover's colour while text keeps 4.5:1; null keeps the neutral background. */
-    detailsBackground(bookId) {
+    /** The page tinted toward the cover's colour while text keeps 4.5:1; null keeps the neutral background. */
+    accentBackground(bookId) {
         const accent = this.accents.get(bookId);
         if (!accent) return null;
         const style = getComputedStyle(document.documentElement);
         const read = (name, fallback) => style.getPropertyValue(name).trim() || fallback;
-        const tint = detailsTint(accent, read('--folio-bg', '#0B0B0C'), [read('--folio-text', '#EDEBE6'), read('--folio-text-muted', '#9A968E')]);
+        const tint = accentTint(accent, read('--folio-bg', '#0B0B0C'), [read('--folio-text', '#EDEBE6'), read('--folio-text-muted', '#9A968E')]);
         return tint ? new THREE.Color(tint) : null;
     }
 
@@ -420,7 +420,6 @@ export class Stage {
             for (const [key, mesh] of this.instances) if (key.endsWith(`:${id}`)) this.applyLook(mesh, id);
             if (this.featuredId === id && this.featured) this.applyLook(this.featured, id);
             this.callbacks.onAccent?.(id, accent);
-            if (this.scene.kind === 'details' && this.scene.bookId === id) this.backgroundTarget = this.detailsBackground(id);
             this.invalidate();
         })().finally(() => this.loading.delete(id));
         this.loading.set(id, task);
@@ -644,9 +643,16 @@ export class Stage {
             const id = this.pick(event);
             if (!id) return;
             this.touch();
-            if (this.scene.kind === 'details') this.callbacks.onBookActivated?.(id, 'open');
-            else if (id === this.focusId || (this.scene.kind === 'hero' && id === this.featuredId)) this.callbacks.onBookActivated?.(id, 'details');
-            else this.callbacks.onBookHovered?.(id);
+            // A click presents a book; a click on the presented book (or the hero's book) opens it.
+            if (id === this.focusId || (this.scene.kind === 'hero' && id === this.featuredId)) this.callbacks.onBookActivated?.(id, 'open');
+            else { this.callbacks.onBookHovered?.(id); this.callbacks.onBookActivated?.(id, 'present'); }
+        });
+        on(this.input, 'contextmenu', event => {
+            if (!live() || onControl(event)) return;
+            const id = this.pick(event);
+            if (!id) return;
+            event.preventDefault(); this.touch();
+            this.callbacks.onBookActivated?.(id, 'menu');
         });
         on(this.input, 'wheel', event => {
             if (!live() || Math.abs(event.deltaY) < 4 || event.target?.closest?.('.folio-stage-scroll')) return;
