@@ -19,7 +19,9 @@ export default defineConfig({
     timeout: 180_000,
     expect: { timeout: 30_000 },
     fullyParallel: false,
-    workers: 1,
+    // Each test runs in its own browser context (its own origin storage), so files can run side by side; two workers keep CI near
+    // 25 minutes without starving the software renderer that the frame-time checks run on.
+    workers: process.env.CI ? 2 : 1,
     retries: process.env.CI ? 1 : 0,
     reporter: [['list'], ['json', { outputFile: '../../.artifacts/web-e2e/results.json' }]],
     outputDir: '../../.artifacts/web-e2e/output',
