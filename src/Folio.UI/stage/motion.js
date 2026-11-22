@@ -6,6 +6,15 @@ export const LAMBDA = { camera: 4, pullOut: 10, pointer: 6, details: 5, opening:
 // invisible, large enough that long moves stop drawing promptly (SPEC: zero frames after 2 s idle).
 export const EPSILON = 2e-3;
 
+/**
+ * Damping rate for a camera move of `distance` cm so it arrives (within `tolerance` cm, about 5 px) in `seconds`:
+ * single-row steps keep a calm ease, and long jumps (keys 1–9, the sidebar) speed up so they still land within 700 ms.
+ */
+export function travelLambda(distance, seconds = 0.7, tolerance = 0.5) {
+    if (!(distance > tolerance)) return LAMBDA.camera;
+    return Math.min(12, Math.max(LAMBDA.camera, Math.log(distance / tolerance) / seconds));
+}
+
 export function damp(value, target, lambda, dt) {
     if (!(dt > 0)) return value;
     return target + (value - target) * Math.exp(-lambda * dt);

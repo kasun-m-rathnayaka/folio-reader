@@ -211,3 +211,36 @@ select { color:var(--folio-text-primary); background:var(--md-sys-color-surface)
 #blazor-error-ui { position:fixed; left:0; right:0; bottom:0; z-index:5000; display:none; padding:10px 16px; background:var(--folio-surface, #151517); color:var(--folio-text, #edebe6); border-top:1px solid var(--folio-border, rgba(128,128,128,.4)); font:13px Inter, system-ui, sans-serif; }
 #blazor-error-ui[hidden] { display:none; }
 #blazor-error-ui a { color:inherit; margin-left:8px; text-decoration:underline; }
+
+/* ---- WP7: Folio panels (dialogs), underline inputs and the thin-icon sidebar ------------------------------------------- */
+.mud-dialog.folio-dialog { background:var(--folio-surface) !important; border:1px solid var(--folio-hairline-strong); border-radius:2px !important; color:var(--folio-text); }
+.folio-dialog .mud-dialog-title { padding:28px 28px 0; }
+.folio-dialog .folio-eyebrow { margin-bottom:8px; }
+.folio-dialog-title { font-family:var(--folio-font-display); font-size:34px; font-weight:400; line-height:1.04; letter-spacing:-0.01em; margin:0; }
+.folio-dialog .mud-dialog-content { padding:14px 28px 6px; }
+.folio-dialog .mud-dialog-actions { padding:10px 20px 22px; gap:14px; justify-content:flex-end; }
+.folio-dialog .folio-muted { font-size:13px; margin:0 0 6px; }
+.folio-dialog .folio-field-label { font-family:var(--folio-font-mono); text-transform:uppercase; letter-spacing:.08em; font-size:10px; font-weight:500; color:var(--folio-text-muted); margin:20px 0 4px; }
+.folio-dialog .folio-error-text { min-height:18px; margin:8px 0 0; font-size:12px; }
+.folio-underline-input { width:100%; background:transparent; border:0; border-bottom:1px solid var(--folio-hairline-strong); border-radius:0; color:var(--folio-text); padding:8px 0; font-size:15px; font-family:var(--folio-font-ui); min-width:0; }
+.folio-underline-input::placeholder { color:var(--folio-text-muted); }
+.folio-underline-input:focus, .folio-underline-input:focus-visible { outline:none; border-bottom-color:var(--folio-accent); box-shadow:0 1px 0 var(--folio-accent); }
+.folio-underline-input:disabled { opacity:.55; }
+.folio-manage-shelf { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--folio-hairline); }
+.folio-manage-shelf.is-drop-target { box-shadow:inset 0 2px 0 var(--folio-accent); }
+.folio-drag-handle { cursor:grab; color:var(--folio-text-muted); font-family:var(--folio-font-mono); letter-spacing:-.15em; user-select:none; flex-shrink:0; padding:4px 2px; }
+.folio-manage-confirm { flex:1; margin:0; font-size:13px; }
+.folio-bracket-mini { font-family:var(--folio-font-mono); font-size:11px; letter-spacing:.06em; color:var(--folio-text-muted); background:none; border:0; padding:4px 2px; cursor:pointer; flex-shrink:0; white-space:nowrap; }
+.folio-bracket-mini:hover:not(:disabled), .folio-bracket-mini:focus-visible { color:var(--folio-text); }
+.folio-bracket-mini:disabled { opacity:.4; cursor:default; }
+.folio-confirm-dialog .mud-dialog-actions { border-top:0; margin-top:0; }
+.folio-brand { display:flex; align-items:center; gap:10px; }
+.folio-brand-logo { width:28px; height:28px; object-fit:contain; flex-shrink:0; border-radius:4px; display:block; }
+.sidebar-collapsed .folio-wordmark { display:none; }
+.folio-nav-link { font-family:var(--folio-font-ui); font-size:13px; font-weight:400; color:var(--folio-text-muted); }
+.folio-nav-link:hover, .folio-nav-link.active { color:var(--folio-text); }
+.folio-nav-link .folio-icon { width:18px; height:18px; flex-shrink:0; color:var(--folio-text-muted); }
+.folio-nav-link:hover .folio-icon, .folio-nav-link.active .folio-icon { color:var(--folio-text); }
+.folio-nav-link small { margin-left:auto; font-size:11px; letter-spacing:.04em; padding:0; text-align:right; min-width:2ch; }
+.folio-shelves-heading .folio-bracket-mini { color:var(--folio-text-muted); }
+.sidebar-collapsed .folio-nav-link small { display:none; }

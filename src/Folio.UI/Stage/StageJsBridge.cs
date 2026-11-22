@@ -21,17 +21,19 @@ public sealed class StageJsBridge(IJSRuntime js) : IAsyncDisposable
     public async ValueTask<StageInitResult> InitAsync(string canvasId, object options, object dotNetRef) =>
         await (await Module()).InvokeAsync<StageInitResult>("init", canvasId, options, dotNetRef);
 
-    public async ValueTask SetLibraryAsync(IReadOnlyList<StageBook> books, IReadOnlyList<StageShelf> shelves, IReadOnlyList<string>? visibleIds) =>
-        await (await Module()).InvokeVoidAsync("setLibrary", books, shelves, visibleIds);
+    public async ValueTask SetLibraryAsync(IReadOnlyList<StageBook> books, IReadOnlyList<StageShelf> shelves, IReadOnlyList<string>? visibleIds, int rowsVersion) =>
+        await (await Module()).InvokeVoidAsync("setLibrary", books, shelves, visibleIds, rowsVersion);
 
     public async ValueTask SetSceneAsync(StageScene scene) =>
-        await (await Module()).InvokeVoidAsync("setScene", new { kind = scene.Kind, bookId = scene.BookId?.ToString(), shelfId = scene.ShelfId?.ToString(), page = scene.Page });
+        await (await Module()).InvokeVoidAsync("setScene", SceneArgs(scene));
+
+    private static object SceneArgs(StageScene scene) => new { kind = scene.Kind, bookId = scene.BookId?.ToString(), rowIndex = scene.RowIndex, rowsVersion = scene.RowsVersion, page = scene.Page };
 
     public async ValueTask<bool> BeginOpenAsync(Guid id) => await (await Module()).InvokeAsync<bool>("beginOpen", id.ToString());
     public async ValueTask AlignToAsync(PageRect rect) => await (await Module()).InvokeVoidAsync("alignTo", new { x = rect.X, y = rect.Y, width = rect.Width, height = rect.Height });
     public async ValueTask BeginCloseAsync(Guid id, PageRect rect, StageScene scene) =>
         await (await Module()).InvokeVoidAsync("beginClose", id.ToString(), new { x = rect.X, y = rect.Y, width = rect.Width, height = rect.Height },
-            new { kind = scene.Kind, bookId = scene.BookId?.ToString(), shelfId = scene.ShelfId?.ToString() });
+            SceneArgs(scene));
 
     public async ValueTask FocusBookAsync(Guid? id) => await (await Module()).InvokeVoidAsync("focusBook", id?.ToString());
     public async ValueTask SetMotionAsync(string level) => await (await Module()).InvokeVoidAsync("setMotion", level);

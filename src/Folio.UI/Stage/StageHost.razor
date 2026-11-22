@@ -5,6 +5,7 @@
 @inject IBookUrlResolver Urls
 @inject IAppPreferencesService Preferences
 @inject LibraryEvents Events
+@inject ShelfNavigator Shelves
 @inject NotificationService Notifications
 @inject IJSRuntime JS
 @inject IBatteryMonitor Battery
@@ -105,7 +106,10 @@
         var books = await Library.GetAllAsync(State.Filter.Sort);
         // The stage knows every book (any can open, SRC-2); the filter only decides which stand on the rows (LIB-6).
         var visibleIds = State.Filter == new StageFilter(State.Filter.Sort) ? null : State.Filter.Apply(books).Select(b => b.Id.ToString()).ToList();
-        var shelves = await Library.GetShelvesAsync();
+        // The rows come from the shelf navigator, the one list every view and the stage agree on (WP2).
+        await Shelves.RefreshAsync();
+        var rowsVersion = Shelves.RowsVersion;
+        var shelves = Shelves.Rows.Where(r => r.Id != null).ToList();
         var payload = new List<StageBook>(books.Count);
         foreach (var book in books)
         {
@@ -113,7 +117,7 @@
             payload.Add(new(book.Id.ToString(), book.Title, book.Author, book.PageCount, cover, null,
                 BookGeometry.Progress(book), book.BookShelves.Select(s => s.ShelfId.ToString()).ToArray()));
         }
-        await Bridge.SetLibraryAsync(payload, shelves.Select(s => new StageShelf(s.Id.ToString(), s.Name)).ToList(), visibleIds);
+        await Bridge.SetLibraryAsync(payload, shelves.Select(s => new StageShelf(s.Id.ToString()!, s.Name)).ToList(), visibleIds, rowsVersion);
         _libraryLoaded = true;
     }
 
@@ -136,7 +140,8 @@
 
     [JSInvokable] public void OnBookHovered(string id) { if (Guid.TryParse(id, out var g)) State.ReportHover(g); }
     [JSInvokable] public Task OnBookActivated(string id, string action) => Guid.TryParse(id, out var g) ? State.ReportActivated(g, action) : Task.CompletedTask;
-    [JSInvokable] public void OnSceneSettled(string kind) { State.ReportSettled(kind); if (State.Phase == StagePhase.Closing) State.EndClose(); }
+    [JSInvokable] public void OnSceneSettled(string kind, int rowIndex) { State.ReportSettled(kind, rowIndex); if (State.Phase == StagePhase.Closing) State.EndClose(); }
+    [JSInvokable] public async Task OnRowsStale(int version) { if (_started) await InvokeAsync(ReloadLibrary); }
     [JSInvokable] public Task OnOpenHandoff(string id, PageRect rect, int elapsedMs) => State.CompleteHandoffAsync();
     [JSInvokable] public Task OnScrollIntent(string direction) => State.ReportScroll(direction);
     [JSInvokable] public void OnBookAccent(string id, string? color) { if (Guid.TryParse(id, out var g)) State.ReportAccent(g, color); }

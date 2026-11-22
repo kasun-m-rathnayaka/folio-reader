@@ -9,10 +9,10 @@ namespace Folio.UI.Services;
 public sealed class SceneKeys(IJSRuntime js) : IAsyncDisposable
 {
     private DotNetObjectReference<SceneKeys>? _reference;
-    private Func<string, bool, Task>? _handler;
+    private Func<string, bool, bool, Task>? _handler;
 
-    /// <summary>Makes <paramref name="handler"/> (key, shift) the receiver until the returned lease is disposed.</summary>
-    public async Task<IAsyncDisposable> AttachAsync(Func<string, bool, Task> handler)
+    /// <summary>Makes <paramref name="handler"/> (key, shift, auto-repeat) the receiver until the returned lease is disposed.</summary>
+    public async Task<IAsyncDisposable> AttachAsync(Func<string, bool, bool, Task> handler)
     {
         _handler = handler;
         _reference ??= DotNetObjectReference.Create(this);
@@ -20,9 +20,9 @@ public sealed class SceneKeys(IJSRuntime js) : IAsyncDisposable
         return new Lease(this, handler);
     }
 
-    [JSInvokable] public Task OnSceneKey(string key, bool shift) => _handler?.Invoke(key, shift) ?? Task.CompletedTask;
+    [JSInvokable] public Task OnSceneKey(string key, bool shift, bool repeat) => _handler?.Invoke(key, shift, repeat) ?? Task.CompletedTask;
 
-    private async Task DetachAsync(Func<string, bool, Task> handler)
+    private async Task DetachAsync(Func<string, bool, bool, Task> handler)
     {
         if (_handler != handler) return;
         _handler = null;
@@ -31,7 +31,7 @@ public sealed class SceneKeys(IJSRuntime js) : IAsyncDisposable
 
     public ValueTask DisposeAsync() { _reference?.Dispose(); return ValueTask.CompletedTask; }
 
-    private sealed class Lease(SceneKeys owner, Func<string, bool, Task> handler) : IAsyncDisposable
+    private sealed class Lease(SceneKeys owner, Func<string, bool, bool, Task> handler) : IAsyncDisposable
     {
         public async ValueTask DisposeAsync() => await owner.DetachAsync(handler);
     }

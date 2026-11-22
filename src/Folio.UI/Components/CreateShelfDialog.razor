@@ -1,19 +1,19 @@
 @implements IDisposable
 @inject ILibraryService Library
 
-<MudDialog Class="folio-shelf-dialog">
-    <TitleContent><h2>Create a shelf</h2></TitleContent>
+<MudDialog Class="folio-dialog">
+    <TitleContent><div class="folio-eyebrow">[ NEW SHELF ]</div><h2 class="folio-dialog-title">Create a shelf</h2></TitleContent>
     <DialogContent>
         <p class="folio-muted">Keep related books together. You can add books from their menu.</p>
         <form id="folio-create-shelf" @onsubmit="Save" @onsubmit:preventDefault>
             <label class="folio-field-label" for="folio-shelf-name">Shelf name</label>
-            <input @ref="_nameInput" id="folio-shelf-name" class="folio-input-field" placeholder="e.g. Design research" maxlength="100" @bind="_name" @bind:event="oninput" aria-describedby="folio-shelf-error" aria-invalid="@(_error != null)" disabled="@_saving" />
+            <input @ref="_nameInput" id="folio-shelf-name" class="folio-underline-input" placeholder="e.g. Design research" maxlength="100" @bind="_name" @bind:event="oninput" aria-describedby="folio-shelf-error" aria-invalid="@(_error != null)" disabled="@_saving" />
             <p id="folio-shelf-error" class="folio-error-text" role="alert">@_error</p>
         </form>
     </DialogContent>
     <DialogActions>
-        <button class="folio-subtle-btn" @onclick="Cancel">Cancel</button>
-        <button class="folio-primary-btn" type="submit" form="folio-create-shelf" disabled="@(_saving || string.IsNullOrWhiteSpace(_name))">@(_saving ? "Creating…" : "Create shelf")</button>
+        <BracketButton Label="CANCEL" Plus="false" OnClick="Cancel" />
+        <BracketButton Label="@(_saving ? "CREATING…" : "CREATE SHELF")" Plus="@(!_saving)" AriaLabel="Create shelf" type="submit" form="folio-create-shelf" Disabled="@(_saving || string.IsNullOrWhiteSpace(_name))" />
     </DialogActions>
 </MudDialog>
 @code {
@@ -23,7 +23,8 @@
     private string? _error;
     private bool _saving, _disposed;
     private CancellationTokenSource? _saveCancellation;
-    protected override async Task OnAfterRenderAsync(bool firstRender) { if (firstRender) await _nameInput.FocusAsync(); }
+    // MudBlazor settles its own focus when the dialog opens; focusing a moment later keeps the cursor in the field, so Enter and Esc work.
+    protected override async Task OnAfterRenderAsync(bool firstRender) { if (firstRender) { await Task.Delay(120); if (!_disposed) await _nameInput.FocusAsync(); } }
     private void Cancel() { _saveCancellation?.Cancel(); Dialog.Cancel(); }
     private async Task Save()
     {

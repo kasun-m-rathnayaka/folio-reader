@@ -1,39 +1,58 @@
 @inject ILibraryService Library
-@inject IDialogService Dialogs
-<MudDialog Class="folio-shelf-dialog">
-    <TitleContent><h2>Manage shelves</h2></TitleContent>
+@inject ShelfNavigator ShelfNav
+@inject LibraryEvents Events
+<MudDialog Class="folio-dialog">
+    <TitleContent><div class="folio-eyebrow">[ SHELVES ]</div><h2 class="folio-dialog-title">Manage shelves</h2></TitleContent>
     <DialogContent>
-        <p class="folio-muted">Rename shelves or move them into your preferred order. Deleting a shelf keeps its books.</p>
+        <p class="folio-muted">Rename a shelf in place, drag the handle or use the arrows to reorder. Deleting a shelf keeps its books.</p>
         <div class="folio-manage-shelves">
             @for (var i = 0; i < _shelves.Count; i++)
             {
                 var shelf = _shelves[i]; var index = i;
-                <div class="folio-manage-shelf" @key="shelf.Id">
-                    <input class="folio-input-field" aria-label="@($"Name for {shelf.Name}")" maxlength="100" @bind="shelf.Name" @bind:event="oninput" disabled="@_busy" />
-                    <button class="folio-subtle-btn" disabled="@_busy" @onclick="() => Rename(shelf)">Save</button>
-                    <button class="folio-icon-button" title="Move up" aria-label="Move shelf up" disabled="@(_busy || index == 0)" @onclick="() => Move(shelf, -1)"><MudIcon Icon="@Icons.Material.Filled.KeyboardArrowUp" /></button>
-                    <button class="folio-icon-button" title="Move down" aria-label="Move shelf down" disabled="@(_busy || index == _shelves.Count - 1)" @onclick="() => Move(shelf, 1)"><MudIcon Icon="@Icons.Material.Filled.KeyboardArrowDown" /></button>
-                    <button class="folio-icon-button" title="Delete shelf" aria-label="Delete shelf" disabled="@_busy" @onclick="() => Delete(shelf)"><MudIcon Icon="@Icons.Material.Outlined.Delete" /></button>
+                <div class="folio-manage-shelf @(_dragOver == shelf.Id ? "is-drop-target" : "")" @key="shelf.Id" draggable="@(!_busy && _confirming == null)"
+                     @ondragstart="() => _dragging = shelf.Id" @ondragend="() => { _dragging = null; _dragOver = null; }"
+                     @ondragenter="() => _dragOver = shelf.Id" @ondragover="() => { }" @ondragover:preventDefault="true" @ondrop="() => Drop(index)" @ondrop:preventDefault="true">
+                    @if (_confirming == shelf.Id)
+                    {
+                        <p class="folio-manage-confirm" role="alert">Delete @shelf.Name? Its books stay in your library.</p>
+                        <BracketButton Label="DELETE" AriaLabel="@($"Delete shelf {shelf.Name}")" Plus="false" Class="is-danger" Disabled="@_busy" OnClick="() => Delete(shelf)" />
+                        <BracketButton Label="KEEP" AriaLabel="@($"Keep shelf {shelf.Name}")" Plus="false" OnClick="() => _confirming = null" />
+                    }
+                    else
+                    {
+                        <span class="folio-drag-handle" aria-hidden="true" title="Drag to reorder">⋮⋮</span>
+                        <input class="folio-underline-input" aria-label="@($"Name for {shelf.Name}")" maxlength="100" value="@shelf.Name" disabled="@_busy"
+                               @onchange="e => Rename(shelf, e.Value?.ToString())" />
+                        <button type="button" class="folio-bracket folio-bracket-mini" title="Move up" aria-label="Move shelf up" disabled="@(_busy || index == 0)" @onclick="() => Move(shelf, -1)">[ ↑ ]</button>
+                        <button type="button" class="folio-bracket folio-bracket-mini" title="Move down" aria-label="Move shelf down" disabled="@(_busy || index == _shelves.Count - 1)" @onclick="() => Move(shelf, 1)">[ ↓ ]</button>
+                        <BracketButton Label="DELETE" AriaLabel="@($"Delete {shelf.Name}")" Plus="false" Class="is-danger" Disabled="@_busy" OnClick="() => _confirming = shelf.Id" />
+                    }
                 </div>
             }
         </div>
         @if (_shelves.Count == 0) { <p class="folio-muted">No shelves yet. Create one from the sidebar.</p> }
         <p class="folio-error-text" role="alert">@_error</p>
     </DialogContent>
-    <DialogActions><button class="folio-primary-btn" disabled="@_busy" @onclick="() => Dialog.Close(DialogResult.Ok(true))">Done</button></DialogActions>
+    <DialogActions><BracketButton Label="DONE" Plus="false" Disabled="@_busy" OnClick="() => Dialog.Close(DialogResult.Ok(true))" /></DialogActions>
 </MudDialog>
 @code {
     [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
     private IReadOnlyList<Shelf> _shelves = [];
     private bool _busy; private string? _error;
+    private Guid? _confirming, _dragging, _dragOver;
     protected override async Task OnInitializedAsync() => await Refresh();
     private async Task Refresh() => _shelves = await Library.GetShelvesAsync();
-    private async Task Run(Func<Task> action) { if (_busy) return; _busy = true; _error = null; try { await action(); await Refresh(); } catch (Exception ex) { _error = ex.Message; } finally { _busy = false; } }
-    private Task Rename(Shelf shelf) => Run(() => Library.RenameShelfAsync(shelf.Id, shelf.Name));
+    // Every change refreshes the shared row list at once, so the sidebar and the bookcase update live (WP2).
+    private async Task Run(Func<Task> action) { if (_busy) return; _busy = true; _error = null; try { await action(); await Refresh(); await ShelfNav.RefreshAsync(); await Events.NotifyAsync(); } catch (Exception ex) { _error = ex.Message; await Refresh(); } finally { _busy = false; } }
+    private Task Rename(Shelf shelf, string? name) => string.IsNullOrWhiteSpace(name) || name == shelf.Name ? Task.CompletedTask : Run(() => Library.RenameShelfAsync(shelf.Id, name.Trim()));
     private Task Move(Shelf shelf, int direction) => Run(() => Library.MoveShelfAsync(shelf.Id, direction));
-    private async Task Delete(Shelf shelf)
+    private Task Delete(Shelf shelf) { _confirming = null; return Run(() => Library.DeleteShelfAsync(shelf.Id)); }
+    private Task Drop(int targetIndex)
     {
-        if (await ConfirmActionDialog.ShowAsync(Dialogs, "Delete shelf?", "Remove this shelf from your library?", "Delete shelf", shelf.Name, "Your books and notes will stay in the library."))
-            await Run(() => Library.DeleteShelfAsync(shelf.Id));
+        var id = _dragging; _dragging = null; _dragOver = null;
+        var from = _shelves.ToList().FindIndex(s => s.Id == id);
+        if (id == null || from < 0 || from == targetIndex) return Task.CompletedTask;
+        // One saved move is one position: drag across several rows by repeating it.
+        return Run(async () => { for (var step = 0; step < Math.Abs(targetIndex - from); step++) await Library.MoveShelfAsync(id.Value, Math.Sign(targetIndex - from)); });
     }
 }

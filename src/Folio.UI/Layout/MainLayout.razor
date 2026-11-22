@@ -14,37 +14,39 @@
 @inject FolioNavigator Navigator
 @inject LibraryEvents Events
 @inject StageState Stage
+@inject ShelfNavigator ShelfNav
 
 <MudThemeProvider Theme="_theme" IsDarkMode="@Preferences.Current.DarkMode" />
 <MudPopoverProvider />
-<MudDialogProvider />
+<MudDialogProvider CloseOnEscapeKey="true" />
 <div class="folio-app @PhaseClass" data-theme="@(Preferences.Current.DarkMode ? "dark" : "light")">
     <div class="folio-library-shell @(Preferences.Current.SidebarCollapsed ? "sidebar-collapsed" : "") @(_inReader && Stage.Phase == StagePhase.None ? "is-covered" : "") @(Stage.Scene != null && Stage.Available ? "stage-on" : "")" inert="@(_inReader || Stage.Phase != StagePhase.None)">
         <button type="button" class="folio-skip-link" @onclick="SkipToContent">Skip to content</button>
         <aside class="folio-sidebar" aria-label="Main navigation">
             <button class="folio-brand" @onclick="() => Go(FolioRoutes.Home)" aria-label="Folio home" title="Folio home">
+                <img class="folio-brand-logo" src="_content/Folio.UI/images/folio-logo.png" width="28" height="28" alt="" />
                 <span class="folio-wordmark">FOLIO</span>
             </button>
             <nav aria-label="Library">
             <div class="folio-nav-section">[ WORKSPACE ]</div>
-            <button class="folio-nav-link @Active(_route.Home || (_route.Shelf && _route.ShelfId == null && _route.Status == null))" aria-current="@Current(_route.Home)" @onclick="() => Go(FolioRoutes.Home)" title="Library"><MudIcon Icon="@Icons.Material.Outlined.LocalLibrary" /><span>Library</span><small>@_counts.All</small></button>
+            <button class="folio-nav-link @Active(_route.Home || (_route.Shelf && _route.ShelfId == null && _route.Status == null))" aria-current="@Current(_route.Home)" @onclick="() => Go(FolioRoutes.Home)" title="Library"><FolioIcon Name="library" /><span>Library</span><small>@_counts.All</small></button>
             <div class="folio-nav-section">[ READING ]</div>
-            <button class="folio-nav-link @Active(_route.Status == ReadingStatus.Reading)" @onclick="() => Go(FolioRoutes.Shelf(status: ReadingStatus.Reading))" title="Currently reading"><MudIcon Icon="@Icons.Material.Outlined.AutoStories" /><span>Currently reading</span><small>@_counts.Reading</small></button>
-            <button class="folio-nav-link @Active(_route.Status == ReadingStatus.WantToRead)" @onclick="() => Go(FolioRoutes.Shelf(status: ReadingStatus.WantToRead))" title="Want to read"><MudIcon Icon="@Icons.Material.Outlined.BookmarkBorder" /><span>Want to read</span><small>@_counts.WantToRead</small></button>
-            <button class="folio-nav-link @Active(_route.Status == ReadingStatus.Finished)" @onclick="() => Go(FolioRoutes.Shelf(status: ReadingStatus.Finished))" title="Finished"><MudIcon Icon="@Icons.Material.Outlined.CheckCircle" /><span>Finished</span><small>@_counts.Finished</small></button>
-            <div class="folio-nav-section folio-shelves-heading"><span>[ SHELVES ]</span><div class="folio-shelf-actions"><button aria-label="Manage shelves" title="Manage shelves" @onclick="ManageShelves"><MudIcon Icon="@Icons.Material.Outlined.Tune" Size="Size.Small" /></button><button aria-label="Create shelf" title="Create shelf" @onclick="CreateShelf"><MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" /></button></div></div>
+            <button class="folio-nav-link @Active(_route.Status == ReadingStatus.Reading)" @onclick="() => Go(FolioRoutes.Shelf(status: ReadingStatus.Reading))" title="Currently reading"><FolioIcon Name="reading" /><span>Currently reading</span><small>@_counts.Reading</small></button>
+            <button class="folio-nav-link @Active(_route.Status == ReadingStatus.WantToRead)" @onclick="() => Go(FolioRoutes.Shelf(status: ReadingStatus.WantToRead))" title="Want to read"><FolioIcon Name="want" /><span>Want to read</span><small>@_counts.WantToRead</small></button>
+            <button class="folio-nav-link @Active(_route.Status == ReadingStatus.Finished)" @onclick="() => Go(FolioRoutes.Shelf(status: ReadingStatus.Finished))" title="Finished"><FolioIcon Name="finished" /><span>Finished</span><small>@_counts.Finished</small></button>
+            <div class="folio-nav-section folio-shelves-heading"><span>[ SHELVES ]</span><div class="folio-shelf-actions"><button class="folio-bracket-mini" aria-label="Manage shelves" title="Manage shelves" @onclick="ManageShelves">[ ⋯ ]</button><button class="folio-bracket-mini" aria-label="Create shelf" title="Create shelf" @onclick="CreateShelf">[ + ]</button></div></div>
             <div class="folio-shelves-list" role="region" aria-label="Shelves" tabindex="0">
                 @for (var i = 0; i < _shelves.Count; i++)
                 {
                     var shelf = _shelves[i]; var number = i + 1;
-                    <button class="folio-nav-link @Active(_route.ShelfId == shelf.Id)" aria-current="@Current(_route.ShelfId == shelf.Id)" @onclick="() => Go(FolioRoutes.Shelf(shelf.Id))" title="@shelf.Name"><MudIcon Icon="@Icons.Material.Outlined.Folder" /><span>@shelf.Name</span>@if (number <= 9) { <small class="folio-mono" aria-hidden="true">@number</small> }</button>
+                    <button class="folio-nav-link @Active(_route.ShelfId == shelf.Id)" aria-current="@Current(_route.ShelfId == shelf.Id)" @onclick="() => Go(FolioRoutes.Shelf(shelf.Id))" title="@shelf.Name"><FolioIcon Name="shelf" /><span>@shelf.Name</span><small class="folio-mono" aria-hidden="true">@number.ToString("00")</small></button>
                 }
                 @if (_shelves.Count == 0) { <p class="folio-sidebar-hint">Create a shelf to organize your books.</p> }
             </div>
             </nav>
             <div class="folio-sidebar-bottom">
-                <button class="folio-nav-link @Active(_route.Trash)" aria-current="@Current(_route.Trash)" @onclick="() => Go(FolioRoutes.Trash)" title="Trash"><MudIcon Icon="@Icons.Material.Outlined.Delete" /><span>Trash</span><small>@_counts.Trash</small></button>
-                <button class="folio-nav-link @Active(_route.Settings)" aria-current="@Current(_route.Settings)" @onclick="() => Go(FolioRoutes.Settings)" title="Settings"><MudIcon Icon="@Icons.Material.Outlined.Settings" /><span>Settings</span></button>
+                <button class="folio-nav-link @Active(_route.Trash)" aria-current="@Current(_route.Trash)" @onclick="() => Go(FolioRoutes.Trash)" title="Trash"><FolioIcon Name="trash" /><span>Trash</span><small>@_counts.Trash</small></button>
+                <button class="folio-nav-link @Active(_route.Settings)" aria-current="@Current(_route.Settings)" @onclick="() => Go(FolioRoutes.Settings)" title="Settings"><FolioIcon Name="settings" /><span>Settings</span></button>
             </div>
         </aside>
         <section class="folio-shell-main">
@@ -94,7 +96,7 @@
     private bool _inReader;
     private RouteInfo _route = new();
     private LibraryCounts _counts = new(0, 0, 0, 0, 0);
-    private IReadOnlyList<Shelf> _shelves = [];
+    private IReadOnlyList<Shelf> _shelves => ShelfNav.Shelves; // the navigator is the one list of shelves (WP2)
     private bool _importing, _importCancelled;
     private double _importProgress;
     private CancellationTokenSource? _importCancellation;
@@ -152,6 +154,7 @@
         Inbox.Changed += ImportQueued;
         Navigation.LocationChanged += LocationChanged;
         Stage.Changed += StageChanged;
+        ShelfNav.RowsChanged += ShelvesChanged;
         UpdateRoute();
         await RefreshNavigation();
     }
@@ -192,7 +195,7 @@
     }
     private void SearchKey(KeyboardEventArgs e) { if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_search)) Navigator.Go(FolioRoutes.Search(_search.Trim())); }
 
-    public async Task RefreshNavigation() { _counts = await Library.GetCountsAsync(); _shelves = await Library.GetShelvesAsync(); StateHasChanged(); }
+    public async Task RefreshNavigation() { _counts = await Library.GetCountsAsync(); await ShelfNav.RefreshAsync(); StateHasChanged(); }
     /// <summary>Pages call this after changing books or shelves so counts and open views refresh.</summary>
     public async Task NotifyLibraryChangedAsync() { await RefreshNavigation(); await Events.NotifyAsync(); }
     public IReadOnlyList<Shelf> Shelves => _shelves;
@@ -276,6 +279,7 @@
         Preferences.Save(Preferences.Current with { BackupReminderAt = DateTimeOffset.UtcNow });
         Notifications.Add("Your books are stored in this browser, which can clear its storage. Export a backup from Settings to keep them safe.", Severity.Info, "Back up your library");
     }
-    public void Dispose() { Inbox.Changed -= ImportQueued; Navigation.LocationChanged -= LocationChanged; Stage.Changed -= StageChanged; _importCancellation?.Cancel(); }
+    public void Dispose() { Inbox.Changed -= ImportQueued; Navigation.LocationChanged -= LocationChanged; Stage.Changed -= StageChanged; ShelfNav.RowsChanged -= ShelvesChanged; _importCancellation?.Cancel(); }
     private void StageChanged() => _ = InvokeAsync(StateHasChanged);
+    private void ShelvesChanged() => _ = InvokeAsync(StateHasChanged);
 }

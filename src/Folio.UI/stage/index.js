@@ -3,7 +3,8 @@
 // something is settling (render on demand), and never while paused or hidden.
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { damp, dampObject, idleTurn, motionSettings, LAMBDA } from './motion.js';
+import { damp, dampObject, idleTurn, motionSettings, travelLambda, LAMBDA } from './motion.js';
+import { GestureGate } from './input.js';
 import { rowsFor } from './layout.js';
 import { BookFactory } from './book-factory.js';
 import { LruCache, loadCover, ensureFonts } from './textures.js';
@@ -29,6 +30,13 @@ export function probeWebGL(canvas, { allowSoftware = false } = {}) {
     return { gl, renderer };
 }
 
+/** Largest remaining distance between the camera and its target pose (cm). */
+function cameraRemaining(state, target) {
+    let max = 0;
+    for (const key in target) max = Math.max(max, Math.abs((state[key] ?? target[key]) - target[key]));
+    return max;
+}
+
 export class Stage {
     constructor(canvas, options = {}, callbacks = {}) {
         this.canvas = canvas;
@@ -42,7 +50,9 @@ export class Stage {
         this.pointer = { x: 0, y: 0 }; this.lastInputAt = performance.now(); this.idleClock = 0;
         this.paused = false; this.disposed = false; this.raf = 0; this.contextLosses = 0;
         this.stats = { frames: 0, lastFrameAt: 0, frameTimes: [], drawCalls: 0, textures: 0, quality: null, renderer: options.renderer ?? null };
-        this.settledKind = null;
+        this.settledKind = null; this.reportedKey = null;
+        this.rowsVersion = null; this.pendingScene = null; this.cameraLambda = LAMBDA.camera;
+        this.gate = new GestureGate();
 
         const probe = options.gl ? { gl: options.gl } : probeWebGL(canvas, { allowSoftware: this.testMode || options.allowSoftware });
         if (!probe.gl) throw Object.assign(new Error(probe.reason), { fallbackReason: probe.reason });
@@ -93,7 +103,7 @@ export class Stage {
     // ---- inputs from .NET ------------------------------------------------------------------------------------------
 
     /** All books (so any book can open), with `visibleIds` limiting which stand on the rows (LIB-6 filters). */
-    setLibrary(books, shelves = [], visibleIds = null) {
+    setLibrary(books, shelves = [], visibleIds = null, rowsVersion = null) {
         const known = new Set(this.byId.keys());
         const signature = b => `${b.title}|${b.author}|${b.coverUrl}|${Math.round((b.progress || 0) * 100)}|${b.color}`;
         for (const book of books) {
@@ -101,7 +111,7 @@ export class Stage {
             if (previous && signature(previous) !== signature(book)) this.looks.delete(book.id);
         }
         const firstLoad = !this.libraryLoaded; this.libraryLoaded = true;
-        this.books = books; this.shelves = shelves;
+        this.books = books; this.shelves = shelves; this.rowsVersion = rowsVersion;
         this.byId = new Map(books.map(b => [b.id, b]));
         const visible = visibleIds ? new Set(visibleIds) : null;
         this.rows = layoutRows(rowsFor(visible ? books.filter(b => visible.has(b.id)) : books, shelves));
@@ -126,6 +136,13 @@ export class Stage {
         if (this.featuredId && !this.byId.has(this.featuredId)) this.setFeatured(null);
         this.refreshLooks();
         this.invalidate();
+        this.applyPendingScene();
+    }
+
+    /** A shelf scene waits here when it names a newer row list than the stage holds (WP2). */
+    applyPendingScene() {
+        const pending = this.pendingScene;
+        if (pending && (pending.rowsVersion == null || pending.rowsVersion === this.rowsVersion)) { this.pendingScene = null; this.setScene(pending); }
     }
 
     /** One plank under each row: the books stand on something, and an empty library still shows a shelf (LIB-7). */
@@ -145,15 +162,28 @@ export class Stage {
     }
 
     setScene(scene) {
-        const next = { kind: scene?.kind || 'hero', bookId: scene?.bookId ?? null, shelfId: scene?.shelfId ?? null, page: scene?.page ?? null };
+        const next = { kind: scene?.kind || 'hero', bookId: scene?.bookId ?? null, rowIndex: Number.isInteger(scene?.rowIndex) ? scene.rowIndex : null,
+            rowsVersion: Number.isInteger(scene?.rowsVersion) ? scene.rowsVersion : null, page: scene?.page ?? null };
+        if (next.kind === 'shelf' && next.rowsVersion != null && next.rowsVersion !== this.rowsVersion) {
+            // The row list changed (a shelf was created, renamed or reordered): ask for it again instead of guessing a row.
+            this.pendingScene = next; this.callbacks.onRowsStale?.(next.rowsVersion);
+            return;
+        }
+        this.pendingScene = null;
+        const previousCamera = this.cameraState;
         if (next.kind === 'shelf') {
-            const index = this.rows.findIndex(r => r.id === (next.shelfId || null));
-            this.rowIndex = Math.max(0, index);
+            const wanted = next.rowIndex ?? this.rowIndex;
+            this.rowIndex = Math.min(Math.max(0, wanted), Math.max(0, this.rows.length - 1));
         }
         if (next.bookId) this.focusId = next.bookId;
         if (next.kind !== 'shelf') this.setFeatured(next.bookId || this.featuredId || this.books[0]?.id || null);
-        this.scene = next; this.settledKind = null;
+        this.scene = next; this.settledKind = null; this.reportedKey = null;
         this.backgroundTarget = null;
+        this.cameraLambda = LAMBDA.camera;
+        if (next.kind === 'shelf' && previousCamera) {
+            const target = cameraPose(next, { rowIndex: this.rowIndex, rows: this.rows, focusId: this.focusId, halfViewWidth: this.halfViewWidth() });
+            this.cameraLambda = travelLambda(Math.abs(target.py - previousCamera.py));
+        }
         this.touch();
         this.refreshLooks();
         if (!this.motion.travel && this.cameraState) this.snap();
@@ -481,7 +511,8 @@ export class Stage {
         // camera
         const target = cameraPose(this.scene, ctx);
         if (!this.cameraState || !this.motion.travel) this.cameraState = { ...target };
-        else remaining = Math.max(remaining, dampObject(this.cameraState, target, this.scene.kind === 'opening' ? LAMBDA.opening : LAMBDA.camera, dt));
+        else remaining = Math.max(remaining, dampObject(this.cameraState, target, this.scene.kind === 'opening' ? LAMBDA.opening : this.cameraLambda, dt));
+        if (this.scene.kind === 'shelf' && !this.pendingScene && cameraRemaining(this.cameraState, target) < 0.3) this.report('shelf');
         const c = this.cameraState;
         // Scenes centre on the main area (right of the sidebar, below the header); opening uses the whole window.
         const offsetTarget = this.scene.kind === 'opening' || this.opening ? { x: 0, y: 0 } : this.mainOffset();
@@ -532,9 +563,16 @@ export class Stage {
     }
 
     maybeSettled() {
-        if (this.settledKind === this.scene.kind) return;
         this.settledKind = this.scene.kind;
-        this.callbacks.onSceneSettled?.(this.scene.kind);
+        this.report(this.scene.kind);
+    }
+
+    /** Tells .NET the scene arrived, once per scene and row (the shelf navigator's settle handshake, WP2). */
+    report(kind) {
+        const key = `${kind}:${kind === 'shelf' ? this.rowIndex : ''}`;
+        if (this.reportedKey === key) return;
+        this.reportedKey = key;
+        this.callbacks.onSceneSettled?.(kind, kind === 'shelf' ? this.rowIndex : -1);
     }
 
     recordFrame(now, intervalMs, cpuMs) {
@@ -655,12 +693,13 @@ export class Stage {
             this.callbacks.onBookActivated?.(id, 'menu');
         });
         on(this.input, 'wheel', event => {
-            if (!live() || Math.abs(event.deltaY) < 4 || event.target?.closest?.('.folio-stage-scroll')) return;
+            if (!live() || event.target?.closest?.('.folio-stage-scroll')) return;
+            // One gesture is one step: momentum events of a trackpad swipe never fire a second one (WP2).
+            const { intent, pan } = this.gate.wheel(event, performance.now());
+            if (!event.deltaX && !event.deltaY) return;
             event.preventDefault();
-            const now = performance.now();
-            if (now - (this.lastWheel || 0) < 450) return;
-            this.lastWheel = now; this.touch();
-            this.callbacks.onScrollIntent?.(event.deltaY > 0 ? 'down' : 'up');
+            if (pan) this.panBy?.(pan);
+            if (intent) { this.touch(); this.callbacks.onScrollIntent?.(intent); }
         }, { passive: false });
         let touchStart = null;
         on(this.input, 'touchstart', event => { touchStart = event.touches[0]?.clientY ?? null; }, { passive: true });

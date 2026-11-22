@@ -8,6 +8,7 @@
 @inject NavigationManager Navigation
 @inject LibraryEvents Events
 @inject SceneKeys Keys
+@inject ShelfNavigator ShelfNav
 @inject StageState Stage
 @inject IJSRuntime JS
 
@@ -36,14 +37,6 @@ else if (Mode == View.Shelf)
                 @foreach (var sort in Enum.GetValues<LibrarySort>()) { <option value="@sort">@SortName(sort)</option> }
             </select></label>
         </header>
-        <nav class="folio-row-index" aria-label="Shelves">
-            <BracketButton Label="ALL BOOKS" Plus="false" Class="@(ShelfId == null ? "is-current" : "")" aria-current="@(ShelfId == null ? "page" : null)" OnClick="() => Navigator.Go(FolioRoutes.Shelf(null, _status, Q))" />
-            @for (var i = 0; i < _shelves.Count; i++)
-            {
-                var shelf = _shelves[i]; var number = i + 1;
-                <BracketButton Label="@shelf.Name.ToUpperInvariant()" AriaLabel="@($"Shelf {shelf.Name}")" Plus="false" Hint="@(number <= 9 ? number.ToString() : null)" Class="@(ShelfId == shelf.Id ? "is-current" : "")" aria-current="@(ShelfId == shelf.Id ? "page" : null)" OnClick="() => Navigator.Go(FolioRoutes.Shelf(shelf.Id, _status, Q))" />
-            }
-        </nav>
         <div class="folio-status-filter" role="group" aria-label="Reading status">
             @foreach (var (status, label) in Statuses)
             {
@@ -124,6 +117,8 @@ else if (Mode == View.TwoD)
         Stage.ScrollIntent += StageScroll;
         Stage.Hovered += StageHovered;
         Stage.Settled += StageSettled;
+        ShelfNav.TargetChanged += TargetChanged;
+        ShelfNav.RowsChanged += RowsChanged;
     }
 
     protected override async Task OnParametersSetAsync()
@@ -133,15 +128,21 @@ else if (Mode == View.TwoD)
         _home = path.Length == 0;
         _shelfRoute = path == "shelf" || path.StartsWith("shelf/", StringComparison.Ordinal);
         _status = Enum.TryParse<ReadingStatus>(Status, true, out var status) ? status : null;
-        _shelves = await Library.GetShelvesAsync();
-        _shelf = null;
-        if (ShelfId is { } id)
-        {
-            _shelf = _shelves.FirstOrDefault(s => s.Id == id);
-            if (_shelf == null) { Navigator.Go(FolioRoutes.Home, replace: true); return; }
-        }
+        await ShelfNav.RefreshAsync();
+        _shelves = ShelfNav.Shelves;
+        if (!ResolveShelf()) return;
+        // Back, Forward, typed addresses and sidebar clicks set the target row; a route that matches it does nothing.
+        if (_shelfRoute) ShelfNav.SyncFromRoute(ShelfId);
         _filter = new StageFilter(Enum.TryParse<LibrarySort>(Sort, true, out var sort) ? sort : LibrarySort.Recent, _shelfRoute ? _status : null, _shelfRoute ? Q : null);
         await LoadAsync();
+    }
+
+    /// <summary>Finds the shelf named in the address among the current rows; a shelf that no longer exists goes home.</summary>
+    private bool ResolveShelf()
+    {
+        _shelf = ShelfId is { } id ? _shelves.FirstOrDefault(s => s.Id == id) : null;
+        if (ShelfId != null && _shelf == null) { Navigator.Go(FolioRoutes.Home, replace: true); return false; }
+        return true;
     }
 
     private async Task LoadAsync()
@@ -170,7 +171,7 @@ else if (Mode == View.TwoD)
                 break;
             case View.Shelf:
                 Stage.SetFilter(_filter);
-                Stage.Show(StageScene.Shelf(ShelfId, _focusId), this);
+                Stage.Show(StageScene.Shelf(ShelfNav.TargetIndex, ShelfNav.RowsVersion, _focusId), this);
                 // Announce the scene when it is shown; the stage's settle event repeats it once the camera arrives.
                 _announcement = ShelfAnnouncement;
                 break;
@@ -186,7 +187,7 @@ else if (Mode == View.TwoD)
     {
         if (_focusId == id) return;
         _focusId = id;
-        if (Mode == View.Shelf) Stage.Show(StageScene.Shelf(ShelfId, id), this);
+        if (Mode == View.Shelf) Stage.Show(StageScene.Shelf(ShelfNav.TargetIndex, ShelfNav.RowsVersion, id), this);
     }
 
     private async Task MoveFocus(int delta)
@@ -208,8 +209,9 @@ else if (Mode == View.TwoD)
         await JS.InvokeVoidAsync("folioShell.focusElement", BookButtonId(id));
     });
 
-    private void StageSettled(string kind) => _ = InvokeAsync(() =>
+    private void StageSettled(string kind, int rowIndex) => _ = InvokeAsync(() =>
     {
+        if (kind == "shelf") ShelfNav.OnSettled(rowIndex);
         _announcement = kind switch
         {
             "shelf" when Mode == View.Shelf => ShelfAnnouncement,
@@ -244,21 +246,28 @@ else if (Mode == View.TwoD)
 
     private Task MenuChanged() => Layout?.NotifyLibraryChangedAsync() ?? Task.CompletedTask;
 
-    private Task StageScroll(string direction) => InvokeAsync(() => StepRow(direction == "down" ? 1 : -1));
+    private Task StageScroll(string direction) => InvokeAsync(() => StepRow(direction == "down" ? 1 : -1, repeat: false));
 
-    /// <summary>Up/down through Hero → All books → each shelf (LIB-3, SHF-1).</summary>
-    private void StepRow(int delta)
+    /// <summary>Up/down through Hero → All books → each shelf (LIB-3, SHF-1). One gesture or key press moves one row (WP2).</summary>
+    private void StepRow(int delta, bool repeat)
     {
-        if (Mode == View.Hero) { if (delta > 0) Navigator.Go(FolioRoutes.Shelf()); return; }
+        if (Mode == View.Hero) { if (delta > 0 && !repeat) Navigator.Go(FolioRoutes.Shelf()); return; }
         if (Mode != View.Shelf) return;
-        var rows = new List<Guid?> { null };
-        rows.AddRange(_shelves.Select(s => (Guid?)s.Id));
-        var index = rows.IndexOf(ShelfId) + delta;
-        if (index < 0) Navigator.Go(FolioRoutes.Home);
-        else if (index < rows.Count) Navigator.Go(FolioRoutes.Shelf(rows[index], _status, Q));
+        if (delta < 0 && ShelfNav.TargetIndex == 0) { if (!repeat) Navigator.Go(FolioRoutes.Home); return; }
+        ShelfNav.Step(delta, repeat);
     }
 
-    private async Task Key(string key, bool shift)
+    /// <summary>The navigator chose a new target row: the camera starts at once, and the address follows it.</summary>
+    private void TargetChanged(int index) => _ = InvokeAsync(() =>
+    {
+        if (Mode != View.Shelf) return;
+        UpdateStage();
+        Navigator.Go(FolioRoutes.Shelf(ShelfNav.Rows[index].Id, _status, Q));
+    });
+
+    private void RowsChanged() => _ = InvokeAsync(() => { if (Mode == View.Shelf) UpdateStage(); StateHasChanged(); });
+
+    private async Task Key(string key, bool shift, bool repeat)
     {
         var book = Mode switch { View.Hero => _hero?.Current ?? HeroBooks.FirstOrDefault(), View.Shelf => FocusedBook, _ => _view?.FocusedBook };
         switch (key)
@@ -270,11 +279,14 @@ else if (Mode == View.TwoD)
                 else if (Mode == View.Hero) _hero?.Step(delta);
                 else _view?.StepHero(delta);
                 break;
-            case "ArrowDown": StepRow(1); break;
-            case "ArrowUp": StepRow(-1); break;
+            case "ArrowDown": StepRow(1, repeat); break;
+            case "ArrowUp": StepRow(-1, repeat); break;
             case "Escape" when !_home: Navigator.Go(FolioRoutes.Home); break;
             case [var digit] when char.IsAsciiDigit(digit) && digit != '0' && digit - '1' < _shelves.Count:
-                Navigator.Go(FolioRoutes.Shelf(_shelves[digit - '1'].Id)); break;
+                // Shelf n is row n (row 0 is All books). The navigator sets the target; the address follows.
+                if (Mode != View.Shelf) Navigator.Go(FolioRoutes.Shelf(_shelves[digit - '1'].Id));
+                else if (!ShelfNav.GoTo(digit - '0')) Navigator.Go(FolioRoutes.Shelf(_shelves[digit - '1'].Id, _status, Q));
+                break;
         }
     }
 
@@ -291,7 +303,9 @@ else if (Mode == View.TwoD)
     private Task Changed() => Layout?.RefreshNavigation() ?? Task.CompletedTask;
     private async Task Reload()
     {
-        _shelves = await Library.GetShelvesAsync();
+        await ShelfNav.RefreshAsync();
+        _shelves = ShelfNav.Shelves;
+        if (!ResolveShelf()) return;               // renamed shelves show their new name; deleted ones go home
         await LoadAsync();
         if (_view != null) await _view.RefreshAsync();
         await InvokeAsync(StateHasChanged);
@@ -305,6 +319,8 @@ else if (Mode == View.TwoD)
         Stage.ScrollIntent -= StageScroll;
         Stage.Hovered -= StageHovered;
         Stage.Settled -= StageSettled;
+        ShelfNav.TargetChanged -= TargetChanged;
+        ShelfNav.RowsChanged -= RowsChanged;
         Stage.Release(this);
         if (_keys != null) await _keys.DisposeAsync();
     }

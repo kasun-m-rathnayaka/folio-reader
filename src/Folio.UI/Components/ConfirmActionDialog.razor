@@ -1,15 +1,13 @@
-<MudDialog Class="folio-shelf-dialog folio-confirm-dialog">
-    <TitleContent>
-        <div class="folio-confirm-heading"><span class="folio-confirm-icon" aria-hidden="true"><MudIcon Icon="@Icons.Material.Outlined.DeleteOutline" /></span><h2>@Title</h2></div>
-    </TitleContent>
+<MudDialog Class="folio-dialog folio-confirm-dialog">
+    <TitleContent><div class="folio-eyebrow">[ CONFIRM ]</div><h2 class="folio-dialog-title">@Title</h2></TitleContent>
     <DialogContent>
         @if (!string.IsNullOrWhiteSpace(Subject)) { <div class="folio-confirm-subject">@Subject</div> }
         <p class="folio-confirm-message">@Message</p>
         @if (!string.IsNullOrWhiteSpace(Detail)) { <p class="folio-confirm-detail">@Detail</p> }
     </DialogContent>
     <DialogActions>
-        <button @ref="_cancel" type="button" class="folio-subtle-btn" @onclick="() => Dialog.Cancel()">Cancel</button>
-        <button type="button" class="folio-danger-btn" @onclick="() => Dialog.Close(DialogResult.Ok(true))">@ConfirmText</button>
+        <button @ref="_cancel" type="button" class="folio-bracket" @onclick="() => Dialog.Cancel()"><span class="folio-bracket-edge" aria-hidden="true">[</span><span class="folio-bracket-label">CANCEL</span><span class="folio-bracket-edge" aria-hidden="true">]</span></button>
+        <BracketButton Label="@ConfirmText.ToUpperInvariant()" AriaLabel="@ConfirmText" Plus="false" Class="is-danger" OnClick="() => Dialog.Close(DialogResult.Ok(true))" />
     </DialogActions>
 </MudDialog>
 @code {

@@ -27,10 +27,11 @@ public sealed record PageRect(double X, double Y, double Width, double Height);
 public enum StagePhase { None, Opening, Handoff, Closing }
 
 /// <summary>A scene the stage should show (SPEC: scenes). Book and shelf ids are optional.</summary>
-public sealed record StageScene(string Kind, Guid? BookId = null, Guid? ShelfId = null, int? Page = null)
+public sealed record StageScene(string Kind, Guid? BookId = null, int? RowIndex = null, int? RowsVersion = null, int? Page = null)
 {
     public static StageScene Hero(Guid? bookId) => new("hero", bookId);
-    public static StageScene Shelf(Guid? shelfId, Guid? focusId = null) => new("shelf", focusId, shelfId);
+    /// <summary>A bookcase row by index and the row-list version it was computed from (WP2).</summary>
+    public static StageScene Shelf(int rowIndex, int rowsVersion, Guid? focusId = null) => new("shelf", focusId, rowIndex, rowsVersion);
 }
 
 /// <summary>
@@ -113,7 +114,9 @@ public sealed class StageState
     public event Action<Guid>? Hovered;
     public event Func<Guid, string, Task>? Activated;
     public event Func<string, Task>? ScrollIntent;
-    public event Action<string>? Settled;
+    public event Action<string, int>? Settled;
+    /// <summary>The stage was given a scene for a newer row list than it holds and asks for the library again.</summary>
+    public event Func<Task>? RowsStale;
 
     private object? _owner;
 
@@ -139,6 +142,7 @@ public sealed class StageState
     internal void ReportHover(Guid id) { HoveredBookId = id; Hovered?.Invoke(id); }
     internal Task ReportActivated(Guid id, string action) => Activated?.Invoke(id, action) ?? Task.CompletedTask;
     internal Task ReportScroll(string direction) => ScrollIntent?.Invoke(direction) ?? Task.CompletedTask;
-    internal void ReportSettled(string kind) => Settled?.Invoke(kind);
+    internal void ReportSettled(string kind, int rowIndex) => Settled?.Invoke(kind, rowIndex);
+    internal Task ReportRowsStale() => RowsStale?.Invoke() ?? Task.CompletedTask;
     internal void ReportAccent(Guid id, string? color) { _accents[id] = color; Changed?.Invoke(); }
 }

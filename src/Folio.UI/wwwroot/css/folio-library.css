@@ -174,11 +174,10 @@ select { border-radius:2px; background:var(--folio-surface); border-color:var(--
 .folio-stage-shelf { display:flex; flex-direction:column; padding:24px 32px 0; }
 .folio-stage-shelf-head { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; }
 .folio-stage-shelf-head h1 { margin-bottom:6px; }
-.folio-row-index, .folio-status-filter { display:flex; flex-wrap:wrap; gap:0 14px; }
-.folio-status-filter { margin-top:-2px; }
-.folio-row-index .folio-bracket, .folio-status-filter .folio-bracket { color:var(--folio-text-muted); font-size:11px; }
-.folio-row-index .folio-bracket.is-current, .folio-status-filter .folio-bracket.is-current { color:var(--folio-text); }
-.folio-row-index .folio-bracket.is-current .folio-bracket-label, .folio-status-filter .folio-bracket.is-current .folio-bracket-label { background-size:100% 1px; }
+.folio-status-filter { display:flex; flex-wrap:wrap; gap:0 14px; margin-top:-2px; }
+.folio-status-filter .folio-bracket { color:var(--folio-text-muted); font-size:11px; }
+.folio-status-filter .folio-bracket.is-current { color:var(--folio-text); }
+.folio-status-filter .folio-bracket.is-current .folio-bracket-label { background-size:100% 1px; }
 .folio-stage-empty { margin:auto; text-align:center; display:grid; gap:12px; justify-items:center; padding-bottom:80px; }
 .folio-stage-empty .folio-display { font-size:32px; }
 /* The focus layer is the real library for keyboard and screen readers. It sits along the bottom edge, visually quiet:

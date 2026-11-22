@@ -22,14 +22,15 @@ async function putOnShelf(page, bookId, shelf) {
 }
 
 async function collectRow(page, count) {
-    const names = new Set();
-    for (let i = 0; i < count + 1; i++) {
-        await page.keyboard.press('ArrowRight');
+    const names = new Set(); let last = null;
+    const read = async () => {
         await page.waitForTimeout(80);
         const label = await page.evaluate(() => document.activeElement?.closest('.folio-focus-layer') ? document.activeElement.getAttribute('aria-label') : null);
-        if (label) names.add(label.split(',')[0]);
-    }
-    return [...names];
+        if (label) { last = label.split(',')[0]; names.add(last); }
+    };
+    for (let i = 0; i < count + 1; i++) { await page.keyboard.press('ArrowLeft'); await read(); }    // start from the first book
+    for (let i = 0; i < count + 1; i++) { await page.keyboard.press('ArrowRight'); await read(); }
+    return [...[...names].filter(n => n !== last), last];   // the book focused last comes last
 }
 
 test('keyboard only: reach every book on three shelves, open one, return', async ({ page }) => {

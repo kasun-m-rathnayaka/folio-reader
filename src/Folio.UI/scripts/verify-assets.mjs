@@ -46,6 +46,13 @@ for (const license of ['OFL-InstrumentSerif.txt', 'OFL-Inter.txt', 'OFL-JetBrain
     if (!existsSync(resolve(root, 'wwwroot/fonts', license))) fail(`missing font licence ${license}`);
 console.log(`Verified ${fonts.length} self-hosted font files and their OFL licences.`);
 
+// 3b. The app icon shows in the sidebar (WP7): the file exists and the layout references it by a base-relative path.
+const logo = resolve(root, 'wwwroot/images/folio-logo.png');
+if (!existsSync(logo)) fail('wwwroot/images/folio-logo.png is missing');
+const layout = await readFile(resolve(root, 'Layout/MainLayout.razor'), 'utf8');
+if (!layout.includes('src="_content/Folio.UI/images/folio-logo.png"')) fail('MainLayout does not show the app icon in the sidebar brand');
+else console.log('Verified the sidebar app icon.');
+
 // 4. No runtime request leaves the device: no remote stylesheets, fonts, scripts, imports or workers.
 const remote = /(url\(\s*['"]?https?:|@import\s+['"]?https?:|<(?:script|link)[^>]+(?:src|href)=["']https?:|\bimport\s*\(\s*["']https?:|\bfrom\s*["']https?:|new\s+Worker\(\s*["']https?:)/i;
 const scan = async (dir, filter) => {

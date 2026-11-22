@@ -1,13 +1,13 @@
 @inject ILibraryService Library
-<MudDialog Class="folio-shelf-dialog folio-book-details-dialog">
-    <TitleContent><h2>Book details</h2></TitleContent>
+<MudDialog Class="folio-dialog folio-book-details-dialog">
+    <TitleContent><div class="folio-eyebrow">[ EDIT BOOK ]</div><h2 class="folio-dialog-title">Book details</h2></TitleContent>
     <DialogContent>
         <p class="folio-muted">Update this book's details and choose where it belongs.</p>
         <form id="folio-edit-book" @onsubmit="Save" @onsubmit:preventDefault>
             <label class="folio-field-label" for="folio-book-title">Title</label>
-            <input @ref="_titleInput" id="folio-book-title" class="folio-input-field" maxlength="500" @bind="_title" @bind:event="oninput" disabled="@(_saving || _loading)" required />
+            <input @ref="_titleInput" id="folio-book-title" class="folio-underline-input" maxlength="500" @bind="_title" @bind:event="oninput" disabled="@(_saving || _loading)" required />
             <label class="folio-field-label" for="folio-book-author">Author</label>
-            <input id="folio-book-author" class="folio-input-field" maxlength="250" @bind="_author" @bind:event="oninput" disabled="@(_saving || _loading)" placeholder="Unknown author" />
+            <input id="folio-book-author" class="folio-underline-input" maxlength="250" @bind="_author" @bind:event="oninput" disabled="@(_saving || _loading)" placeholder="Unknown author" />
             <h3 class="folio-field-label" id="folio-book-shelves-label">Shelves</h3>
             @if (_loading) { <p class="folio-muted" role="status">Loading shelves…</p> }
             else if (_shelves.Count == 0) { <p class="folio-muted">Create a shelf from the sidebar to organize this book.</p> }
@@ -27,8 +27,8 @@
         </form>
     </DialogContent>
     <DialogActions>
-        <button class="folio-subtle-btn" @onclick="() => Dialog.Cancel()" disabled="@_saving">Cancel</button>
-        <button class="folio-primary-btn" type="submit" form="folio-edit-book" disabled="@(_saving || _loading || _loadFailed || string.IsNullOrWhiteSpace(_title))">@(_saving ? "Saving…" : "Save changes")</button>
+        <BracketButton Label="CANCEL" Plus="false" OnClick="() => Dialog.Cancel()" Disabled="@_saving" />
+        <BracketButton Label="@(_saving ? "SAVING…" : "SAVE CHANGES")" Plus="@(!_saving)" AriaLabel="Save changes" type="submit" form="folio-edit-book" Disabled="@(_saving || _loading || _loadFailed || string.IsNullOrWhiteSpace(_title))" />
     </DialogActions>
 </MudDialog>
 @code {

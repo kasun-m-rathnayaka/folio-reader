@@ -36,7 +36,8 @@ export function init(canvasId, options, dotNetRef) {
         }, {
             onBookHovered: id => call('OnBookHovered', id),
             onBookActivated: (id, action) => call('OnBookActivated', id, action),
-            onSceneSettled: kind => call('OnSceneSettled', kind),
+            onSceneSettled: (kind, row) => call('OnSceneSettled', kind, Number.isInteger(row) ? row : -1),
+            onRowsStale: version => call('OnRowsStale', version),
             onScrollIntent: direction => call('OnScrollIntent', direction),
             onFallback: reason => call('OnFallback', reason),
             onAccent: (id, color) => call('OnBookAccent', id, color),
@@ -49,16 +50,19 @@ export function init(canvasId, options, dotNetRef) {
     }
 }
 
-export function setLibrary(books, shelves, visibleIds) {
+export function setLibrary(books, shelves, visibleIds, rowsVersion) {
     if (!stage) return;
     const clean = (Array.isArray(books) ? books : []).map(cleanBook).filter(Boolean);
     const cleanShelves = (Array.isArray(shelves) ? shelves : []).filter(s => typeof s?.id === 'string').map(s => ({ id: s.id, name: str(s.name) || '' }));
-    stage.setLibrary(clean, cleanShelves, Array.isArray(visibleIds) ? visibleIds.filter(x => typeof x === 'string') : null);
+    stage.setLibrary(clean, cleanShelves, Array.isArray(visibleIds) ? visibleIds.filter(x => typeof x === 'string') : null, Number.isInteger(rowsVersion) ? rowsVersion : null);
 }
+
+const cleanScene = scene => ({ kind: scene.kind, bookId: str(scene.bookId, 64), rowIndex: Number.isInteger(scene.rowIndex) ? scene.rowIndex : null,
+    rowsVersion: Number.isInteger(scene.rowsVersion) ? scene.rowsVersion : null, page: Number.isFinite(scene.page) ? scene.page : null });
 
 export function setScene(scene) {
     if (!stage || !SCENES.has(scene?.kind)) return;
-    stage.setScene({ kind: scene.kind, bookId: str(scene.bookId, 64), shelfId: str(scene.shelfId, 64), page: Number.isFinite(scene.page) ? scene.page : null });
+    stage.setScene(cleanScene(scene));
 }
 
 const cleanRect = r => r && [r.x, r.y, r.width, r.height].every(Number.isFinite) && r.width > 0 && r.height > 0
@@ -72,7 +76,7 @@ export const alignTo = rect => { const r = cleanRect(rect); if (r) stage?.alignT
 export function beginClose(id, rect, scene) {
     if (!stage || !SCENES.has(scene?.kind)) return;
     const r = cleanRect(rect);
-    const next = { kind: scene.kind, bookId: str(scene.bookId, 64), shelfId: str(scene.shelfId, 64) };
+    const next = cleanScene(scene);
     if (!r || typeof id !== 'string') stage.setScene(next); else stage.beginClose(id, r, next);
 }
 

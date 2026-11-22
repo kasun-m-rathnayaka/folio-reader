@@ -91,10 +91,12 @@ window.addEventListener('keydown', event => {
     if (element?.closest('input, textarea, select, [contenteditable="true"], .mud-dialog, .mud-popover-open, [role="menu"]')) return;
     const keys = ['Enter', 'Escape', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', '?', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
     if (!keys.includes(event.key)) return;
+    // Held keys: only the arrows repeat. ↑ / ↓ repeats reach .NET flagged, so a held key moves one shelf per settle (WP2).
+    if (event.repeat && !event.key.startsWith('Arrow')) return;
     if (event.key === 'Enter' && element?.closest('button, a[href], [role="button"], summary')) return;
     if (event.key.startsWith('Arrow') && element?.closest('.folio-shelves-list, .folio-books-scroll') && !element.closest('button')) return;
     if (event.key.startsWith('Arrow')) event.preventDefault();
-    target.invokeMethodAsync('OnSceneKey', event.key, event.shiftKey).catch(() => {});
+    target.invokeMethodAsync('OnSceneKey', event.key, event.shiftKey, event.repeat).catch(() => {});
 });
 window.addEventListener('keydown', event => {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k' && !window.folioReader?.pdfDoc) {
