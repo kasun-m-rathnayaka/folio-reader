@@ -52,8 +52,7 @@ Gates marked *(CI)* are proven by GitHub Actions; *(human)* needs real hardware.
 - [x] Visual baselines: sidebar, header and reader toolbar, light and dark (2% tolerance, D-028)
 - [x] Docs: SPEC.md points to SPEC-V2; README and how-folio-works describe the bookcase, covers, present motion and 3D reading;
       DECISIONS D-024 to D-029
-- [ ] Full CI green on Linux, Windows and web for the final commit *(CI)* — Linux and Windows green throughout; the web job's last
-      completed run failed only on the old visual baselines and two pan tests, both fixed since
+- [x] Full CI green on Linux, Windows and web for the final commit *(CI)* — Verify Folio run 25 (66b64cc): all three jobs green
 - [ ] A human checks on Windows hardware *(human)*: see below
 
 ## Review changes after WP6
