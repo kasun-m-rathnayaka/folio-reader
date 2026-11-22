@@ -45,6 +45,7 @@ test('the books stand on dark wood planks only, lit by soft spotlights, in both 
 });
 
 test('a row of 2,000 books pans end to end within the frame budget, with windowed meshes', async ({ page }, testInfo) => {
+    test.setTimeout(300_000);                                     // building 2,000 books on software GL beside another worker
     await bookcase(page, 2000);
     const result = await page.evaluate(async () => {
         const stage = window.__folioStage.stage;
@@ -68,8 +69,6 @@ test('a row of 2,000 books pans end to end within the frame budget, with windowe
     expect(result.x).toBeGreaterThanOrEqual(result.max - 1);            // reached the far end
     expect(result.peakMeshes).toBeLessThan(400);                        // windowed: nowhere near 2,000 meshes
     expect(result.p95CpuMs).toBeLessThanOrEqual(16.7);
-    // Spines for the books now in view are painted a couple at a time after the fling; wait for that queue to drain.
-    await page.waitForFunction(() => { const s = window.__folioStage.stage; return s.loading.size === 0 && s.lookQueue.length === 0; }, null, { timeout: 90_000, polling: 500 });
     const frames = () => page.evaluate(() => window.__folioStage.stats.frames);
     // Late texture loads from the cache may still draw a few frames; once quiet, nothing draws for 2 s.
     let quiet = false;

@@ -336,3 +336,10 @@ the cross-browser gates for M2 are proven on Chromium only and need a manual che
   go quiet (300 ms, at most 2 s after the first write; also on `pagehide` and when the page is hidden). Reads see buffered entries
   at once and no longer queue behind a burst of blob writes after a fling. The cache stays best-effort: a write lost on a crash
   only means the book is painted again.
+- **Storage never holds a spine.** Cache reads give up after 2 s and cached-image decodes after 3 s (the book is painted instead),
+  and a spine load still running after 8 s gives its queue slot back. On CI, with two headless Chromium workers on software GL,
+  a few cache reads and decodes started during a 2,000-book fling stayed unanswered for about two minutes. They finished at once when
+  the page next used a canvas or IndexedDB. Even the timers above did not fire for those loads, so the cause looks like the browser
+  rather than the stage. It is recorded as an open item in PROGRESS-V2.md. The 2,000-book check keeps its original gates (end
+  reached, windowed meshes, CPU per frame, no frames after 2 s idle); a wait for every spine to finish, added and then removed
+  in this session, is not part of it.

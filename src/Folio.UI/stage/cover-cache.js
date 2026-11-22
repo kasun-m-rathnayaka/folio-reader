@@ -55,10 +55,17 @@ if (typeof addEventListener === 'function') {
     addEventListener('pagehide', () => flush());
 }
 
+// A read that has not answered in READ_TIMEOUT_MS counts as a miss and the book is painted instead. Chromium has been seen to
+// leave a read unanswered after a long busy task (a 2,000-book fling on software GL); one lost read must not leave a spine
+// unpainted or hold the paint queue.
+const READ_TIMEOUT_MS = 2000;
+
 export const cacheGet = key => {
     if (pending.has(key)) return Promise.resolve(pending.get(key));
     if (pending.size) scheduleFlush();                       // a read pushes the flush back, up to FLUSH_MAX_MS
-    return run('readonly', store => store.get(key));
+    let timer = 0;
+    const timeout = new Promise(resolve => { timer = setTimeout(() => resolve(null), READ_TIMEOUT_MS); });
+    return Promise.race([run('readonly', store => store.get(key)), timeout]).finally(() => clearTimeout(timer));
 };
 export const cachePut = (key, value) => {
     if (!pending.size) firstPendingAt = performance.now();

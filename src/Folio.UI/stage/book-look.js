@@ -12,6 +12,16 @@ const signature = book => hashString(`${book.title}|${book.author}`).toString(36
 const keyOf = (kind, book, extra = '') => `${kind}|${book.id}|v${DESIGN_VERSION}|${signature(book)}${extra}`;
 
 /** Decodes a cached PNG into a texture (flipped at decode time, since ImageBitmap textures cannot flip on upload). */
+// Cached images are blobs held by IndexedDB. If decoding one does not finish in DECODE_TIMEOUT_MS (seen in Chromium after a long
+// busy task), the cache is skipped and the image is painted again, so a book never waits on storage. A late result is released.
+const DECODE_TIMEOUT_MS = 3000;
+function decodeTimed(promise) {
+    let timer = 0, late = false;
+    const timeout = new Promise((_, reject) => { timer = setTimeout(() => { late = true; reject(new Error('cached image decode timed out')); }, DECODE_TIMEOUT_MS); });
+    promise.then(value => { if (!late) return; for (const item of [value].flat()) { item?.close?.(); item?.dispose?.(); } }, () => {});
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 async function textureFromBlob(blob, srgb) {
     const bitmap = await createImageBitmap(blob, { imageOrientation: 'flipY' });
     const texture = new THREE.Texture(bitmap);
@@ -48,7 +58,7 @@ export async function loadSpineLook(book, { anisotropy = 4 } = {}) {
     let record = await cacheGet(key);
     let dominant = book.color || record?.dominant || null, spineImage = null, cached = false;
     if (record?.blob) {
-        try { spineImage = await createImageBitmap(record.blob); cached = true; } catch { record = null; }
+        try { spineImage = await decodeTimed(createImageBitmap(record.blob)); cached = true; } catch { record = null; }
     }
     if (!spineImage) {
         // Not cached yet: measure page 1's dominant colour (the cloth follows it), then paint the spine.
@@ -76,7 +86,7 @@ export async function loadCoverLook(book, { level = 'full', dominant = null, ani
     const record = await cacheGet(key);
     if (record?.color) {
         try {
-            const [color, orm, normal] = await Promise.all([textureFromBlob(record.color, true), textureFromBlob(record.orm, false), record.normal ? textureFromBlob(record.normal, false) : null]);
+            const [color, orm, normal] = await decodeTimed(Promise.all([textureFromBlob(record.color, true), textureFromBlob(record.orm, false), record.normal ? textureFromBlob(record.normal, false) : null]));
             for (const t of [color, orm, normal]) if (t) t.anisotropy = anisotropy;
             return { color, orm, normal, cached: true, width };
         } catch { /* repaint below */ }

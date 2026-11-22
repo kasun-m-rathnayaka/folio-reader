@@ -25,6 +25,7 @@ const DWELL_MS = 250;         // a pointer resting this long on a book presents 
 const IDLE_STOP_MS = 20000;   // idle turn stops 20 s after the last input
 const LOOK_LIMIT = 120;       // ~120 books keep their detailed textures
 const LOOK_CONCURRENCY = 2;   // spine paints in flight at once
+const LOOK_STALL_MS = 8000;   // a load still running after this frees its slot
 const POINTER_MAX = { hero: 4 };
 
 /** Checks whether this device should draw 3D. Returns null when it can, else the fallback reason. */
@@ -605,7 +606,8 @@ export class Stage {
             let loaded;
             try { loaded = await loadSpineLook(book, { anisotropy: this.renderer.capabilities.getMaxAnisotropy() }); }
             catch (error) { console.warn('[FolioStage] look', book.id, error?.message); return; }
-            if (this.disposed || this.byId.get(id) !== book && !this.byId.has(id)) { loaded.spine.dispose(); return; }
+            // Gone, or loaded meanwhile by a retry after a stall (below): keep the look that is already in use.
+            if (this.disposed || this.byId.get(id) !== book && !this.byId.has(id) || this.looks.has(id)) { loaded.spine.dispose(); return; }
             const accent = loaded.dominant ? readableAccent(loaded.dominant, '#0B0B0C', 3) : null;
             this.accents.set(id, accent);
             const look = { ...loaded, accent, cover: null, coverWidth: 0, materials: null, disposeMaterials: null,
@@ -617,7 +619,13 @@ export class Stage {
             if ((this.scene.kind === 'shelf' && id === this.focusId) || this.reading?.id === id) this.backgroundTarget = this.accentBackground(id);
             if (this.wantsCover(id)) this.requestCover(id);
             this.invalidate();
-        })().finally(() => { this.loading.delete(id); setTimeout(() => this.pumpLooks(), 0); });
+        })().finally(() => {
+            clearTimeout(stall);
+            if (this.loading.get(id) === task) this.loading.delete(id);
+            setTimeout(() => this.pumpLooks(), 0);
+        });
+        // A load that stalls (storage that never answers) gives its slot back, so the rest of the row still gets its spines.
+        const stall = setTimeout(() => { if (this.loading.get(id) === task) { this.loading.delete(id); this.pumpLooks(); } }, LOOK_STALL_MS);
         this.loading.set(id, task);
     }
 

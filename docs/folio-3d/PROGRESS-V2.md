@@ -64,6 +64,11 @@ Gates marked *(CI)* are proven by GitHub Actions; *(human)* needs real hardware.
 - CI fix for the reference-quality commit: spine paints are queued two at a time and stale ones dropped after a fling; the flat
   opening's safety net waits for the stage once the reader has reported its page; the CPU-per-frame gates render at a reduced pixel
   ratio on software GL (D-030).
+- Open item, stopped here per the "fails twice" rule (D-030): after a 2,000-book fling on CI's headless software-GL Chromium, the
+  last one or two spine loads can take about two minutes. Their cache read or image decode, and even their timeout timers, do not
+  run until the page next uses a canvas or IndexedDB. Locally it happens only when two workers run side by side. A wait for every
+  spine to finish failed four times for this reason, so it was removed and the check keeps its original gates. Needs a human
+  decision: accept it as a CI artefact, or check on hardware that spines appear promptly after a long fling.
 
 ## Final report
 
