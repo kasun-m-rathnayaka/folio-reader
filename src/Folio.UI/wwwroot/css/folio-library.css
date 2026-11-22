@@ -236,3 +236,16 @@ select { border-radius:2px; background:var(--folio-surface); border-color:var(--
 .stage-reading .folio-library-shell { position:fixed; inset:0; z-index:1; pointer-events:none; }
 .stage-reading .folio-reader { position:fixed; inset:0; z-index:50; width:auto; height:auto; }
 .stage-reading.reading-flat .folio-library-shell { display:none; }
+
+/* ---- Shelf at reference scale: books fill the view under a large serif title marquee ------------------------------------------ */
+.folio-stage-shelf-head h1 { font-size:22px; margin:2px 0 4px; }
+.folio-shelf-marquee { top:118px; }
+.folio-shelf-marquee .folio-marquee-track { gap:64px; }
+.folio-shelf-marquee .folio-marquee-title { font-size:clamp(44px, 6.4vw, 96px); line-height:1; font-style:italic; color:color-mix(in srgb, var(--folio-text) 34%, transparent); letter-spacing:-0.02em; }
+.folio-shelf-marquee .folio-marquee-title.is-current { font-style:normal; color:var(--folio-text); }
+.folio-marquee-format { font-family:var(--folio-font-display); font-style:normal; font-size:15px; letter-spacing:0; margin-left:8px; vertical-align:top; position:relative; top:.4em; color:var(--folio-text-muted); }
+.folio-shelf-pills { position:absolute; left:0; right:0; bottom:96px; display:flex; justify-content:center; gap:22px; pointer-events:none; z-index:3; }
+.folio-pill { pointer-events:auto; font-family:var(--folio-font-ui); font-size:17px; padding:12px 26px; border-radius:999px; border:0; cursor:pointer;
+  background:color-mix(in srgb, #F4F2EE 92%, transparent); color:#16130F; box-shadow:0 6px 24px rgba(0,0,0,.28); transition:transform 160ms var(--folio-ease), background 160ms; }
+.folio-pill:hover { transform:translateY(-1px); background:#FFFFFF; }
+:root[data-motion="reduced"] .folio-pill, :root[data-motion="off"] .folio-pill { transition:none; }

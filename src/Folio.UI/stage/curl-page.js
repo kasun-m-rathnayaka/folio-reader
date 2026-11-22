@@ -5,6 +5,16 @@
 import * as THREE from 'three';
 
 /** Position and surface normal of a page point at x, with the fold at `fold` and cylinder radius `radius`. */
+/**
+ * How an open page bows: it dips into the gutter, rises over its inner third and settles flat at the outer edge, like a real
+ * spread. `d` is the distance from the spine in cm, `width` the page width. The vertex shader uses the same curve.
+ */
+export const BOW = { gutterDip: 0.6, gutterFalloff: 1.2, rise: 0.4 };
+export function pageBow(d, width) {
+    const t = Math.min(1, Math.max(0, d / width));
+    return -BOW.gutterDip * Math.exp(-d / BOW.gutterFalloff) + BOW.rise * Math.sin(Math.PI * t);
+}
+
 export function curlPoint(x, fold, radius) {
     const s = x - fold;
     if (s <= 0) return { x, z: 0, nx: 0, nz: 1, theta: 0 };
@@ -26,6 +36,7 @@ const VERTEX = /* glsl */`
 uniform float uFold;
 uniform float uRadius;
 uniform float uGutter;
+uniform float uWidth;
 varying vec2 vUv;
 varying vec3 vNormal;
 varying float vShade;
@@ -36,14 +47,22 @@ void main() {
     vec3 n = vec3(0.0, 0.0, 1.0);
     float theta = 0.0;
     float s = p.x - uFold;
+    bool lying = true;
     if (s > 0.0) {
         if (uRadius < 0.0001 || s >= PI * uRadius) { p.x = uFold - (s - PI * uRadius); p.z = 2.0 * uRadius; n = vec3(0.0, 0.0, -1.0); theta = PI; }
-        else { theta = s / uRadius; p.x = uFold + uRadius * sin(theta); p.z = uRadius * (1.0 - cos(theta)); n = vec3(-sin(theta), 0.0, cos(theta)); }
+        else { theta = s / uRadius; p.x = uFold + uRadius * sin(theta); p.z = uRadius * (1.0 - cos(theta)); n = vec3(-sin(theta), 0.0, cos(theta)); lying = false; }
     }
-    // The page dips and darkens a little towards the gutter, like a real spread.
-    float g = exp(-pow(abs(position.x) / 1.7, 2.0));
-    p.z -= uGutter * 0.35 * g;
-    vShade = 1.0 - uGutter * 0.28 * g;
+    // Lying pages bow like a real spread: into the gutter, up over the inner third, flat at the outer edge (pageBow in JS).
+    float d = abs(p.x);
+    float g = exp(-d / 1.2);
+    if (lying && uGutter > 0.0) {
+        float bow = -0.6 * g + 0.4 * sin(PI * clamp(d / uWidth, 0.0, 1.0));
+        float slope = 0.6 / 1.2 * g + 0.4 * PI / uWidth * cos(PI * clamp(d / uWidth, 0.0, 1.0));
+        p.z += uGutter * bow;
+        vec3 bent = normalize(vec3(-sign(p.x) * slope * uGutter, 0.0, 1.0));
+        n = n.z < 0.0 ? -bent : bent;
+    }
+    vShade = 1.0 - uGutter * 0.22 * exp(-pow(d / 1.4, 2.0));
     vNormal = normalize(normalMatrix * n);
     gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 }`;
@@ -72,8 +91,8 @@ void main() {
     vec3 color = front ? sampleFit(uFront, uFrontFit, vUv, uHasFront) : sampleFit(uBack, uBackFit, vec2(1.0 - vUv.x, vUv.y), uHasBack);
     vec3 n = normalize(vNormal);
     if (!front) n = -n;
-    // A flat page faces the camera and stays pure white; only a curling page picks up shading.
-    float light = 0.7 + 0.3 * max(dot(n, vec3(0.0, 0.0, 1.0)), 0.0);
+    // White paper: a page facing the light stays white; the bow and a curling page pick up soft shading.
+    float light = 0.72 + 0.28 * clamp(dot(n, normalize(vec3(0.15, 0.55, 0.82))) + 0.12, 0.0, 1.0);
     gl_FragColor = vec4(color * light * vShade * uFade, 1.0);
     #include <colorspace_fragment>
 }`;
@@ -86,7 +105,7 @@ export function createPageMaterial() {
     return new THREE.ShaderMaterial({
         vertexShader: VERTEX, fragmentShader: FRAGMENT, side: THREE.DoubleSide, toneMapped: false,
         uniforms: {
-            uFold: { value: 1e6 }, uRadius: { value: 0 }, uGutter: { value: 0 },
+            uFold: { value: 1e6 }, uRadius: { value: 0 }, uGutter: { value: 0 }, uWidth: { value: 13.6 },
             uFront: { value: blank }, uBack: { value: blank }, uHasFront: { value: 0 }, uHasBack: { value: 0 },
             uFrontFit: { value: new THREE.Vector4(1, 1, 0, 0) }, uBackFit: { value: new THREE.Vector4(1, 1, 0, 0) },
             uPaper: { value: new THREE.Color(0xFFFFFF) }, uFade: { value: 1 },
@@ -114,7 +133,8 @@ export class CurlPage {
         this.geometry = new THREE.PlaneGeometry(width, height, 48, 8);
         this.geometry.translate(width / 2, 0, 0);          // x runs from the spine (0) to the outer edge (width)
         this.material = createPageMaterial();
-        this.material.uniforms.uGutter.value = 0;
+        this.material.uniforms.uGutter.value = 1;        // a leaf lies on the bowed pages, so it bows with them while flat
+        this.material.uniforms.uWidth.value = width;
         this.mesh = new THREE.Mesh(this.geometry, this.material);
         this.mesh.frustumCulled = false; this.mesh.visible = false;
         this.u = 0; this.active = false;

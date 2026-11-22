@@ -45,4 +45,40 @@ Gates marked *(CI)* are proven by GitHub Actions; *(human)* needs real hardware.
 - [x] Z crossfades to the flat reader at the same page; Esc returns to the spread; Esc closes the book to its slot
 
 ## WP8 — Hardening
-- [ ] pending
+- [x] Axe clean (serious and critical) on the 2D library, book menu, settings, reader, 3D hero, bookcase, presented book, book menu over
+      the bookcase and the 3D spread, in both themes where themed (`a11y.spec.mjs`, `wp7.spec.mjs`)
+- [x] Performance: 300 books p95 frame CPU 3–6 ms; 2,000 books panned end to end p95 3–10 ms with at most 137 book meshes; a page turn
+      p95 2 ms; open sequence 1.57 s on the stage clock (software GL in a container; recorded in the specs' `[metrics]` lines)
+- [x] Visual baselines: sidebar, header and reader toolbar, light and dark (2% tolerance, D-028)
+- [x] Docs: SPEC.md points to SPEC-V2; README and how-folio-works describe the bookcase, covers, present motion and 3D reading;
+      DECISIONS D-024 to D-029
+- [ ] Full CI green on Linux, Windows and web for the final commit *(CI)* — Linux and Windows green throughout; the web job's last
+      completed run failed only on the old visual baselines and two pan tests, both fixed since
+- [ ] A human checks on Windows hardware *(human)*: see below
+
+## Review changes after WP6
+- Shelf: base wood only (no back, top or side frames), dark charred-wood texture, soft spotlights (D-028).
+- Reference quality from the Stripe Press screenshots: large books under a large serif marquee, 1024 px spines, pill buttons; the
+  open book leans back with bowed pages, near-white page edges and the book's colour behind it; text layer mapped onto the tilted
+  page (D-029). Pages are pure white with no corner marks.
+
+## Final report
+
+**Shipped:** WP0–WP8 as above: error boundary; View Details removed with a book menu and the `/book/{id}` redirect; one-step shelf
+navigation with a shared row list; bracket dialogs and sidebar with the app icon; a wooden base with endless sideways browsing;
+generated hardcovers (four templates, cached); hover lift and present motion with parting neighbours, tint and marquee; 3D reading
+with riffle, page curl, text overlay, Zoom and a Reading view setting.
+
+**Deferred or changed:** wood textures are generated, not Poly Haven/ambientCG (blocked here, D-026); covers are cached in IndexedDB
+rather than the covers folder or OPFS (D-027); pages render on the main thread through the reader engine rather than a PDF.js worker
+(D-027); the live Stripe Press site could not be studied from this environment, so motion follows the plan's captured reference and
+the user's screenshots (D-028, D-029); one branch with `WP<N>:` commits instead of a branch and PR per package (D-024).
+
+**A human must check on Windows hardware:**
+1. 3D draws in WebView2 (does not fall back to 2D), with the dark wood base and spotlights.
+2. A real trackpad swipe moves exactly one shelf; a held ↓ moves one shelf per settle; sideways swipes and dragging the wood pan with
+   momentum and a soft stop.
+3. Hover, dwell (250 ms) and click presenting feel right at 60 fps with 300 and 2,000 books on an integrated GPU.
+4. Opening a book (about 1.6 s), page turns (about 0.4 s) and the riffle are smooth; reader input is immediate after the spread settles.
+5. On the tilted spread: select text, highlight it (the highlight sits on the words), find a phrase, bookmark a page, Z and Esc.
+6. Battery saver caps the frame rate on battery; the web app on real Firefox and Safari (D-021).

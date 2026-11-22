@@ -38,7 +38,7 @@ test('open → riffle → spread completes in about 1.6 s on the stage clock, wi
     await testInfo.attach('open-sequence', { body: JSON.stringify({ simulatedSeconds: simulated, state }, null, 2), contentType: 'application/json' });
     expect(simulated).toBeGreaterThan(1.2); expect(simulated).toBeLessThan(2.6);       // ≈ 1.6 s: forward, cover, lay open, riffle, settle
     expect(state.spread).toBe(60);                                                     // page 120 is on spread 60
-    await expect(page.locator('.folio-spread-count')).toHaveText('120 OF 300');
+    await expect(page.locator('.folio-spread-count')).toHaveText('120 · 121 of 300');
     await expect(page.locator('.folio-spread-toolbar')).toBeVisible();
     expect(await frames(page)).toBeGreaterThan(f0);
     expect(errors.filter(e => !/GL Driver/.test(e))).toEqual([]);
@@ -68,7 +68,7 @@ test('arrow keys turn one page with a curl, the address follows, and a turn stay
     await page.waitForFunction(() => window.__folioStage.stats.reading?.interactive && window.__folioStage.stats.reading.spread === 61, null, { timeout: 60_000 });
     const turnSeconds = ((await frames(page)) - before) / 60;
     expect(turnSeconds).toBeGreaterThan(0.3); expect(turnSeconds).toBeLessThan(0.8);   // about 400 ms
-    await expect(page.locator('.folio-spread-count')).toHaveText('122 OF 300');
+    await expect(page.locator('.folio-spread-count')).toHaveText('122 · 123 of 300');
     await expect.poll(() => pathOf(page)).toMatch(/\/read\?page=122$/);                // the address updates on every turn
     const p95 = await page.evaluate(() => window.__folioStage.stats.p95CpuMs);
     console.log('[metrics] turn', JSON.stringify({ turnSeconds, p95CpuMs: p95 }));
@@ -86,7 +86,7 @@ test('Home and End riffle to the first and last pages; a find result on another 
     await page.waitForFunction(() => window.__folioStage.stats.reading?.interactive && window.__folioStage.stats.reading.spread === 150, null, { timeout: 120_000 });
     await page.keyboard.press('Home');
     await page.waitForFunction(() => window.__folioStage.stats.reading?.interactive && window.__folioStage.stats.reading.spread === 0, null, { timeout: 120_000 });
-    await expect(page.locator('.folio-spread-count')).toHaveText('1 OF 300');
+    await expect(page.locator('.folio-spread-count')).toHaveText('1 of 300');
     // Find in book: "Paragraph 15.1" is on page 15 (index 14), which is on spread 7 (pages 14 and 15).
     await page.keyboard.press('Control+f');
     await page.locator('.folio-find-bar input').fill('Paragraph 15.1');

@@ -59,8 +59,8 @@ export function pageEdgeTexture() {
     if (pageEdge) return pageEdge;
     const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 4;
     const g = canvas.getContext('2d');
-    g.fillStyle = '#EFE8D8'; g.fillRect(0, 0, 256, 4);
-    for (let x = 0; x < 256; x += 2) { g.fillStyle = `rgba(90,70,40,${0.05 + ((x * 37) % 11) / 160})`; g.fillRect(x, 0, 1, 4); }
+    g.fillStyle = '#F7F5F1'; g.fillRect(0, 0, 256, 4);
+    for (let x = 0; x < 256; x += 2) { g.fillStyle = `rgba(60,55,50,${0.06 + ((x * 37) % 11) / 140})`; g.fillRect(x, 0, 1, 4); }      // stacked leaves
     pageEdge = new THREE.CanvasTexture(canvas);
     pageEdge.colorSpace = THREE.SRGBColorSpace;
     pageEdge.wrapS = pageEdge.wrapT = THREE.RepeatWrapping;

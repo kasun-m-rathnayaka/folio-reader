@@ -31,13 +31,13 @@ test('books left of the presented one move left, right ones move right, by the s
     assert.ok(Math.abs(shift - (BOOK_WIDTH / 2 - thicknessCm(row[5].pages) / 2 + 1)) < 1e-9);   // half the cover width − half the thickness + 1 cm
 });
 
-test('poses: rest is spine-out, lifted is up 0.8 cm and forward 0.4 cm, presented faces the camera 9 cm forward', () => {
+test('poses: rest is spine-out, lifted is up 0.8 cm and forward 0.4 cm, presented faces the camera 4 cm forward', () => {
     const rest = shelfPose(0, 10), lifted = shelfPose(0, 10, 'lifted'), presented = shelfPose(0, 10, 'presented');
     assert.equal(rest.ry, Math.PI / 2);
     assert.ok(Math.abs(lifted.y - rest.y - LIFT.y) < 1e-12 && Math.abs(lifted.z - rest.z - LIFT.z) < 1e-12);
     assert.equal(presented.ry, 0);                                   // turned 90° from spine-out to face the camera
     assert.equal(presented.z, PRESENT.z);
-    assert.ok(Math.abs(presented.rx + 2 * Math.PI / 180) < 1e-12);  // leaning back 2°
+    assert.ok(Math.abs(presented.rx + 1 * Math.PI / 180) < 1e-12);  // leaning back 1°
 });
 
 test('rates: lift λ = 12, turn λ = 7, forward λ = 9, nearer neighbours faster', () => {

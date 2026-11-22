@@ -4,10 +4,11 @@
 import { BOOK_HEIGHT, ROW_SPACING, rowPositions, cameraX } from './layout.js';
 
 export const FEATURE_Y = 0;
-export const READ_CAMERA_Z = 52;
+export const READ_CAMERA_Z = 47;
 export const SHELF_TOP_Y = -70;
 export const CAMERA_FOV = 30;
-export const SHELF_DISTANCE = 108;
+// Close enough that a row of spines fills the lower half of the view, as on the reference (about 45 cm of height is visible).
+export const SHELF_DISTANCE = 84;
 const HERO_TURN = 0.48;                 // 3/4 view: cover and spine both visible
 const DEG = Math.PI / 180;
 
@@ -23,7 +24,8 @@ export function cameraPose(scene, ctx) {
             const focus = layout?.positions.get(ctx.focusId)?.x ?? (layout ? Math.min(layout.width / 2, 20) : 0);
             // The pan position (drag, wheel, momentum, recentre) is the camera's x; without one, follow the focused book.
             const x = ctx.panX ?? (layout ? cameraX(focus, layout.width, ctx.halfViewWidth ?? 30) : 0);
-            return { px: x, py: y + 6, pz: SHELF_DISTANCE, lx: x, ly: y + 1, lz: 0 };
+            // The books sit in the lower part of the view, under the title marquee; the camera looks very slightly down on them.
+            return { px: x, py: y + 5.4, pz: SHELF_DISTANCE, lx: x, ly: y + 3.9, lz: 0 };
         }
         case 'opening':
             return { px: 0, py: FEATURE_Y, pz: 40, lx: 0, ly: FEATURE_Y, lz: 0 };
@@ -45,7 +47,7 @@ export function featuredPose(scene, t) {
 }
 
 export const LIFT = { y: 0.8, z: 0.4 };            // a hovered spine lifts 8 mm and comes 4 mm forward
-export const PRESENT = { z: 9, lean: 2 * DEG };    // a presented book faces the camera, 9 cm forward, leaning back 2°
+export const PRESENT = { z: 4, lean: 1 * DEG };    // a presented book faces the camera, 4 cm forward, leaning back 1°
 
 /**
  * Pose of a book on a row. 'rest': spine out on the plank. 'lifted': a hovered spine, up and slightly forward. 'presented':

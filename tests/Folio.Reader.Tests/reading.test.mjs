@@ -75,3 +75,27 @@ test('page images render at the projected height × the pixel ratio, capped at 2
     assert.equal(targetHeight(1500, 2), MAX_HEIGHT);
     assert.equal(targetHeight(100, 1), PREVIEW_HEIGHT);
 });
+
+import { squareToQuad, applyMapping, quadToSquare, quadMatrix3d } from '../../src/Folio.UI/wwwroot/js/reader-geometry.mjs';
+import { pageBow, BOW } from '../../src/Folio.UI/stage/curl-page.js';
+
+test('the text layer maps onto a tilted page exactly at its corners, and selections map back', () => {
+    const quad = [[230, 190], [640, 175], [650, 830], [160, 820]];           // a page of the leaning book, in viewport pixels
+    const m = squareToQuad(quad), back = quadToSquare(m);
+    [[0, 0], [1, 0], [1, 1], [0, 1]].forEach(([u, v], i) => {
+        const [x, y] = applyMapping(m, u, v);
+        assert.ok(Math.hypot(x - quad[i][0], y - quad[i][1]) < 1e-6, `corner ${i}`);
+    });
+    for (const [u, v] of [[0.25, 0.4], [0.9, 0.1], [0.5, 0.5]]) {
+        const [x, y] = applyMapping(m, u, v), [u2, v2] = back(x, y);
+        assert.ok(Math.abs(u2 - u) < 1e-9 && Math.abs(v2 - v) < 1e-9);
+    }
+    assert.match(quadMatrix3d(400, 600, quad), /^matrix3d\((-?[\d.e-]+,){15}-?[\d.e-]+\)$/);
+});
+
+test('an open page bows: down into the gutter, up over the inner third, flat at the outer edge', () => {
+    const w = 13.6;
+    assert.ok(Math.abs(pageBow(0, w) + BOW.gutterDip) < 1e-9);
+    assert.ok(pageBow(w * 0.35, w) > 0.2);
+    assert.ok(Math.abs(pageBow(w, w)) < 0.01);
+});

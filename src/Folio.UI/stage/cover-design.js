@@ -3,7 +3,7 @@
 import { parseHex, toHex, mix, contrast } from '../wwwroot/js/folio-color.mjs';
 
 /** Bump when a template changes: cached covers are keyed by it. */
-export const DESIGN_VERSION = 1;
+export const DESIGN_VERSION = 2;
 export const TEMPLATES = ['plate', 'marble', 'line', 'cloth'];
 export const CREAM = '#F2EEE6', INK = '#16130F';
 /** Title and author text must keep at least this contrast against the cloth. */

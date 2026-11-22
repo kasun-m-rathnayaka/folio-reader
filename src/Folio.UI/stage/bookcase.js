@@ -7,7 +7,7 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 import { rowY } from './scenes.js';
 
 export const CASE = {
-    plank: 2.2, depth: 24, bevel: 0.3, tile: 60, margin: 14, minWidth: 288,
+    plank: 2.2, depth: 24, bevel: 0.3, tile: 90, margin: 14, minWidth: 288,
     plankZ: -1, spacing: 34, floorToTop: 10,
     lampPeriod: 72, coneZ: -15,
 };
@@ -86,7 +86,7 @@ export class Bookcase {
         world.add(this.group);
         this.theme = 'dark';
         this.maps = { map: null, normalMap: null, roughnessMap: null };
-        this.wood = new THREE.MeshStandardMaterial({ color: 0x24201c, roughness: 0.6, metalness: 0.1, normalScale: new THREE.Vector2(1.3, 1.3) });
+        this.wood = new THREE.MeshStandardMaterial({ color: 0x24201c, roughness: 0.6, metalness: 0.1, normalScale: new THREE.Vector2(0.8, 0.8) });
         this.parts = [];
         this.lights = { cone: { uPeriod: { value: CASE.lampPeriod }, uTop: { value: 0 }, uBottom: { value: 0 }, uIntensity: { value: 0.2 }, uColor: { value: new THREE.Color(0xfff1dc) } },
             pool: { uPeriod: { value: CASE.lampPeriod }, uIntensity: { value: 0.3 }, uColor: { value: new THREE.Color(0xffe9c8) } } };

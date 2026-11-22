@@ -44,7 +44,7 @@ function withRibbon(source, progress, color) {
  * `{ spine, dominant, design, cached }`; the caller owns the textures.
  */
 export async function loadSpineLook(book, { anisotropy = 4 } = {}) {
-    const key = keyOf('s', book);
+    const key = keyOf('s', book, `|${SPINE_SIZES.full}`);
     let record = await cacheGet(key);
     let dominant = book.color || record?.dominant || null, spineImage = null, cached = false;
     if (record?.blob) {
@@ -56,7 +56,7 @@ export async function loadSpineLook(book, { anisotropy = 4 } = {}) {
             try { const loaded = await loadCover(book.coverUrl, anisotropy); dominant = loaded.color; loaded.texture.dispose(); loaded.texture.image?.close?.(); }
             catch (error) { console.warn('[FolioStage] cover', book.id, error?.message); }
         }
-        const canvas = composeSpine(book, { width: SPINE_SIZES.shelf, dominant });
+        const canvas = composeSpine(book, { width: SPINE_SIZES.full, dominant });   // spines fill much of the view: 128 × 1024
         spineImage = canvas;
         canvasToBlob(canvas).then(blob => cachePut(key, { blob, dominant })).catch(() => {});
     }
@@ -101,7 +101,7 @@ export async function loadCoverLook(book, { level = 'full', dominant = null, ani
  * from the cache, painted first if needed. The shelf size (512 px cover, 64 px spine) is plenty for a 2D card.
  */
 export async function bookImageBlobs(book, { anisotropy = 4 } = {}) {
-    const width = COVER_SIZES.shelf, sKey = keyOf('s', book), cKey = keyOf('c', book, `|${width}`);
+    const width = COVER_SIZES.shelf, sKey = keyOf('s', book, `|${SPINE_SIZES.shelf}`), cKey = keyOf('c', book, `|${width}`);
     let [spine, cover] = await Promise.all([cacheGet(sKey), cacheGet(cKey)]);
     if (spine?.blob && cover?.color) return { front: cover.color, spine: spine.blob };
     let dominant = book.color || spine?.dominant || null, pageImage = null, pageTexture = null;

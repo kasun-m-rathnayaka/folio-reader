@@ -303,3 +303,19 @@ the cross-browser gates for M2 are proven on Chromium only and need a manual che
   band), a flat page is not shaded, and the dog-ear corner marks are hidden (BOOKMARK in the toolbar still bookmarks the page).
 - **Visual baselines** now cover the sidebar, header and reader toolbar, rendered here with a 2% pixel tolerance. The library page body
   is not compared because the generated covers differ per book id.
+
+## D-029 · Reference-quality shelf and reading view (after the Stripe Press screenshots)
+
+- **Shelf scale.** The camera sits at 84 cm (was 108) and lower, so a row of spines fills the lower half of the view under a large
+  serif title marquee (italic, dimmed neighbours, a small "(PDF)" mark), as on the reference. Spines are painted at 128 × 1024
+  (the design version moved to 2, so cached 64 px spines are repainted). A presented book comes 4 cm forward (was 9) and leans 1°,
+  so it stands in the row rather than floating in front of it. Pill buttons ("+ Book menu +", "+ Open book +") sit over the presented
+  book for pointer users; they are out of the tab order and hidden from assistive technology because Enter, the book's own
+  button in the list and the bottom bar already offer both. The dark wood base and spotlights stay (D-028).
+- **Reading view.** The open book leans back about 15° (`READ.tilt`) and the pages bow like a real spread: into the gutter, up over the
+  inner third, flat at the outer edge (`pageBow`, the same curve in the vertex shader). Page edges are near-white paper. The page takes
+  the book's contrast-checked colour while it is open. The toolbar shows the page pair ("120 · 121", with "of 300" for screen readers).
+- **Text layer on a tilted page.** The stage reports each page's four corners; the reader engine lays the page wrapper at the page's own
+  size and maps it onto those corners with a CSS `matrix3d` (a projective transform, `squareToQuad`). Selections map back through the
+  inverse transform, so highlights are stored in the page's own 0–1 space exactly as in the flat reader. Corners match exactly; inside
+  the page the bow is approximated by the plane through its corners.

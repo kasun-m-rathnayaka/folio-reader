@@ -390,7 +390,8 @@ export class Stage {
         this.reading = new Reading(this, book, this.looks.map.get(bookId));
         this.reading.placeFrom(from);
         this.scene = { kind: 'reading', bookId }; this.settledKind = null; this.reportedKey = null;
-        this.cameraLambda = LAMBDA.opening; this.backgroundTarget = null;
+        // The page takes the book's colour while it is open, as on the reference (contrast-checked, so the toolbar stays readable).
+        this.cameraLambda = LAMBDA.opening; this.backgroundTarget = this.accentBackground(bookId);
         this.touch(); this.invalidate();
         return true;
     }
@@ -586,7 +587,7 @@ export class Stage {
             this.looks.set(id, look);
             this.applyLookEverywhere(id);
             this.callbacks.onAccent?.(id, accent);
-            if (this.scene.kind === 'shelf' && id === this.focusId) this.backgroundTarget = this.accentBackground(id);
+            if ((this.scene.kind === 'shelf' && id === this.focusId) || this.reading?.id === id) this.backgroundTarget = this.accentBackground(id);
             if (this.wantsCover(id)) this.requestCover(id);
             this.invalidate();
         })().finally(() => this.loading.delete(id));
@@ -811,7 +812,10 @@ export class Stage {
     screenPoint(id) {
         const mesh = [...this.instances].find(([key]) => key.endsWith(`:${id}`))?.[1];
         if (!mesh) return null;
-        const v = mesh.position.clone().project(this.camera), rect = this.canvas.getBoundingClientRect();
+        // The middle of the face you see: the spine of a book standing spine-out, the cover of one that faces the camera.
+        const facing = Math.abs(mesh.rotation.y) < 0.5;
+        mesh.updateMatrixWorld();
+        const v = mesh.localToWorld(facing ? new THREE.Vector3(0, 0, mesh.userData.thickness / 2) : new THREE.Vector3(-BOOK_WIDTH / 2, 0, 0)).project(this.camera), rect = this.canvas.getBoundingClientRect();
         return { x: rect.left + (v.x + 1) / 2 * rect.width, y: rect.top + (1 - v.y) / 2 * rect.height };
     }
 

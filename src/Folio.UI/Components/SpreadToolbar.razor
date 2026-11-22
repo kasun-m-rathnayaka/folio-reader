@@ -1,7 +1,7 @@
-@* The toolbar under the open 3D book (WP6): [ ← ]  12 OF 300  [ → ]  [ CONTENTS ]  [ FIND ]  [ ZOOM ]  [ BOOKMARK ]  [ × ]. *@
+@* The toolbar under the open 3D book (WP6): [ ← ]  12 · 13  [ → ]  [ CONTENTS ]  [ FIND ]  [ ZOOM ]  [ BOOKMARK ]  [ × ]. *@
 <nav class="folio-spread-toolbar" aria-label="Book controls">
     <BracketButton Label="←" Plus="false" AriaLabel="Previous page" Disabled="@(CurrentPage <= 1)" OnClick="OnPrevious" Class="folio-spread-prev" />
-    <span class="folio-spread-count folio-mono" role="status" aria-live="polite">@CurrentPage OF @TotalPages</span>
+    <span class="folio-spread-count folio-mono" role="status" aria-live="polite">@CurrentPage@if (Facing is { } facing) { <span aria-hidden="true" class="folio-spread-dot"> · </span><span>@facing</span> }<span class="folio-sr-only"> of @TotalPages</span></span>
     <BracketButton Label="→" Plus="false" AriaLabel="Next page" Disabled="@(CurrentPage >= TotalPages)" OnClick="OnNext" Class="folio-spread-next" />
     <BracketButton Label="CONTENTS" Plus="false" AriaLabel="Contents and bookmarks" OnClick="OnContents" />
     <BracketButton Label="FIND" Plus="false" Hint="Ctrl F" AriaLabel="Find in book" OnClick="OnFind" />
@@ -13,6 +13,8 @@
     [Parameter] public int CurrentPage { get; set; }
     [Parameter] public int TotalPages { get; set; }
     [Parameter] public bool Bookmarked { get; set; }
+    /// <summary>The page facing the current one on the spread (none for the first page, which sits alone, or past the end).</summary>
+    private int? Facing => CurrentPage > 1 && CurrentPage < TotalPages ? CurrentPage + 1 : null;
     [Parameter] public EventCallback OnPrevious { get; set; }
     [Parameter] public EventCallback OnNext { get; set; }
     [Parameter] public EventCallback OnContents { get; set; }

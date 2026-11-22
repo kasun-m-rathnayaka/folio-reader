@@ -8,13 +8,14 @@ import * as THREE from 'three';
 import { BOOK_WIDTH as W, BOOK_HEIGHT as H, thicknessCm } from './layout.js';
 import { MAT, BOARD } from './hardcover.js';
 import { composeEndpaper } from './cover-composer.js';
-import { CurlPage, createPageMaterial, setImage, fitFor, easeTurn, turnShape } from './curl-page.js';
+import { CurlPage, createPageMaterial, setImage, fitFor, easeTurn, turnShape, pageBow } from './curl-page.js';
 import { PageTextures, targetHeight } from './page-textures.js';
 import { dampObject } from './motion.js';
 
 export const READ = {
     PW: 13.6, PH: 20.4,                         // a page: inside the board's overhang
-    camZ: 52, camY: 0.9,                        // keep in step with READ_CAMERA_Z in scenes.js
+    camZ: 47, camY: 1.6,                        // keep in step with READ_CAMERA_Z in scenes.js
+    tilt: -0.27,                                // the open book leans back about 15°, so it reads as an object on a table
     forwardMs: 300, coverMs: 400, coverStartMs: 200, layMs: 300, layStartMs: 500,
     riffleFlightMs: 300, riffleStepMs: 50, maxRiffleLeaves: 12, turnMs: 400, settleMs: 200,
     leaves: 6,
@@ -141,7 +142,7 @@ export class Reading {
     applyPose() { this.group.position.set(this.pose.x, this.pose.y, this.pose.z); this.group.rotation.set(this.pose.rx, this.pose.ry, this.pose.rz); }
 
     /** Where the group sits when the book is shown: closed centred (slide 0) or open with the gutter at the centre (slide 1). */
-    restPose(slide, tilt = 0) { return { x: lerp(-W / 2, 0, slide), y: READ.camY, z: 0, rx: -0.14 * tilt, ry: 0, rz: 0 }; }
+    restPose(slide, tilt = 0) { return { x: lerp(-W / 2, 0, slide), y: READ.camY, z: 0, rx: READ.tilt - 0.14 * tilt, ry: 0, rz: 0 }; }
 
     // ---- control ---------------------------------------------------------------------------------------------------------------
 
@@ -386,18 +387,26 @@ export class Reading {
 
     // ---- overlay (the reader engine's text layer sits over the two pages) -------------------------------------------------
 
-    /** The two pages' on-screen rectangles in viewport CSS pixels, fitted to each page's shape. */
+    /**
+     * The two pages on screen, in viewport CSS pixels, fitted to each page's shape. The book leans back, so a page is a quadrilateral:
+     * `quad` lists its corners (top-left, top-right, bottom-right, bottom-left, on the bowed paper) and `rect` is their bounding box.
+     * The reader engine maps its text layer onto `quad` with a perspective transform.
+     */
     measure() {
         const pages = pagesOfSpread(this.spread, this.total), viewport = this.stage.viewportSize();
-        const project = (x, y) => { const v = this.group.localToWorld(new THREE.Vector3(x, y, 0)).project(this.stage.camera); return [viewport.left + (v.x + 1) / 2 * viewport.width, viewport.top + (1 - v.y) / 2 * viewport.height]; };
-        const plane = x0 => { const a = project(x0, READ.PH / 2), b = project(x0 + READ.PW, -READ.PH / 2); return { x: Math.min(a[0], b[0]), y: Math.min(a[1], b[1]), width: Math.abs(b[0] - a[0]), height: Math.abs(b[1] - a[1]) }; };
-        const fit = (rect, index) => {
-            const aspect = window.folioReader?.pageAspect?.(index) ?? READ.PW / READ.PH, [sx, sy] = fitFor(aspect, READ.PW / READ.PH);
-            return { x: rect.x + rect.width * (1 - sx) / 2, y: rect.y + rect.height * (1 - sy) / 2, width: rect.width * sx, height: rect.height * sy };
+        this.group.updateMatrixWorld(true);
+        const project = (x, y) => {
+            const v = this.group.localToWorld(new THREE.Vector3(x, y, pageBow(Math.abs(x), READ.PW))).project(this.stage.camera);
+            return [viewport.left + (v.x + 1) / 2 * viewport.width, viewport.top + (1 - v.y) / 2 * viewport.height];
         };
-        const left = pages.left != null ? { index: pages.left, rect: fit(plane(-READ.PW), pages.left) } : null;
-        const right = pages.right != null ? { index: pages.right, rect: fit(plane(0), pages.right) } : null;
-        return { left, right };
+        const page = (x0, index) => {
+            const aspect = window.folioReader?.pageAspect?.(index) ?? READ.PW / READ.PH, [sx, sy] = fitFor(aspect, READ.PW / READ.PH);
+            const w = READ.PW * sx, h = READ.PH * sy, left = x0 + (READ.PW - w) / 2;
+            const quad = [project(left, h / 2), project(left + w, h / 2), project(left + w, -h / 2), project(left, -h / 2)];
+            const xs = quad.map(p => p[0]), ys = quad.map(p => p[1]);
+            return { index, quad, rect: { x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) } };
+        };
+        return { left: pages.left != null ? page(-READ.PW, pages.left) : null, right: pages.right != null ? page(0, pages.right) : null };
     }
 
     showOverlay() { window.dispatchEvent(new CustomEvent('folio-spread', { detail: { ...this.measure(), visible: true } })); this.overlay = true; }

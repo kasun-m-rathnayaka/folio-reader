@@ -1,5 +1,5 @@
 import * as pdfjs from '../lib/pdfjs/pdf.min.mjs';
-import { rotateRect, clampRect, resolvePageIndex } from './reader-geometry.mjs';
+import { rotateRect, clampRect, resolvePageIndex, squareToQuad, quadToSquare, quadMatrix3d } from './reader-geometry.mjs';
 pdfjs.GlobalWorkerOptions.workerSrc = new URL('../lib/pdfjs/pdf.worker.min.mjs', import.meta.url).href;
 
 class FolioReaderEngine {
@@ -270,11 +270,22 @@ class FolioReaderEngine {
             const entry = detail.visible === false ? null : entries.find(e => e.index === page.index);
             const style = page.container.style;
             if (!entry) { style.display = 'none'; page.container.inert = true; if (page.rendered || page.rendering) this.recyclePage(page); continue; }
-            const base = page.proxy?.getViewport({ scale: 1 }) ?? { height: page.height };
-            const scale = entry.rect.height / base.height;
+            const base = page.proxy?.getViewport({ scale: 1 }) ?? { width: page.width, height: page.height };
+            // A page of the tilted book is a quadrilateral: lay the wrapper at the page's own size, then map it onto the corners with a
+            // perspective transform, so text, highlights and selection sit exactly on the drawn page.
+            const quad = entry.quad;
+            const edge = (p, q) => Math.hypot(q[0] - p[0], q[1] - p[1]);
+            const height = quad ? (edge(quad[0], quad[3]) + edge(quad[1], quad[2])) / 2 : entry.rect.height;
+            const scale = height / base.height, width = base.width * scale;
             const changed = Math.abs((page.spreadScale ?? 0) - scale) > 1e-4;
             page.spreadScale = scale;
-            Object.assign(style, { display: 'block', position: 'fixed', left: `${entry.rect.x}px`, top: `${entry.rect.y}px`, width: `${entry.rect.width}px`, height: `${entry.rect.height}px`, margin: '0', background: 'transparent', boxShadow: 'none' });
+            if (quad) {
+                page.spreadToUnit = quadToSquare(squareToQuad(quad));
+                Object.assign(style, { display: 'block', position: 'fixed', left: '0px', top: '0px', width: `${width}px`, height: `${height}px`, transformOrigin: '0 0', transform: quadMatrix3d(width, height, quad), margin: '0', background: 'transparent', boxShadow: 'none' });
+            } else {
+                page.spreadToUnit = null;
+                Object.assign(style, { display: 'block', position: 'fixed', left: `${entry.rect.x}px`, top: `${entry.rect.y}px`, width: `${entry.rect.width}px`, height: `${entry.rect.height}px`, transform: '', margin: '0', background: 'transparent', boxShadow: 'none' });
+            }
             page.container.inert = false;
             if (changed && (page.rendered || page.rendering)) this.recyclePage(page);
             if (!page.rendered && !page.rendering) this.renderPage(page);
@@ -290,7 +301,8 @@ class FolioReaderEngine {
         this.layoutMode = this.previousMode === 'single' ? 'single' : 'continuous';
         this.container.classList.remove('folio-spread-overlay');
         for (const page of this.pages) {
-            Object.assign(page.container.style, { position: '', left: '', top: '', margin: '', background: '', boxShadow: '' });
+            Object.assign(page.container.style, { position: '', left: '', top: '', margin: '', background: '', boxShadow: '', transform: '', transformOrigin: '' });
+            page.spreadToUnit = null;
             if (page.rendered || page.rendering) this.recyclePage(page);
         }
         this.refreshLayout();
@@ -335,8 +347,16 @@ class FolioReaderEngine {
         if (!node) return;
         if (node !== end) { this.notify('OnSelectionUnavailable'); return; }
         const pageRect = node.getBoundingClientRect();
+        // On the tilted 3D page, client rectangles are mapped back through the page's perspective into its own 0–1 space.
+        const toUnit = this.pages[Number(node.dataset.pageIndex)]?.spreadToUnit;
+        const normalize = r => {
+            if (!toUnit) return { x: (r.left - pageRect.left) / pageRect.width, y: (r.top - pageRect.top) / pageRect.height, width: r.width / pageRect.width, height: r.height / pageRect.height };
+            const points = [[r.left, r.top], [r.right, r.top], [r.right, r.bottom], [r.left, r.bottom]].map(([x, y]) => toUnit(x, y));
+            const us = points.map(p => p[0]), vs = points.map(p => p[1]);
+            return { x: Math.min(...us), y: Math.min(...vs), width: Math.max(...us) - Math.min(...us), height: Math.max(...vs) - Math.min(...vs) };
+        };
         const rects = Array.from(range.getClientRects()).filter(r => r.width > 1 && r.height > 1)
-            .map(r => rotateRect(clampRect({ x: (r.left - pageRect.left) / pageRect.width, y: (r.top - pageRect.top) / pageRect.height, width: r.width / pageRect.width, height: r.height / pageRect.height }), -this.rotation));
+            .map(r => rotateRect(clampRect(normalize(r)), -this.rotation));
         const text = selection.toString().trim();
         if (text && rects.length) {
             const bounds = range.getBoundingClientRect();

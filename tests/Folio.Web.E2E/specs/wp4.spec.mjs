@@ -64,8 +64,8 @@ test('presenting turns a book to face the camera, parts its neighbours without i
             others: edges.filter(e => e && e.id !== 'b9').every(e => Math.abs(e.ry - Math.PI / 2) < 1e-3) };
     });
     expect(result.present.ry).toBeCloseTo(0, 2);                       // facing the camera
-    expect(result.present.z).toBeCloseTo(9, 1);                        // 9 cm forward
-    expect(result.present.rx).toBeCloseTo(-2 * Math.PI / 180, 2);      // leaning back 2°
+    expect(result.present.z).toBeCloseTo(4, 1);                        // 4 cm forward
+    expect(result.present.rx).toBeCloseTo(-1 * Math.PI / 180, 2);      // leaning back 1°
     expect(result.minGap).toBeGreaterThanOrEqual(0.34);                // no two books intersect (3.5 mm between spines, 1 cm of air at the cover)
     expect(result.others).toBe(true);                                  // everything else is back to spine-out
     expect(Math.abs(result.panX - result.focusX)).toBeLessThan(0.1);   // the row recentred on the presented book
@@ -111,7 +111,7 @@ test('the title marquee follows the presented book', async ({ page }) => {
     const first = await current.textContent();
     await page.keyboard.press('ArrowRight');
     await expect.poll(() => current.textContent()).not.toBe(first);
-    await expect(page.locator('.folio-bottom-bar .folio-bottom-book')).toHaveText((await current.textContent()).trim());
+    await expect(page.locator('.folio-bottom-bar .folio-bottom-book')).toHaveText(await current.evaluate(el => el.firstChild.textContent.trim()));   // the title, without the format mark
     await expect(page.locator('.folio-shelf-marquee')).toHaveAttribute('aria-hidden', 'true');
 });
 
@@ -124,5 +124,5 @@ test('reduced motion: books do not lift and presenting snaps without easing', as
     expect((await state(page, 'b3')).y).toBeCloseTo(rest.y, 3);
     await page.evaluate(() => window.__folioStage.stage.focusBook('b3'));
     await expect.poll(async () => (await state(page, 'b3')).ry, { timeout: 15_000 }).toBeCloseTo(0, 3);
-    expect((await state(page, 'b3')).z).toBeCloseTo(9, 2);
+    expect((await state(page, "b3")).z).toBeCloseTo(4, 2);
 });

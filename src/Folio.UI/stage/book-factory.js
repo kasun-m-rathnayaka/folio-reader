@@ -8,8 +8,8 @@ import { pageEdgeTexture, shadowTexture } from './textures.js';
 export class BookFactory {
     constructor() {
         const edges = pageEdgeTexture();
-        this.pages = new THREE.MeshStandardMaterial({ color: 0xEFE8D8, roughness: 0.95, map: edges });
-        this.pagesTop = new THREE.MeshStandardMaterial({ color: 0xEFE8D8, roughness: 0.95, map: edges });
+        this.pages = new THREE.MeshStandardMaterial({ color: 0xF6F4F0, roughness: 0.95, map: edges });
+        this.pagesTop = new THREE.MeshStandardMaterial({ color: 0xF6F4F0, roughness: 0.95, map: edges });
         this.placeholder = new THREE.MeshPhysicalMaterial({ color: 0x3a3630, roughness: 0.8, sheen: 0.5, sheenColor: new THREE.Color(0x8a7a62) });
         this.paper = new THREE.MeshStandardMaterial({ color: 0xEFE8D8, roughness: 0.92 });
         this.shadowMaterial = new THREE.MeshBasicMaterial({ map: shadowTexture(), transparent: true, depthWrite: false, opacity: 0.9 });
