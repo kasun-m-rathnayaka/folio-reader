@@ -23,6 +23,16 @@ public partial class App : System.Windows.Application
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        DispatcherUnhandledException += (_, args) =>
+        {
+            _host?.Services.GetService<ILogger<App>>()?.LogError(args.Exception, "Unhandled exception on the UI thread.");
+            args.Handled = true; // keep the window open; the Blazor error boundary shows recovery
+        };
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            _host?.Services.GetService<ILogger<App>>()?.LogError(args.Exception, "Unobserved task exception.");
+            args.SetObserved();
+        };
         try { await StartAsync(e); }
         catch (Exception ex)
         {

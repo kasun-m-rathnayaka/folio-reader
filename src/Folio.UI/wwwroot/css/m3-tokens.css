@@ -204,3 +204,10 @@ select { color:var(--folio-text-primary); background:var(--md-sys-color-surface)
 .folio-notification-card.severity-error .folio-notification-heading > svg { color:var(--md-sys-color-error); }
 .folio-notification-card.severity-success .folio-notification-heading > svg { color:var(--md-sys-color-success); }
 .folio-notification-clear { align-self:flex-end; border:1px solid var(--md-sys-color-outline-variant); border-radius:6px; padding:6px 10px; font-size:11px; background:var(--md-sys-color-surface); color:var(--folio-text-secondary); pointer-events:auto; }
+
+/* WP0 safety net: recovery panel and the framework's unhandled-error bar. */
+.folio-error-panel { display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:12px; min-height:60vh; padding:32px; color:var(--folio-text); }
+.folio-error-panel p { color:var(--folio-text-secondary); max-width:420px; font-size:13px; }
+#blazor-error-ui { position:fixed; left:0; right:0; bottom:0; z-index:5000; display:none; padding:10px 16px; background:var(--folio-surface, #151517); color:var(--folio-text, #edebe6); border-top:1px solid var(--folio-border, rgba(128,128,128,.4)); font:13px Inter, system-ui, sans-serif; }
+#blazor-error-ui[hidden] { display:none; }
+#blazor-error-ui a { color:inherit; margin-left:8px; text-decoration:underline; }

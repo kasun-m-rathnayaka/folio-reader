@@ -1,0 +1,25 @@
+@* WP0 safety net: an exception in any page shows a calm recovery panel and is logged; the app keeps running. *@
+@inherits ErrorBoundaryBase
+@inject ILogger<FolioErrorBoundary> Logger
+@inject FolioNavigator Navigator
+@if (CurrentException is null)
+{
+    @ChildContent
+}
+else
+{
+    <div class="folio-error-panel" role="alert">
+        <div class="folio-eyebrow">[ SOMETHING WENT WRONG ]</div>
+        <h1 class="folio-display" tabindex="-1">This view could not be shown</h1>
+        <p>Your books, highlights and reading positions have not been changed.</p>
+        <BracketButton Label="BACK TO LIBRARY" Plus="false" OnClick="BackToLibrary" />
+    </div>
+}
+@code {
+    protected override Task OnErrorAsync(Exception exception)
+    {
+        Logger.LogError(exception, "A view failed and was replaced by the recovery panel.");
+        return Task.CompletedTask;
+    }
+    private void BackToLibrary() { Recover(); Navigator.Go(FolioRoutes.Home); }
+}

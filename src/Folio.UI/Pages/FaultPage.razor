@@ -1,0 +1,6 @@
+@page "/__fault"
+@* Test hook for the WP0 safety net: throws on render so the error boundary and its recovery can be checked end to end.
+   It touches no data and is not linked from anywhere. *@
+@code {
+    protected override void OnInitialized() => throw new InvalidOperationException("Deliberate fault for the error-boundary test.");
+}
