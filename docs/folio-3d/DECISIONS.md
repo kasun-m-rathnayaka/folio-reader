@@ -332,3 +332,7 @@ the cross-browser gates for M2 are proven on Chromium only and need a manual che
 - **CPU gates on CI.** CI has no GPU, so Chromium rasterises in software and blocks the main thread on pixel fill once frames queue
   up; with the closer camera that dominated the "CPU per frame" gates. The 300-book and 2,000-book checks now render at 1/8 of the
   pixel ratio while measuring (`__folioStage.rasterScale`, test mode only). The scene, windowing and draw calls are unchanged.
+- **Cover cache writes are batched.** Spine and cover PNGs are held in memory and written to IndexedDB in one transaction once reads
+  go quiet (300 ms, at most 2 s after the first write; also on `pagehide` and when the page is hidden). Reads see buffered entries
+  at once and no longer queue behind a burst of blob writes after a fling. The cache stays best-effort: a write lost on a crash
+  only means the book is painted again.

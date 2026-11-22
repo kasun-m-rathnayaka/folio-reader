@@ -30,6 +30,40 @@ const run = async (mode, action) => {
     });
 };
 
-export const cacheGet = key => run('readonly', store => store.get(key));
-export const cachePut = (key, value) => run('readwrite', store => store.put(value, key));
-export const cacheClear = () => run('readwrite', store => store.clear());
+// Writes wait in memory and land together in one transaction once reads go quiet (at most FLUSH_MAX_MS after the first one), so a
+// burst of spine reads after a fling never queues behind PNG writes. Reads see buffered values at once.
+const FLUSH_QUIET_MS = 300, FLUSH_MAX_MS = 2000;
+const pending = new Map();
+let flushTimer = 0, firstPendingAt = 0;
+
+function scheduleFlush() {
+    if (!pending.size) return;
+    clearTimeout(flushTimer);
+    const wait = Math.max(0, Math.min(FLUSH_QUIET_MS, firstPendingAt + FLUSH_MAX_MS - performance.now()));
+    flushTimer = setTimeout(flush, wait);
+}
+
+export function flush() {
+    clearTimeout(flushTimer); flushTimer = 0;
+    if (!pending.size) return Promise.resolve(true);
+    const entries = [...pending]; pending.clear(); firstPendingAt = 0;
+    return run('readwrite', store => { let last = null; for (const [key, value] of entries) last = store.put(value, key); return last ?? {}; });
+}
+
+if (typeof addEventListener === 'function') {
+    addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
+    addEventListener('pagehide', () => flush());
+}
+
+export const cacheGet = key => {
+    if (pending.has(key)) return Promise.resolve(pending.get(key));
+    if (pending.size) scheduleFlush();                       // a read pushes the flush back, up to FLUSH_MAX_MS
+    return run('readonly', store => store.get(key));
+};
+export const cachePut = (key, value) => {
+    if (!pending.size) firstPendingAt = performance.now();
+    pending.set(key, value);
+    scheduleFlush();
+    return Promise.resolve(true);
+};
+export const cacheClear = () => { pending.clear(); clearTimeout(flushTimer); return run('readwrite', store => store.clear()); };
