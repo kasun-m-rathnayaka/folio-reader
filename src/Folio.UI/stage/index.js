@@ -955,7 +955,8 @@ export class Stage {
         on(this.input, 'wheel', event => {
             if (!live() || event.target?.closest?.('.folio-stage-scroll')) return;
             // One gesture is one step: momentum events of a trackpad swipe never fire a second one (WP2).
-            const { intent, pan } = this.gate.wheel(event, performance.now());
+            // Input timestamps, not the time the handler runs: a busy main thread must not stretch a gesture into several.
+            const { intent, pan } = this.gate.wheel(event, event.timeStamp);
             if (!event.deltaX && !event.deltaY) return;
             event.preventDefault();
             if (pan && this.scene.kind === 'shelf' && !this.opening) this.panBy(pan);

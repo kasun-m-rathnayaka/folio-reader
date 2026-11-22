@@ -203,7 +203,7 @@ select { border-radius:2px; background:var(--folio-surface); border-color:var(--
 .folio-settings-actions { display:flex; flex-wrap:wrap; gap:8px 18px; margin:6px 0 10px; }
 .folio-storage-status { color:var(--folio-text-muted); margin:4px 0 10px; }
 .folio-stage-page { touch-action:none; }
-.folio-menu-hint { margin:0; padding:8px 16px; font-size:12px; color:var(--folio-text-muted); max-width:240px; }
+.folio-menu-hint { margin:0; padding:8px 16px; font-size:12px; color:var(--folio-text); opacity:.85; max-width:240px; }
 
 /* The bookcase fills the stage, so the page title and status filter sit on a soft scrim to stay readable on wood (WP3). */
 .folio-stage-shelf { isolation:isolate; }

@@ -42,7 +42,7 @@ test('reduced motion: system preference resolves to reduced and books do not ani
 });
 
 // M8: the 3D views carry the same HTML semantics (canvas aria-hidden, focus layer, live region).
-test('axe: 3D hero and shelf', async ({ page, browserName }) => {
+test('axe: 3D hero, shelf, presented book, book menu and spread', async ({ page, browserName }) => {
     test.skip(browserName !== 'chromium', 'Stage checks run on Chromium');
     await openLibrary(page, '/?stageTest=1');
     await importFiles(page, ['01_single_column_book_300p.pdf', '02_two_column_paper.pdf'].map(fixture));
@@ -55,4 +55,16 @@ test('axe: 3D hero and shelf', async ({ page, browserName }) => {
     await page.keyboard.press('ArrowRight');
     await expect(page.locator('.folio-focus-book:focus')).toHaveCount(1);
     await scan(page, 'shelf (3D)');
+    // WP8: the bookcase with a presented book, the book menu over it, and the open 3D spread.
+    await page.keyboard.press('ArrowRight');
+    await page.waitForFunction(() => window.__folioStage.settled, null, { timeout: 60_000 });
+    await scan(page, 'presented book (3D)');
+    await page.locator('.folio-bottom-bar').getByRole('button', { name: /^Actions for / }).click();
+    await page.locator('.mud-popover-open .mud-menu-item').first().waitFor();
+    await scan(page, 'book menu (3D)');
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => window.__folioStage.stats.reading?.interactive, null, { timeout: 120_000 });
+    await page.waitForFunction(() => [...document.querySelectorAll('.folio-page-wrapper')].some(w => w.style.position === 'fixed' && w.querySelector('.folio-text-layer span')), null, { timeout: 90_000 });
+    await scan(page, '3D spread');
 });

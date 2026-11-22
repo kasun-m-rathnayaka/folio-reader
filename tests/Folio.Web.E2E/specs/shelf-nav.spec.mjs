@@ -44,11 +44,20 @@ function expectMonotonic(samples, direction) {
     for (let i = 1; i < samples.length; i++) expect((samples[i] - samples[i - 1]) * direction, `frame ${i}: ${samples[i - 1]} → ${samples[i]}`).toBeGreaterThanOrEqual(-1e-6);
 }
 
-async function swipe(page, sign) {
-    await page.mouse.move(700, 450);
-    // 30 wheel events over 1.2 s with decaying momentum, like a trackpad swipe.
-    for (let i = 0; i < 30; i++) { await page.mouse.wheel(0, sign * Math.max(2, Math.round(60 * Math.exp(-i / 8)))); await page.waitForTimeout(40); }
-}
+// Wheel events are dispatched in one burst with the timestamps of a real swipe (one every 40 ms): real injected events would be
+// spaced by the software-rendered frame time, which is not what a trackpad does. The stage reads `event.timeStamp`.
+const wheelBurst = (page, events) => page.evaluate(events => {
+    // A synthetic clock that only moves forward, so each burst starts well after the previous one ended.
+    const main = document.getElementById('folio-main'), base = window.__synthClock = Math.max(window.__synthClock ?? 0, performance.now()) + 1000;
+    window.__synthClock = base + Math.max(...events.map(e => e[2]));
+    events.forEach(([dx, dy, at]) => {
+        const event = new WheelEvent('wheel', { deltaX: dx, deltaY: dy, bubbles: true, cancelable: true, clientX: 700, clientY: 450 });
+        Object.defineProperty(event, 'timeStamp', { value: base + at });
+        main.dispatchEvent(event);
+    });
+}, events);
+// 30 wheel events over 1.2 s with decaying momentum, like a trackpad swipe.
+const swipe = (page, sign) => wheelBurst(page, Array.from({ length: 30 }, (_, i) => [0, sign * Math.max(2, Math.round(60 * Math.exp(-i / 8))), i * 40]));
 
 test('a trackpad swipe moves exactly one shelf, and a sideways swipe moves none', async ({ page }) => {
     const errors = await bookcase(page, ['Design', 'Research', 'Archive']);
@@ -60,8 +69,7 @@ test('a trackpad swipe moves exactly one shelf, and a sideways swipe moves none'
     expect(await row(page)).toBe(1);
     expectMonotonic(await stopSampling(page), -1);          // going down the case, the camera only ever descends
 
-    await page.mouse.move(700, 450);
-    for (let i = 0; i < 30; i++) { await page.mouse.wheel(30, i % 5 === 0 ? 4 : 1); await page.waitForTimeout(30); }
+    await wheelBurst(page, Array.from({ length: 30 }, (_, i) => [30, i % 5 === 0 ? 4 : 1, i * 30]));
     await page.waitForTimeout(800);
     await expect(title(page)).toHaveText('Design');         // a horizontal gesture never changes shelf
 

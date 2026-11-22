@@ -3,6 +3,7 @@
 @inject ILibraryService Library
 @inject IDialogService Dialogs
 @inject NotificationService Notifications
+@inject IJSRuntime JS
 @if (Book != null)
 {
     <MudMenu @ref="_menu" PopoverClass="folio-action-menu" AnchorOrigin="Origin.TopRight" TransformOrigin="Origin.BottomRight" OpenChanged="OpenChanged">
@@ -38,6 +39,7 @@
         _book = await Library.GetBookAsync(Book.Id);
         _shelves = await Library.GetShelvesAsync();
         StateHasChanged();
+        await JS.InvokeVoidAsync("folioShell.focusMenu");   // keyboard focus moves into the menu, so Esc and the arrow keys work
     }
     private async Task Edit()
     {

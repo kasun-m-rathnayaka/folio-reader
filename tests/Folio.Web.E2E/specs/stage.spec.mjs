@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openLibrary, importFiles, fixture, waitForReader } from './helpers.mjs';
+import { openLibrary, importFiles, fixture, waitForReader, setPreferences } from './helpers.mjs';
 
 // M4 gates. Headless browsers draw WebGL in software, which the fallback rules reject, so 3D checks run in stage test
 // mode (?stageTest=1: software allowed, fixed clock, no idle motion). Chromium only: the WebGL path is the same code.
@@ -34,7 +34,9 @@ test('hero renders real covers in 3D and stops drawing when idle', async ({ page
     await page.waitForTimeout(2000);
     expect(await page.evaluate(() => window.__folioStage.stats.frames)).toBe(before);
 
-    // The stage pauses under the reader.
+    // With flat pages the stage pauses under the reader (in the 3D book it keeps drawing the open book: reading.spec.mjs).
+    await setPreferences(page, { ReadingView: 1 }, '/?stageTest=1');
+    await expect(page.locator('.folio-stage-hero')).toBeVisible({ timeout: 60_000 });
     await page.locator('.folio-hero').getByRole('button', { name: /^Open / }).click();
     await waitForReader(page);
     await expect.poll(() => page.evaluate(() => window.__folioStage.stats.paused)).toBe(true);

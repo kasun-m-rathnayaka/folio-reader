@@ -1,8 +1,9 @@
 # Folio
 
 A calm, local-first PDF library and reader for Windows and the web, built with .NET 10, Blazor, Three.js, PDF.js and
-SQLite. The library is a tactile 3D bookshelf — every PDF becomes a book made from its own cover, title and page count —
-and reading happens in a sharp, fully featured 2D reader. No server, no account, no telemetry.
+SQLite. The library is one tall wooden bookcase — every PDF becomes a hardcover with its own typeset title, author and
+thickness — and reading happens in the open book itself: it opens, riffles to your page and turns pages with a real curl,
+with selection, highlights, bookmarks and find on top. Flat pages (Zoom) are a key away. No server, no account, no telemetry.
 
 - **Windows:** WPF + WebView2 (`src/Folio.Desktop`). Data lives in `%LocalAppData%\Folio`.
 - **Web:** an installable Blazor WebAssembly PWA (`src/Folio.Web`) that works offline. Books stay in the browser's private
@@ -14,13 +15,19 @@ removed in Folio 3D; existing library data stays readable.
 
 ## The library
 
-- The home screen shows the book you read last, turning slowly. **Scroll**, swipe or press **↓** for your shelves:
-  "All books" first, then each shelf. **← →** move along a shelf, **↑ ↓** between shelves, **1–9** jump to a shelf.
-- Hover or focus a book to pull it out. **Enter** (or `[ OPEN BOOK + ]`) opens it: the book comes forward, its cover
-  swings open and the page hands off to the reader. Right-click (or the menu key, or `[ ⋯ ]`) opens the book menu: edit, move to shelf, move to Trash. **Esc**
-  goes back.
-- Settings: **Motion** (match system, Full, Reduced, Off), **Library style** (3D or 2D) and **3D quality** (Auto, High,
-  Low). Without WebGL2, on software rendering, or when 3D is too slow, Folio uses the 2D library automatically. On
+- The home screen shows the book you read last, turning slowly. **Scroll**, swipe or press **↓** for your shelves: each
+  shelf is a row of the bookcase, and one gesture or key press moves exactly one shelf. Rows scroll sideways without limit
+  (trackpad, Shift + wheel, or drag the wood), with momentum and a soft stop at the ends. **← →** move along a shelf,
+  **↑ ↓** between shelves, **1–9** jump to a shelf.
+- Hover a book and its spine lifts. Rest on it for a moment, click it or use the arrow keys and it turns to show its
+  cover, its neighbours part and the page takes the cover's colour. **Enter** (or clicking the presented book, or
+  `[ OPEN BOOK + ]`) opens it. Right-click (or the menu key, or `[ ⋯ ]`) opens the book menu: edit, move to shelf, move to
+  Trash. **Esc** goes back.
+- Reading: the book opens and riffles to your page. **← →** (or Page Up / Down) turn a page, **Home** / **End** riffle to
+  the ends, **Ctrl F** finds, **Z** shows flat pages (Esc returns to the book), **Esc** closes the book. Choose 3D book or
+  Flat pages in Settings → Reading view.
+- Settings: **Motion** (match system, Full, Reduced, Off), **Library style** (3D or 2D), **Reading view** (3D book or Flat
+  pages) and **3D quality** (Auto, High, Low). Without WebGL2, on software rendering, or when 3D is too slow, Folio uses the 2D library automatically. On
   battery the 3D library draws at most 30 frames per second.
 
 ## Library and reading tools

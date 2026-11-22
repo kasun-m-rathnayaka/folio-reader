@@ -27,6 +27,8 @@ window.folioShell = {
     turnPage(step) { window.dispatchEvent(new CustomEvent('folio-turn', { detail: { step } })); },
     /** WP6: after Zoom, ask the stage to draw the spread's text-layer rectangles again. */
     requestSpread() { window.dispatchEvent(new CustomEvent('folio-spread-request')); },
+    /** Moves keyboard focus to the first item of the open menu (after its popover has rendered). */
+    focusMenu() { setTimeout(() => document.querySelector('.mud-popover-open .mud-menu-item:not(.mud-disabled)')?.focus({ preventScroll: true }), 80); },
     focusElement(id) { document.getElementById(id)?.focus({ preventScroll: true }); },
     setSceneKeyTarget(reference) { this.sceneKeyTarget = reference; },
     get motion() { return document.documentElement.dataset.motion || 'full'; },
@@ -88,6 +90,14 @@ window.folioShell = {
 };
 // Scene shortcuts (Enter, D, Space, Esc, arrows, 1–9, ?). Ignored while typing, inside dialogs and menus, in the reader,
 // and for Enter/Space on a focused control so its own activation runs once.
+// Esc closes an open action menu (MudBlazor menus only close on an outside click): the overlay behind it is that click.
+window.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    const menu = document.querySelector('.folio-action-menu.mud-popover-open');
+    if (!menu) return;
+    event.preventDefault(); event.stopPropagation();
+    document.querySelector('.mud-popover-provider .mud-overlay')?.click();
+}, true);
 window.addEventListener('keydown', event => {
     const target = window.folioShell.sceneKeyTarget;
     if (!target || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || window.folioReader?.pdfDoc) return;

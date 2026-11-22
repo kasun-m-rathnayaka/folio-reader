@@ -2,6 +2,11 @@
 
 Nov 22, 2026 · @Kasun Rathnayaka
 
+> **Update (SPEC-V2).** The fixes and Stripe Press motion plan in [SPEC-V2.md](SPEC-V2.md) supersedes parts of this spec: View Details is
+> removed (DET-1, DET-2), shelves are one wooden bookcase with endless browsing, covers are generated, books turn to their cover when
+> presented, and reading happens in a 3D open book (the 2D reader is Zoom). Progress is in [PROGRESS-V2.md](PROGRESS-V2.md) and the
+> decisions in [DECISIONS.md](DECISIONS.md) (D-024 onward).
+
 ## Summary
 
 Folio 3D turns the Folio library into a calm, tactile 3D bookshelf on Windows and the web. Reading itself stays a sharp, fully featured 2D reader. One codebase ships to two hosts — the existing WPF + WebView2 desktop app and a new installable Blazor WebAssembly web app — through nine milestones (M0–M8), each with its own acceptance gate.
