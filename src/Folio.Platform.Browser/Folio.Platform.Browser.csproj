@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <SupportedPlatform Include="browser" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Folio.Application\Folio.Application.csproj" />
+    <ProjectReference Include="..\Folio.Infrastructure\Folio.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Pre-release: pinned exactly and isolated behind IDatabaseSetup (SPEC Risks; DECISIONS D-007). -->
+    <PackageReference Include="SqliteWasmBlazor" Version="[0.9.4-pre]" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.12" />
+    <!-- Lifts SqliteWasmBlazor's transitive MessagePack 3.1.8 past GHSA-qhrr-8q5h-9q3h. -->
+    <PackageReference Include="MessagePack" Version="3.1.12" />
+  </ItemGroup>
+
+</Project>

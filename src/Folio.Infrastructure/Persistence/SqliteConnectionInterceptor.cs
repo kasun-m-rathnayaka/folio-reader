@@ -9,7 +9,8 @@ namespace Folio.Infrastructure.Persistence;
 /// </summary>
 public class SqliteConnectionInterceptor : DbConnectionInterceptor
 {
-    private const string PragmaCommands = "PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;";
+    /// <summary>Pragmas run on every opened connection. Hosts whose storage cannot use WAL override this.</summary>
+    protected virtual string PragmaCommands => "PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;";
 
     public override void ConnectionOpened(DbConnection connection, ConnectionEndEventData eventData)
     {
@@ -26,7 +27,7 @@ public class SqliteConnectionInterceptor : DbConnectionInterceptor
         await base.ConnectionOpenedAsync(connection, eventData, cancellationToken);
     }
 
-    private static void EnablePragmas(DbConnection connection)
+    private void EnablePragmas(DbConnection connection)
     {
         try
         {
@@ -40,7 +41,7 @@ public class SqliteConnectionInterceptor : DbConnectionInterceptor
         }
     }
 
-    private static async Task EnablePragmasAsync(DbConnection connection, CancellationToken cancellationToken)
+    private async Task EnablePragmasAsync(DbConnection connection, CancellationToken cancellationToken)
     {
         try
         {

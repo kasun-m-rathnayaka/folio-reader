@@ -6,7 +6,7 @@ namespace Folio.Infrastructure.Search;
 
 /// <summary>
 /// Library-wide full-text and metadata search engine (FR-LIB-07, §8.6).
-/// Cross-references books, author names, highlight contents, notes, and bookmarks.
+/// Cross-references books, author names, highlighted text, bookmarks, and cached page text.
 /// </summary>
 public class LibrarySearchService : ISearchService
 {
@@ -46,19 +46,16 @@ public class LibrarySearchService : ISearchService
             ));
         }
 
-        // 2. Search Annotations and Notes
+        // 2. Search highlighted text
         var matchedAnnotations = await _context.Annotations
             .Include(a => a.Book)
-            .Where(a => a.Book != null && a.Book.TrashedAt == null && ((a.SelectedText != null && a.SelectedText.ToLower().Contains(query.ToLower())) ||
-                        (a.Note != null && a.Note.ToLower().Contains(query.ToLower()))))
+            .Where(a => a.Book != null && a.Book.TrashedAt == null && a.SelectedText != null && a.SelectedText.ToLower().Contains(query.ToLower()))
             .Take(25)
             .ToListAsync(ct);
 
         foreach (var ann in matchedAnnotations)
         {
-            string snippet = !string.IsNullOrEmpty(ann.Note) && ann.Note.Contains(query, StringComparison.OrdinalIgnoreCase)
-                ? $"Note: {ann.Note}"
-                : $"\"{ann.SelectedText}\"";
+            string snippet = $"\"{ann.SelectedText}\"";
 
             results.Add(new SearchResultDto(
                 BookId: ann.BookId,

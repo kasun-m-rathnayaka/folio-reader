@@ -1,7 +1,7 @@
 namespace Folio.Application.Common.Interfaces;
 
 /// <summary>
-/// Manages physical storage under %LocalAppData%\Folio\ (books, covers, cache, backups, logs).
+/// Manages app storage: on desktop a folder under %LocalAppData%\Folio\; in the browser, private file storage (OPFS).
 /// </summary>
 public interface IFileStore
 {
@@ -19,5 +19,8 @@ public interface IFileStore
     string GetBookPath(string sha256);
     string GetCoverPath(string sha256);
     bool BookExists(string sha256);
+
+    /// <summary>Deletes the app-managed PDF copy and cover for a book. Imported originals are never touched.</summary>
+    Task DeleteManagedFilesAsync(string sha256, CancellationToken cancellationToken = default);
 }
 

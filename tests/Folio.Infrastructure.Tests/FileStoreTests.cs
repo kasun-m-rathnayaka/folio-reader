@@ -88,7 +88,7 @@ public class FileStoreTests : IDisposable
         string path = _fileStore.GetBookPath(hash);
 
         Assert.EndsWith($"{hash}.pdf", path);
-        Assert.Contains("library\\books", path);
+        Assert.Contains(Path.Combine("library", "books"), path);
     }
 }
 

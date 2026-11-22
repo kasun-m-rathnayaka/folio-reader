@@ -122,7 +122,10 @@ class FolioReaderEngine {
     }
     currentOffset() {
         const page = this.pages[this.currentPageIndex];
-        return page ? Math.max(0, Math.min(1, (this.container.scrollTop - page.container.offsetTop) / page.container.offsetHeight)) : 0;
+        // A hidden or closing reader has zero-height pages: report the top of the page, never NaN.
+        if (!page || !page.container.offsetHeight) return 0;
+        const offset = (this.container.scrollTop - page.container.offsetTop) / page.container.offsetHeight;
+        return Number.isFinite(offset) ? Math.max(0, Math.min(1, offset)) : 0;
     }
     handleScroll() {
         if (this.disposed || !this.pages.length) return;
@@ -192,7 +195,6 @@ class FolioReaderEngine {
             page.container.style.setProperty('--total-scale-factor', viewport.scale);
             page.textTask = new pdfjs.TextLayer({ textContentSource: await page.proxy.getTextContent(), container: page.textLayer, viewport });
             await page.textTask.render();
-            if (page.ocr) this.paintOcr(page);
             if (generation !== page.generation || this.disposed) return;
             await this.renderLinks(page, viewport);
             page.rendered = true;
@@ -290,6 +292,14 @@ class FolioReaderEngine {
     }
     pulseAnnotation(id) { document.querySelectorAll(`[data-annotation-id="${id}"]`).forEach(el => { el.classList.add('folio-annotation-pulsing'); setTimeout(() => el.classList.remove('folio-annotation-pulsing'), 1000); }); }
     setDogEar(index, folded) { const ear = this.pages[index]?.dogEar; ear?.classList.toggle('active', folded); ear?.setAttribute('aria-pressed', folded ? 'true' : 'false'); }
+    /** OPN-1/2: where the current page is drawn, in viewport CSS pixels (the stage aligns its 3D page to it). */
+    currentPageRect() {
+        const page = this.pages[this.currentPageIndex];
+        const canvas = page?.canvasWrap.querySelector('canvas') ?? page?.container;
+        if (!canvas) return null;
+        const r = canvas.getBoundingClientRect();
+        return r.width > 0 && r.height > 0 ? { x: r.left, y: r.top, width: r.width, height: r.height } : null;
+    }
     async getPageText(index) {
         if (!this.pdfDoc) return null;
         const page = await this.pdfDoc.getPage(index + 1), content = await page.getTextContent();
@@ -313,8 +323,6 @@ class FolioReaderEngine {
                 const proxy = await this.pdfDoc.getPage(index + 1), content = await proxy.getTextContent();
                 if (version !== this.searchVersion || this.disposed) return;
                 let text = content.items.map(i => i.str || '').join(' ').toLowerCase();
-                if (!text.trim()) text = (this.pages[index]?.ocr?.text || await this.dotNetHelper?.invokeMethodAsync('OnOcrPageRequested', index) || '').toLowerCase();
-                if (version !== this.searchVersion || this.disposed) return;
                 let position = text.indexOf(normalized);
                 while (position !== -1) { this.searchMatches.push({ pageIndex:index, charIndex:position }); position = text.indexOf(normalized, position + normalized.length); }
                 if (index === this.currentPageIndex) this.markSearch(this.pages[index]);
@@ -330,28 +338,11 @@ class FolioReaderEngine {
         await this.notify('OnSearchMatch', { currentMatch:total ? this.currentSearchMatchIndex + 1 : 0, totalMatches:total, pageIndex:this.currentPageIndex });
     }
     markSearch(page) { if (!page) return; for (const span of page.textLayer.querySelectorAll('span')) span.classList.toggle('folio-search-hit', !!this.currentSearchQuery && span.textContent.toLowerCase().includes(this.currentSearchQuery)); }
-    setOcrPage(index, words, text) {
-        const page = this.pages[index]; if (!page) return;
-        page.ocr = { words, text };
-        if (page.rendered || page.rendering) this.paintOcr(page);
-        this.markSearch(page);
-    }
-    paintOcr(page) {
-        if (!page.ocr || !page.viewport) return;
-        const fragment = document.createDocumentFragment();
-        for (const word of page.ocr.words) {
-            const rect = rotateRect(word.rect, this.rotation), span = document.createElement('span');
-            span.textContent = word.text + ' '; span.className = 'folio-ocr-word';
-            Object.assign(span.style, {left:`${rect.x * page.viewport.width}px`,top:`${rect.y * page.viewport.height}px`,width:`${rect.width * page.viewport.width}px`,height:`${rect.height * page.viewport.height}px`,fontSize:`${rect.height * page.viewport.height}px`});
-            fragment.append(span);
-        }
-        page.textLayer.replaceChildren(fragment);
-    }
     clearSearch() { this.searchVersion++; this.currentSearchQuery = ''; this.searchMatches = []; this.currentSearchMatchIndex = -1; this.pages.forEach(p => this.markSearch(p)); }
     handleKeyDown(e) {
         if (e.target.closest('input,textarea,select,[contenteditable="true"],.mud-dialog') || this.disposed) return;
         const ctrl = e.ctrlKey || e.metaKey, key = e.key.toLowerCase();
-        if ((ctrl && ['g','d','f','k','+','=','-'].includes(key)) || ['F11','Escape'].includes(e.key) || (!ctrl && ['h','c'].includes(key) && window.getSelection()?.toString().trim())) {
+        if ((ctrl && ['g','d','f','k','+','=','-'].includes(key)) || ['F11','Escape'].includes(e.key) || (!ctrl && ['h'].includes(key) && window.getSelection()?.toString().trim())) {
             e.preventDefault(); this.notify('OnReaderShortcut', { key:e.key, ctrlKey:ctrl, altKey:e.altKey }); return;
         }
         if (e.altKey && e.key === 'ArrowLeft' && this.historyIndex >= 0) {
@@ -374,7 +365,7 @@ class FolioReaderEngine {
         this.container?.replaceChildren();
     }
 }
-const methods = ['loadDocument','goToPage','setZoom','setFitWidth','setFitPage','setLayoutMode','setRotation','search','clearSearch','getPageText','getThumbnail','drawAnnotations','pulseAnnotation','setDogEar','clearSelectionBox','applyTheme','setOcrPage'];
+const methods = ['loadDocument','goToPage','setZoom','setFitWidth','setFitPage','setLayoutMode','setRotation','search','clearSearch','getPageText','getThumbnail','drawAnnotations','pulseAnnotation','setDogEar','clearSelectionBox','applyTheme','currentPageRect'];
 window.folioReader = {
     engine: null,
     get pdfDoc() { return this.engine?.pdfDoc; },

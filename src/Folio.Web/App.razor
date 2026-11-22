@@ -1,0 +1,50 @@
+@using Folio.Platform.Browser
+@using Folio.UI
+@inject IDatabaseSetup Database
+@inject BrowserFilePickerService Picker
+
+@if (_error != null)
+{
+    <div class="folio-empty-state" role="alert">
+        <h2>Folio could not open your library</h2>
+        <p>@_error</p>
+        <p>Your PDFs and highlights are stored in this browser and have not been changed.</p>
+    </div>
+}
+else if (!_ready)
+{
+    <div class="folio-empty-state" role="status">Opening your library…</div>
+}
+else
+{
+    <Routes />
+}
+
+@code {
+    private bool _ready;
+    private string? _error;
+
+    // SqliteWasmBlazor starts its worker after the first render, so the library waits for it here.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            // A storage engine that never answers must not leave a spinner forever (DECISIONS D-021).
+            var start = Database.InitializeAsync();
+            if (await Task.WhenAny(start, Task.Delay(TimeSpan.FromSeconds(30))) != start)
+                throw new TimeoutException("OPFS: storage did not start in time.");
+            await start;
+            await Picker.RegisterDropTargetAsync();
+            _ready = true;
+        }
+        catch (Exception ex)
+        {
+            // SqliteWasmBlazor needs private file storage with sync access handles in workers (OPFS).
+            _error = ex.Message.Contains("SqliteWasm", StringComparison.Ordinal) || ex.Message.Contains("OPFS", StringComparison.Ordinal) || ex is TimeoutException
+                ? "This browser does not offer the private file storage Folio keeps your library in. Use a current Chrome, Edge, Firefox or Safari, outside private browsing."
+                : ex.Message;
+        }
+        StateHasChanged();
+    }
+}

@@ -1,15 +1,16 @@
-using System.Text.Json;
 using Folio.Application.Common.Interfaces;
-using Folio.Application.OCR;
 using Folio.Domain.Entities;
-using Folio.Domain.OCR;
 using Folio.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
-using OcrWord = Folio.Domain.OCR.OcrWord;
 
 namespace Folio.Infrastructure.Extraction;
 
-public sealed class DocumentTextService(IDbContextFactory<FolioDbContext> factory, IPdfTextExtractor extractor, IOcrService ocr) : IDocumentTextService
+/// <summary>
+/// Caches the native text layer of each page for library search. Pages without a text layer are cached as empty text;
+/// a book whose pages are all empty is reported as not indexable. The legacy WordsJson and IsOcr columns are left
+/// untouched for compatibility and always written as empty / false.
+/// </summary>
+public sealed class DocumentTextService(IDbContextFactory<FolioDbContext> factory, IPdfTextExtractor extractor) : IDocumentTextService
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
     public async Task<DocumentTextPage> GetPageAsync(Guid bookId, int pageIndex, CancellationToken ct = default)
@@ -21,30 +22,22 @@ public sealed class DocumentTextService(IDbContextFactory<FolioDbContext> factor
             {
                 await using var db = await factory.CreateDbContextAsync(ct);
                 var saved = await db.DocumentPages.FindAsync([bookId, pageIndex], ct);
-                if (saved != null) return Convert(saved);
+                if (saved != null) return new DocumentTextPage(saved.PageIndex, saved.Text);
                 var book = await db.Books.SingleAsync(b => b.Id == bookId, ct);
                 if (pageIndex < 0 || pageIndex >= book.PageCount) throw new ArgumentOutOfRangeException(nameof(pageIndex));
                 var page = await extractor.ExtractPageAsync(book.FilePath, pageIndex, ct);
-                var words = page.Lines.SelectMany(l => l.Words).Select(w => new OcrWord(w.Text, w.Bounds)).ToArray();
-                var text = page.PlainText; var isOcr = false;
-                if (words.Length < 5 && await ocr.IsScannedPageAsync(book.FilePath, pageIndex))
-                {
-                    var recognized = await ocr.RecognizePageAsync(book.FilePath, pageIndex, ct);
-                    words = recognized.Words.ToArray(); text = recognized.FullText; isOcr = true;
-                }
-                saved = new DocumentPage { BookId = bookId, PageIndex = pageIndex, Text = text, IsOcr = isOcr, WordsJson = JsonSerializer.Serialize(words) };
+                saved = new DocumentPage { BookId = bookId, PageIndex = pageIndex, Text = page.PlainText, IsOcr = false, WordsJson = "[]" };
                 db.DocumentPages.Add(saved); await db.SaveChangesAsync(ct);
-                return Convert(saved);
+                return new DocumentTextPage(saved.PageIndex, saved.Text);
             }, ct);
         }
         finally { _gate.Release(); }
     }
-    private static DocumentTextPage Convert(DocumentPage page) => new(page.PageIndex, page.Text, JsonSerializer.Deserialize<OcrWord[]>(page.WordsJson) ?? [], page.IsOcr);
-    public async Task IndexBookAsync(Guid bookId, IProgress<TextIndexProgress>? progress = null, CancellationToken ct = default)
+    public async Task<bool> IndexBookAsync(Guid bookId, IProgress<TextIndexProgress>? progress = null, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
         var book = await db.Books.AsNoTracking().SingleOrDefaultAsync(b => b.Id == bookId && b.TrashedAt == null, ct);
-        if (book == null) return;
+        if (book == null) return true;
         var indexed = (await db.DocumentPages.Where(p => p.BookId == bookId).Select(p => p.PageIndex).ToListAsync(ct)).ToHashSet();
         for (var page = 0; page < book.PageCount; page++)
         {
@@ -52,13 +45,18 @@ public sealed class DocumentTextService(IDbContextFactory<FolioDbContext> factor
             if (!indexed.Contains(page)) await GetPageAsync(bookId, page, ct);
             progress?.Report(new(book.Title, page + 1, book.PageCount));
         }
+        return book.PageCount == 0 || await db.DocumentPages.AnyAsync(p => p.BookId == bookId && p.Text != "", ct);
     }
     public async Task IndexLibraryAsync(IProgress<TextIndexProgress>? progress = null, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
         foreach (var book in await db.Books.AsNoTracking().Where(b => b.TrashedAt == null).ToListAsync(ct))
         {
-            try { await IndexBookAsync(book.Id, progress, ct); }
+            try
+            {
+                if (!await IndexBookAsync(book.Id, progress, ct))
+                    progress?.Report(new($"{book.Title}: no text layer (scanned PDF)", 0, 0));
+            }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex) { progress?.Report(new($"{book.Title}: {ex.Message}", 0, 0)); }
         }

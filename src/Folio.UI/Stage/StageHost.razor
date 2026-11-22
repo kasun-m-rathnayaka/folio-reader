@@ -1,0 +1,162 @@
+@implements IAsyncDisposable
+@inject StageJsBridge Bridge
+@inject StageState State
+@inject ILibraryService Library
+@inject IBookUrlResolver Urls
+@inject IAppPreferencesService Preferences
+@inject LibraryEvents Events
+@inject NotificationService Notifications
+@inject IJSRuntime JS
+@inject IBatteryMonitor Battery
+@* One persistent WebGL canvas behind the library chrome (LIB-1). aria-hidden: everything it shows is also in the HTML
+   layer the pages render on top (SPEC: accessibility). *@
+<div class="folio-stage @(Visible ? "is-visible" : "")" aria-hidden="true">
+    <canvas id="folio-stage-canvas" tabindex="-1"></canvas>
+</div>
+
+@code {
+    /// <summary>True while the reader (or anything else) covers the library: the stage stops rendering.</summary>
+    [Parameter] public bool Suspended { get; set; }
+    private DotNetObjectReference<StageHost>? _reference;
+    private bool _started, _starting, _libraryLoaded, _disposed;
+    private StageScene? _appliedScene;
+    private bool? _appliedPaused;
+    private bool Visible => _started && State.Available && (State.Scene != null || State.Phase != StagePhase.None) && !Suspended;
+
+    protected override void OnInitialized()
+    {
+        State.Changed += StateChanged;
+        State.FilterChanged += FilterChanged;
+        Events.Changed += ReloadLibrary;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await StartAsync();
+        await SyncAsync();
+    }
+
+    /// <summary>Starts the stage if 3D is chosen; otherwise reports 2D. Safe to call again after a preference change.</summary>
+    public async Task StartAsync()
+    {
+        if (_starting || _started || _disposed) return;
+        if (Preferences.Current.LibraryStyle == LibraryStyle.TwoD) { State.SetAvailable(false, "user-chose-2d"); return; }
+        _starting = true;
+        try
+        {
+            _reference ??= DotNetObjectReference.Create(this);
+            var motion = await JS.InvokeAsync<string>("folioShell.applyMotion");
+            var result = await Bridge.InitAsync("folio-stage-canvas", new
+            {
+                motion, quality = Preferences.Current.Quality.ToString().ToLowerInvariant(),
+                theme = Preferences.Current.DarkMode ? "dark" : "light", inputTarget = "#folio-main",
+            }, _reference);
+            _started = result.Ok;
+            if (!result.Ok) { State.SetAvailable(false, result.Reason); return; }
+            State.Motion = motion;
+            State.BeginOpenHandler = async id => { await SyncAsync(force: true); return await Bridge.BeginOpenAsync(id); };
+            State.AlignHandler = async rect => await Bridge.AlignToAsync(rect);
+            State.BeginCloseHandler = async (id, rect, scene) => { _appliedScene = scene; await SyncAsync(force: true); await Bridge.BeginCloseAsync(id, rect, scene); };
+            await LoadLibraryAsync();
+            State.SetAvailable(true, null);
+            _ = WatchPowerAsync();
+        }
+        catch (Exception ex) when (ex is JSException or InvalidOperationException) { State.SetAvailable(false, "init-failed"); }
+        finally { _starting = false; }
+    }
+
+    /// <summary>Applies motion, quality, theme and library style after Settings change.</summary>
+    public async Task ApplyPreferencesAsync()
+    {
+        if (Preferences.Current.LibraryStyle == LibraryStyle.TwoD)
+        {
+            if (_started) { await Bridge.DisposeAsync(); _started = false; _libraryLoaded = false; _appliedScene = null; _appliedPaused = null; }
+            State.SetAvailable(false, "user-chose-2d");
+            return;
+        }
+        if (!_started) { await StartAsync(); StateHasChanged(); return; }
+        State.Motion = await JS.InvokeAsync<string>("folioShell.applyMotion");
+        await Bridge.SetMotionAsync(State.Motion);
+        await Bridge.SetQualityAsync(Preferences.Current.Quality.ToString().ToLowerInvariant());
+        await Bridge.SetThemeAsync(Preferences.Current.DarkMode ? "dark" : "light");
+    }
+
+    private readonly CancellationTokenSource _lifetime = new();
+    private bool? _powerSaver;
+
+    /// <summary>DSK-2: checks the power source every 30 s and tells the stage to save energy on battery.</summary>
+    private async Task WatchPowerAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(30));
+        try
+        {
+            do
+            {
+                var saver = Battery.IsRunningOnBattery;
+                if (_started && saver != _powerSaver) { _powerSaver = saver; await InvokeAsync(async () => await Bridge.SetPowerSaverAsync(saver)); }
+            }
+            while (await timer.WaitForNextTickAsync(_lifetime.Token));
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private async Task LoadLibraryAsync()
+    {
+        var books = await Library.GetAllAsync(State.Filter.Sort);
+        // The stage knows every book (any can open, SRC-2); the filter only decides which stand on the rows (LIB-6).
+        var visibleIds = State.Filter == new StageFilter(State.Filter.Sort) ? null : State.Filter.Apply(books).Select(b => b.Id.ToString()).ToList();
+        var shelves = await Library.GetShelvesAsync();
+        var payload = new List<StageBook>(books.Count);
+        foreach (var book in books)
+        {
+            var cover = string.IsNullOrWhiteSpace(book.CoverPath) ? null : await Urls.GetCoverUrlAsync(book);
+            payload.Add(new(book.Id.ToString(), book.Title, book.Author, book.PageCount, cover, null,
+                BookGeometry.Progress(book), book.BookShelves.Select(s => s.ShelfId.ToString()).ToArray()));
+        }
+        await Bridge.SetLibraryAsync(payload, shelves.Select(s => new StageShelf(s.Id.ToString(), s.Name)).ToList(), visibleIds);
+        _libraryLoaded = true;
+    }
+
+    private async Task ReloadLibrary() { if (_started) { await LoadLibraryAsync(); _appliedScene = null; await SyncAsync(); } }
+
+    private void FilterChanged() => _ = InvokeAsync(ReloadLibrary);
+    private void StateChanged() => _ = InvokeAsync(async () => { StateHasChanged(); await SyncAsync(); });
+
+    private async Task SyncAsync(bool force = false)
+    {
+        if (!_started || !_libraryLoaded || _disposed) return;
+        var paused = !Visible && !force;
+        if (_appliedPaused != paused) { _appliedPaused = paused; await Bridge.SetPausedAsync(paused); }
+        if (State.Scene is { } scene && scene != _appliedScene) { _appliedScene = scene; await Bridge.SetSceneAsync(scene); }
+    }
+
+    protected override async Task OnParametersSetAsync() => await SyncAsync();
+
+    // ---- intents from the stage --------------------------------------------------------------------------------------
+
+    [JSInvokable] public void OnBookHovered(string id) { if (Guid.TryParse(id, out var g)) State.ReportHover(g); }
+    [JSInvokable] public Task OnBookActivated(string id, string action) => Guid.TryParse(id, out var g) ? State.ReportActivated(g, action) : Task.CompletedTask;
+    [JSInvokable] public void OnSceneSettled(string kind) { State.ReportSettled(kind); if (State.Phase == StagePhase.Closing) State.EndClose(); }
+    [JSInvokable] public Task OnOpenHandoff(string id, PageRect rect, int elapsedMs) => State.CompleteHandoffAsync();
+    [JSInvokable] public Task OnScrollIntent(string direction) => State.ReportScroll(direction);
+    [JSInvokable] public void OnBookAccent(string id, string? color) { if (Guid.TryParse(id, out var g)) State.ReportAccent(g, color); }
+    [JSInvokable] public async Task OnFallback(string reason)
+    {
+        await Bridge.DisposeAsync();
+        _started = false; _libraryLoaded = false;
+        State.SetAvailable(false, reason);
+        if (reason == "slow") Notifications.Add("3D was too slow on this device, so the library switched to 2D. You can change this in Settings.", MudBlazor.Severity.Info, "Library style");
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        _lifetime.Cancel();
+        State.Changed -= StateChanged;
+        State.FilterChanged -= FilterChanged;
+        Events.Changed -= ReloadLibrary;
+        await Bridge.DisposeAsync();
+        _reference?.Dispose();
+    }
+}

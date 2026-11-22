@@ -2,7 +2,7 @@ using System.Windows;
 using Folio.Application;
 using Folio.Application.Common.Interfaces;
 using Folio.Infrastructure;
-using Folio.Infrastructure.Persistence.Migrations;
+using Folio.Platform.Windows;
 using Folio.UI;
 using Microsoft.AspNetCore.Components.WebView.Wpf;
 using Microsoft.Extensions.DependencyInjection;
@@ -58,6 +58,7 @@ public partial class App : System.Windows.Application
 #endif
                 services.AddMudServices();
                 services.AddFolioInfrastructure(options => options.RootDirectory = dataRoot);
+                services.AddFolioWindowsPlatform();
                 services.AddFolioApplication();
                 services.AddFolioUI();
                 services.AddSingleton<IFilePickerService, Folio.Desktop.Services.WpfFilePickerService>();
@@ -68,11 +69,7 @@ public partial class App : System.Windows.Application
             .Build();
 
         // Run versioned database migrations on startup (FR-DAT-04)
-        using (var scope = _host.Services.CreateScope())
-        {
-            var migrator = scope.ServiceProvider.GetRequiredService<IDatabaseMigrator>();
-            await migrator.MigrateAsync();
-        }
+        await _host.Services.GetRequiredService<IDatabaseSetup>().InitializeAsync();
 
         // Workers may query Jobs immediately, so schema upgrades must finish first.
         await _host.StartAsync();

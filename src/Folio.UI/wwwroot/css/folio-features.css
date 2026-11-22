@@ -8,5 +8,4 @@
 .folio-search-result:hover { border-color:var(--md-sys-color-primary); }
 .folio-search-result small { color:var(--folio-text-secondary); }
 .folio-search-result span { font-size:13px; line-height:1.6; overflow-wrap:anywhere; }
-.folio-text-layer .folio-ocr-word { position:absolute; white-space:pre; color:transparent; font-family:sans-serif; line-height:1; }
 .sidebar-collapsed .folio-shelf-actions { flex-direction:column; gap:8px; }

@@ -1,0 +1,15 @@
+@* The only button style in the library chrome (SPEC: chrome): [ LABEL + ] in mono caps, with an optional key hint. *@
+<button type="button" class="folio-bracket @Class" @onclick="OnClick" disabled="@Disabled" aria-label="@AriaLabel" aria-keyshortcuts="@Hint" @attributes="Attributes">
+    <span class="folio-bracket-edge" aria-hidden="true">[</span><span class="folio-bracket-label">@Label</span>@if (Plus) {<span class="folio-bracket-plus" aria-hidden="true">+</span>}<span class="folio-bracket-edge" aria-hidden="true">]</span>
+    @if (!string.IsNullOrEmpty(Hint)) { <kbd class="folio-key-hint" aria-hidden="true">@Hint</kbd> }
+</button>
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public string? Hint { get; set; }
+    [Parameter] public string? AriaLabel { get; set; }
+    [Parameter] public bool Plus { get; set; } = true;
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public EventCallback<MouseEventArgs> OnClick { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? Attributes { get; set; }
+}

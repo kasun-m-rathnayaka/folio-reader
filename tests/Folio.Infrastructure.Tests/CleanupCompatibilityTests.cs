@@ -1,19 +1,9 @@
-using Folio.Application.Annotations;
 using Folio.Infrastructure.Storage;
 
 namespace Folio.Infrastructure.Tests;
 
 public class CleanupCompatibilityTests
 {
-    [Theory]
-    [InlineData("Ada", "\"A quote\" — Ada, Book (p. 3)")]
-    [InlineData(null, "\"A quote\" — Book (p. 3)")]
-    [InlineData("  ", "\"A quote\" — Book (p. 3)")]
-    public void CopiedQuote_PreservesCitation(string? author, string expected)
-    {
-        Assert.Equal(expected, QuoteCitationFormatter.Format(" A quote ", "Book", author, 2));
-    }
-
     [Fact]
     public void OlderSettings_PreserveSupportedPreferencesAndIgnoreRemovedFeatures()
     {

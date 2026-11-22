@@ -3,6 +3,62 @@ on: [push, pull_request]
 permissions:
   contents: read
 jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: WebAssembly build tools
+        run: dotnet workload install wasm-tools
+      - name: Restore and build (Windows targeting)
+        run: |
+          dotnet restore Folio.sln -p:EnableWindowsTargeting=true
+          dotnet build Folio.sln --no-restore -c Release -m:1 -warnaserror -p:EnableWindowsTargeting=true
+      - name: Shared .NET tests
+        run: |
+          dotnet test tests/Folio.Domain.Tests --no-build --no-restore -c Release
+          dotnet test tests/Folio.Infrastructure.Tests --no-build --no-restore -c Release
+      - name: JavaScript checks and reader engine (Chromium)
+        working-directory: src/Folio.UI
+        run: |
+          npm ci --ignore-scripts
+          npm run check
+          npm test
+          npx playwright install --with-deps chromium
+          FOLIO_BROWSER_PATH="$(node -e "console.log(require('playwright').chromium.executablePath())")" npm run test:reader
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: WebAssembly build tools
+        run: dotnet workload install wasm-tools
+      - name: Publish the web app as a static site
+        run: dotnet publish src/Folio.Web -c Release -warnaserror -o .artifacts/web
+      - name: End-to-end tests (Chromium; cross-engine check on Firefox and WebKit)
+        working-directory: tests/Folio.Web.E2E
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium firefox webkit
+          npx playwright test
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: web-e2e
+          path: .artifacts/web-e2e
+          if-no-files-found: ignore
   windows:
     runs-on: windows-latest
     steps:
@@ -14,6 +70,8 @@ jobs:
         with:
           node-version: '24'
           package-manager-cache: false
+      - name: WebAssembly build tools
+        run: dotnet workload install wasm-tools
       - name: Restore and build
         run: |
           dotnet restore Folio.sln
@@ -23,6 +81,7 @@ jobs:
           dotnet test tests/Folio.Domain.Tests --no-build --no-restore -c Release
           dotnet test tests/Folio.Infrastructure.Tests --no-build --no-restore -c Release
           dotnet test tests/Folio.Desktop.Tests --no-build --no-restore -c Release
+          dotnet test tests/Folio.Platform.Windows.Tests --no-build --no-restore -c Release
       - name: Reader engine tests
         working-directory: src/Folio.UI
         run: |

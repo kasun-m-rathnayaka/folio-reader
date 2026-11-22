@@ -1,0 +1,63 @@
+@* 2D hero (LIB-1, LIB-2 without WebGL): the most recently read book large, with a marquee of recent titles that moves
+   only when the featured book changes. *@
+@if (Books.Count > 0)
+{
+    var book = Books[Math.Clamp(_index, 0, Books.Count - 1)];
+    <section class="folio-hero" aria-labelledby="folio-hero-title">
+        <div class="folio-marquee" aria-hidden="true" @ref="_marquee">
+            <div class="folio-marquee-track">
+                @for (var i = 0; i < Books.Count; i++) { var item = Books[i]; <span class="folio-marquee-title @(i == _index ? "is-current" : "")">@item.Title</span> }
+            </div>
+        </div>
+        <div class="folio-hero-body">
+            @if (ShowBook) { <div class="folio-hero-book" data-book-id="@book.Id" @onclick="() => OnOpen.InvokeAsync(book)"><CssBook Book="book" Height="300" /></div> }
+            else { <div class="folio-hero-stage-slot" data-book-id="@book.Id" aria-hidden="true"></div> }
+            <div class="folio-hero-copy">
+                <div class="folio-eyebrow">[ CONTINUE READING ]</div>
+                <h1 id="folio-hero-title" class="folio-display">@book.Title</h1>
+                <p class="folio-hero-author">@(string.IsNullOrWhiteSpace(book.Author) ? "Unknown author" : book.Author)</p>
+                <p class="folio-hero-progress"><span class="folio-mono">PAGE @((book.ReadingPosition?.PageIndex ?? 0) + 1) / @book.PageCount</span><span class="folio-progress-track"><span style="width:@BookGeometry.ProgressPercent(book)%"></span></span></p>
+                <div class="folio-hero-actions">
+                    <BracketButton Label="OPEN BOOK" Hint="Enter" AriaLabel="@($"Open {book.Title}")" OnClick="() => OnOpen.InvokeAsync(book)" />
+                    <BracketButton Label="VIEW DETAILS" Hint="D" AriaLabel="@($"View details of {book.Title}")" OnClick="() => OnDetails.InvokeAsync(book)" />
+                </div>
+                @Footer
+                @if (Books.Count > 1)
+                {
+                    <div class="folio-hero-nav">
+                        <button class="folio-icon-button" aria-label="Previous recent book" @onclick="() => Step(-1)"><MudIcon Icon="@Icons.Material.Filled.ChevronLeft" Size="Size.Small" /></button>
+                        <span class="folio-mono">@(_index + 1) / @Books.Count</span>
+                        <button class="folio-icon-button" aria-label="Next recent book" @onclick="() => Step(1)"><MudIcon Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" /></button>
+                    </div>
+                }
+            </div>
+        </div>
+    </section>
+}
+@inject IJSRuntime JS
+@code {
+    [Parameter] public IReadOnlyList<Book> Books { get; set; } = [];
+    private ElementReference _marquee;
+    private int _centered = -1;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Books.Count == 0 || _centered == _index) return;
+        _centered = _index;
+        await JS.InvokeVoidAsync("folioShell.centerMarquee", _marquee);
+    }
+    [Parameter] public EventCallback<Book> OnOpen { get; set; }
+    [Parameter] public EventCallback<Book> OnDetails { get; set; }
+    /// <summary>False when the 3D stage draws the book behind this overlay.</summary>
+    [Parameter] public bool ShowBook { get; set; } = true;
+    [Parameter] public EventCallback<Book> OnCurrentChanged { get; set; }
+    [Parameter] public RenderFragment? Footer { get; set; }
+    private int _index;
+    public Book? Current => Books.Count == 0 ? null : Books[Math.Clamp(_index, 0, Books.Count - 1)];
+    public void Step(int delta)
+    {
+        if (Books.Count == 0) return;
+        _index = (_index + delta + Books.Count) % Books.Count;
+        _ = OnCurrentChanged.InvokeAsync(Books[_index]);
+        StateHasChanged();
+    }
+}

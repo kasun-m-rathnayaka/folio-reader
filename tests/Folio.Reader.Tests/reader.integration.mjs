@@ -101,23 +101,13 @@ try {
   await page.evaluate(async()=>{
     window.folioReader.init('reader',window.helper);
     await window.folioReader.loadDocument('/fixtures/04_scanned_book.pdf');
-    window.folioReader.setOcrPage(0,[{text:'Recognized needle',rect:{x:.1,y:.2,width:.3,height:.04}}],'Recognized needle');
   });
-  await page.waitForFunction(()=>document.querySelector('.folio-ocr-word'));
-  const ocrGeometry=await page.evaluate(()=>{
-    const p=window.folioReader.engine.pages[0],s=p.textLayer.querySelector('.folio-ocr-word');
-    return {left:parseFloat(s.style.left),expected:p.viewport.width*.1,text:s.textContent};
-  });
-  assert.ok(Math.abs(ocrGeometry.left-ocrGeometry.expected)<.01);
-  assert.ok(ocrGeometry.text.includes('Recognized needle'));
-  await page.evaluate(async()=>await window.folioReader.search('Recognized needle'));
-  const ocrMatch=await page.evaluate(()=>window.events.filter(e=>e.method==='OnSearchMatch').at(-1).data);
-  assert.equal(ocrMatch.pageIndex,0); assert.equal(ocrMatch.totalMatches,1);
-  await page.evaluate(()=>window.folioReader.setRotation(90));
-  await page.waitForFunction(()=>window.folioReader.engine.pages[0].rendered && document.querySelector('.folio-ocr-word'));
-  const rotatedOcr=await page.evaluate(()=>{const p=window.folioReader.engine.pages[0];return Math.abs(parseFloat(p.textLayer.querySelector('.folio-ocr-word').style.left)-p.viewport.width*.76);});
-  assert.ok(rotatedOcr<.01);
-  results.push({scenario:'OCR text supports selection geometry, search, and rotation',passed:true});
+  await page.waitForFunction(()=>window.folioReader.engine.pages[0].rendered);
+  await page.evaluate(async()=>await window.folioReader.search('needle'));
+  const scannedMatch=await page.evaluate(()=>window.events.filter(e=>e.method==='OnSearchMatch').at(-1).data);
+  assert.equal(scannedMatch.totalMatches,0);
+  assert.equal(await page.evaluate(()=>window.events.some(e=>e.method==='OnOcrPageRequested')),false);
+  results.push({scenario:'Scanned PDF without a text layer renders and finds nothing, with no OCR request',passed:true});
   await page.evaluate(async()=>await window.folioReader.dispose());
   assert.deepEqual(errors,[],'Unexpected browser errors');
   console.log(JSON.stringify(results,null,2));

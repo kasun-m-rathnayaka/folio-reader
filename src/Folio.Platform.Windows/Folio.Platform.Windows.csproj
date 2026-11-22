@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Folio.Application\Folio.Application.csproj" />
+    <ProjectReference Include="..\Folio.Infrastructure\Folio.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Folio.Platform.Windows.Tests" />
+  </ItemGroup>
+
+</Project>

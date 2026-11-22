@@ -1,0 +1,9 @@
+@page "/settings"
+
+<PageTitle>Settings · Folio</PageTitle>
+<SettingsView OnPreferencesChanged="Changed" />
+
+@code {
+    [CascadingParameter] public Layout.MainLayout? Layout { get; set; }
+    private Task Changed() => Layout?.ApplyPreferences() ?? Task.CompletedTask;
+}

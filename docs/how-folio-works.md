@@ -1,93 +1,129 @@
 # How Folio fits together
 
-Folio is a Windows application with a WPF shell and a Blazor interface. You can understand most of it using the C# you already know. The screens are Razor components and CSS; WPF creates the window and supplies Windows integration.
+Folio is one Blazor interface that ships to two hosts: a Windows app (WPF + WebView2) and a web app (Blazor WebAssembly,
+installable, offline). The library is a calm 3D stage drawn with Three.js; reading is the 2D PDF.js reader. You can
+understand most of it with the C# you already know: screens are Razor components and CSS, and each host only wires
+platform services together.
 
 ```mermaid
 flowchart LR
-    WPF[WPF window] --> WebView[WebView2]
-    Razor[Blazor / Razor components] -->|render HTML and CSS| WebView
-    Razor -->|button events| Services[Application services]
-    Services --> Domain[Domain entities and rules]
-    Services --> Storage[Infrastructure: SQLite and files]
-    Razor <-->|ReaderJsBridge| PDF[JavaScript / PDF.js]
-    PDF -->|canvas and text layers| WebView
+    subgraph Hosts
+      Desktop[Folio.Desktop<br/>WPF + WebView2]
+      Web[Folio.Web<br/>Blazor WebAssembly PWA]
+    end
+    subgraph Shared
+      UI[Folio.UI<br/>pages, components, stage host]
+      App[Folio.Application<br/>services and ports]
+      Domain[Folio.Domain]
+      Infra[Folio.Infrastructure<br/>EF Core, migrations, search]
+    end
+    subgraph Platforms
+      Win[Folio.Platform.Windows<br/>WinRT covers, battery, virtual hosts]
+      Browser[Folio.Platform.Browser<br/>OPFS, SQLite on OPFS, PDF.js covers, backup]
+    end
+    Desktop --> UI
+    Web --> UI
+    UI --> App --> Domain
+    App --> Infra
+    Desktop --> Win
+    Web --> Browser
+    UI <-->|StageJsBridge| Stage[stage.bundle.mjs<br/>Three.js]
+    UI <-->|ReaderJsBridge| Reader[folio-reader.js<br/>PDF.js]
 ```
 
-## 1. Startup
+The product spec for this design is [docs/folio-3d/SPEC.md](folio-3d/SPEC.md); decisions and deviations are in
+[DECISIONS.md](folio-3d/DECISIONS.md) and progress in [PROGRESS.md](folio-3d/PROGRESS.md).
 
-Start with [App.xaml.cs](../src/Folio.Desktop/App.xaml.cs). `OnStartup` is the WPF equivalent of a web application's entry point. It calls an async startup method and handles failures with a useful native message.
+## 1. Startup and platforms
 
-The dependency-injection registrations say which concrete class supplies each interface. For example, asking for `IFilePickerService` produces the Windows file-dialog implementation. Asking for `ILibraryService` produces the database-backed library service. Interfaces keep the UI from knowing how SQLite or Windows dialogs work.
+Shared code targets `net10.0` only. Each host registers one platform:
 
-Startup upgrades and checks SQLite **before** starting workers. It then opens `MainWindow`. That window contains a `BlazorWebView`, which renders `MainApp` into the `#app` element in `index.html`. `MainApp` displays `MainLayout`.
+| Port | Windows | Browser |
+|---|---|---|
+| `IFileStore` | Folder under `%LocalAppData%\Folio` | In-memory working area mirrored to the Origin Private File System |
+| `IDatabaseSetup` | SQLite file + `DatabaseMigrator` | SqliteWasmBlazor (SQLite on OPFS) + the same migrator |
+| `IBookUrlResolver` | `https://folio.books/…`, `https://folio.covers/…` | Blob URLs read from OPFS |
+| `IPdfRasterizer` | WinRT `Windows.Data.Pdf` | PDF.js, 512 px covers |
+| `IPdfTextExtractor` | PdfPig | PDF.js text content (faster in WebAssembly) |
+| `IBatteryMonitor` | Win32 power status | Battery Status API where available |
+| `IPlatformCapabilities` | folder import, Locate PDF, command line | folder import, backup |
 
-Exercise: place a breakpoint in `StartAsync`, then in the `MainWindow` constructor. Step through them and watch when the window becomes visible.
+Desktop: [App.xaml.cs](../src/Folio.Desktop/App.xaml.cs) builds the host, runs `IDatabaseSetup` **before** starting
+workers, and opens `MainWindow`, whose `BlazorWebView` renders [Routes](../src/Folio.UI/Routes.razor).
+Web: [Program.cs](../src/Folio.Web/Program.cs) registers the browser platform; [App.razor](../src/Folio.Web/App.razor)
+waits for the first render (SQLite starts its worker then), initialises storage, and renders the same `Routes`.
 
-## 2. The library
+Exercise: put breakpoints in both hosts' start-up and compare which `IFileStore` each resolves.
 
-`MainLayout` owns navigation, the open book, import progress, and appearance preferences. `LibraryView` owns the library's sort order and virtualized rows. Opening a card changes the layout's `_book` state; Blazor then displays a `ReaderView`. The library stays mounted behind it, preserving the browsing position.
+## 2. Routes and the layout
 
-`ILibraryService.QueryAsync` accepts the search, status, shelf, sort, and requested range. The implementation creates a fresh EF Core context, asks SQLite for that range, and returns untracked books. `Virtualize` requests only the rows needed near the viewport.
+Every view has an address, so Back/Forward, deep links and reload work: `/`, `/shelf/{id?}`, `/book/{id}`,
+`/book/{id}/read?page=n`, `/search?q=`, `/trash`, `/settings`. Addresses are built by `FolioRoutes` and are relative to the
+base href, which lets the web app live under a sub-path.
 
-The context is a database session, not an application-wide singleton. Keeping a single context alive across timers and UI callbacks can produce concurrent-operation errors and stale data.
+`MainLayout` owns the sidebar, header, import progress and the **persistent stage**. It stays mounted while you read
+(hidden), so the stage survives route changes and can animate the book into the reader. `FolioNavigator` opens and
+closes books and remembers where you came from.
 
-Exercise: put a breakpoint in `QueryAsync`, switch grid/list mode, and inspect `Start` and `Count`. Try a status filter and observe how the query changes.
+## 3. The 3D stage
 
-## 3. Importing a PDF
+The stage is a pure view. Blazor owns state, data and navigation; the stage shows the scene it is told to and reports
+intent (hover, activate, scroll, settled, handoff). Only state changes cross the bridge — the frame loop stays in JS.
 
-The Add books button opens a native file picker through an interface. Each selected file is processed independently:
+- Sources: [src/Folio.UI/stage/](../src/Folio.UI/stage/) (`index.js`, `scenes.js`, `book-factory.js`, `textures.js`,
+  `motion.js`, `quality.js`, `opening.js`, `bridge.js`), bundled by `npm run build:stage`.
+- .NET side: [StageHost.razor](../src/Folio.UI/Stage/StageHost.razor), [StageJsBridge.cs](../src/Folio.UI/Stage/StageJsBridge.cs),
+  [StageState.cs](../src/Folio.UI/Stage/StageState.cs). Pages call `Stage.Show(scene, this)` and `Stage.Release(this)`.
+- Books are generated: cover from the PDF's first page, spine drawn from title and author, thickness from page count,
+  accent from the cover's dominant colour. Textures live in an LRU of 120 books.
+- Every moving value damps toward its target (`damp(value, target, λ, dt)`), and frames are drawn only while something
+  is still settling. `window.__folioStage.stats` shows frames, draw calls and timings.
+- Without WebGL2, on a software renderer, after two context losses, when persistently slow, or when you choose 2D in
+  Settings, the library uses CSS 3D books (`CssBook.razor`) instead. Every action works in both.
 
-1. Compute SHA-256 to identify identical files.
-2. Check whether that book already exists.
-3. Copy it atomically into managed storage.
-4. Extract metadata and render a cover.
-5. Save the book and initial reading position to SQLite.
+Accessibility: the canvas is `aria-hidden`. Each page renders a real HTML layer — the hero's copy and buttons, and on a
+shelf a list with an Open and a Details button per book — and a polite live region announces scene changes.
 
-The original file stays intact. Each file gets an honest success, duplicate, or error result. Cancellation keeps books already imported. A failed metadata parse is reported rather than silently accepting a broken PDF as a one-page book.
+Exercise: open the library with `?stageTest=1` (fixed clock, no idle motion), then watch
+`window.__folioStage.stats.frames` stop increasing once nothing moves.
 
-Exercise: import the same fixture twice and inspect the two results. Confirm that SQLite contains one book with that hash.
+## 4. Opening a book
 
-## 4. Reading and JavaScript interop
+With Full motion, `FolioNavigator.OpenBookAsync` asks the stage to start opening (the book comes forward and its cover
+swings open) and navigates to the reader at the same time. The reader renders underneath, invisible, and reports where
+it drew the current page (`folioReader.currentPageRect`). The stage computes the exact pose that puts its 3D page on that
+rectangle ([opening.js](../src/Folio.UI/stage/opening.js)), snaps onto it, and hands off; a 120 ms crossfade reveals the
+reader. Closing runs the other way. Reduced motion uses a short View Transition crossfade; Off cuts.
+
+## 5. Reading and JavaScript interop
 
 Read [ReaderView.razor](../src/Folio.UI/Pages/ReaderView.razor) alongside [folio-reader.js](../src/Folio.UI/wwwroot/js/folio-reader.js).
+Razor owns the toolbar, panels and reading state; JavaScript owns **only the PDF viewport**. `ReaderJsBridge` calls
+methods such as `goToPage`; JavaScript calls `[JSInvokable]` methods such as `OnPositionChanged` with typed payloads. The
+PDF URL comes from `IBookUrlResolver` (virtual host on desktop, blob URL in the browser).
 
-Razor owns the toolbar, panels, dialogs, and reading state. JavaScript owns **only the dedicated PDF viewport**. This boundary matters: replacing HTML that Blazor owns can erase controls or leave its rendering state inconsistent.
+## 6. Highlights and bookmarks
 
-`ReaderJsBridge` invokes JavaScript methods such as `goToPage`. JavaScript calls `[JSInvokable]` C# methods such as `OnPositionChanged` with typed JSON payloads. The PDF itself is loaded through the local `folio.books` virtual host, rather than passing the file across the interop bridge.
+Selecting text produces a page index and normalised rectangles (0–1 in page space). A highlight stores them and the
+selected text in SQLite; it never edits the PDF. Double-click a highlight to remove it. Bookmarks are dog-ears or named
+bookmarks. Marginalia, the Notebook, OCR and quote-with-citation were removed; their old data stays readable.
 
-PDF.js draws the visible pages on canvases and adds an invisible text layer for selection. Distant canvases are recycled. PDF links use the viewport's coordinate transform; the installed PDF.js 6 API provides point conversion, so the code converts both corners of each link rectangle.
+## 7. Saving, migrations and backup
 
-Exercise: break on `OnPositionChanged`, advance a page, and inspect the zero-based page index, offset, and zoom. A displayed page number is the stored index plus one.
-
-## 5. Notes and bookmarks
-
-Selecting text produces a page index and normalized rectangles. Coordinates between zero and one describe where the selection sits on the page, independently of pixel size. A highlight stores those rectangles and the selected text in SQLite. It does not edit the PDF.
-
-When a page renders again, C# retrieves its annotations and JavaScript draws them over the canvas. Rotation transforms stored rectangles into the current view. Notes add your text to the same annotation record; Notebook provides links back to the source page.
-
-Exercise: highlight a phrase, close the book, reopen it, then rotate the page. Compare the saved rectangle with the visible highlight.
-
-## 6. Saving and recovery
-
-Position events are throttled so continuous scrolling still reports movement. A two-second loop saves dirty reading state using a fresh service scope. Orderly window close performs a final database flush before stopping the host. Saving does not depend on the UI renderer surviving teardown.
-
-An entity property describes the schema the code expects. A **migration** changes an existing database to that schema. The original missing-column bug occurred because the entity gained `CharacterOffset` while the startup migration did not create it. Tests using `EnsureCreated()` bypassed that history. The new compatibility tests start from the historical schema and exercise the real migration path.
-
-Library archive backup and restore are no longer offered. Database upgrades still keep an internal recovery snapshot before a schema migration.
-
-Exercise: run `StartupCompatibilityTests`. Read the assertions as descriptions of behavior the application must preserve.
+A two-second loop saves dirty reading state in a fresh scope. Migrations in `DatabaseMigrator` are forward-only SQL steps
+shared by both hosts. In the browser, Settings → Library backup exports one `.zip` (database, PDFs, covers) and restores
+it into an empty profile; Folio asks for persistent storage and reminds you to back up.
 
 ## Where to change things
 
 | Change | Starting place |
 |---|---|
-| Navigation, search header, import UI | `MainLayout` |
-| Book browsing and virtualized rows | `LibraryView`, `ILibraryService` |
-| Colors, spacing, card styles | `Folio.UI/wwwroot/css/m3-tokens.css` |
-| Reader toolbar and panels | `ReaderToolbar`, `ReaderSidebar`, `ReaderView` |
-| PDF selection, rendering, and coordinates | `folio-reader.js`, `reader-geometry.mjs` |
-| Business rules and stored entities | `Folio.Domain`, `Folio.Application` |
-| SQL schema upgrades and storage | `Folio.Infrastructure` |
-| Windows-specific behavior | `Folio.Desktop` |
-
-The reader's JavaScript and CSS have one authoritative copy under `Folio.UI/wwwroot`. The desktop host consumes those static assets. The disconnected TypeScript scaffold and duplicated desktop asset tree were removed.
+| Navigation, header, import UI, the persistent stage | `MainLayout`, `FolioNavigator`, `FolioRoutes` |
+| Library pages (hero, shelves, 2D library) | `LibraryPage`, `LibraryView`, `LibraryHero`, `CssBook` |
+| Book details | `BookDetailsPage` |
+| 3D scenes, motion, textures | `src/Folio.UI/stage/*` then `npm run build:stage` |
+| Colours, type, chrome | `m3-tokens.css` (tokens, fonts), `folio-library.css` (components) |
+| Reader | `ReaderView`, `ReaderToolbar`, `folio-reader.js` |
+| Storage and SQL schema | `Folio.Infrastructure` |
+| Windows-only behaviour | `Folio.Platform.Windows`, `Folio.Desktop` |
+| Browser-only behaviour | `Folio.Platform.Browser`, `Folio.Web` |

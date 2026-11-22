@@ -8,13 +8,15 @@ public record LibraryQuery(string? Search = null, ReadingStatus? Status = null, 
     bool Trash = false, LibrarySort Sort = LibrarySort.Recent, int Start = 0, int Count = 40);
 public record LibraryPage(IReadOnlyList<Book> Books, int Total);
 public record LibraryCounts(int All, int Reading, int WantToRead, int Finished, int Trash);
-public record LibraryNote(Annotation Annotation, string BookTitle, string? Author);
 
 /// <summary>Each operation owns its database context; UI components never retain tracked entities.</summary>
 public interface ILibraryService
 {
     Task<LibraryPage> QueryAsync(LibraryQuery query, CancellationToken ct = default);
     Task<LibraryCounts> GetCountsAsync(CancellationToken ct = default);
+    /// <summary>Every book not in Trash, with reading position and shelf membership, in the given order (the 3D stage).</summary>
+    Task<IReadOnlyList<Book>> GetAllAsync(LibrarySort sort = LibrarySort.Recent, CancellationToken ct = default);
+    /// <summary>Most recently read books, newest first, any reading status (the library hero, LIB-1).</summary>
     Task<IReadOnlyList<Book>> GetRecentAsync(CancellationToken ct = default);
     Task<IReadOnlyList<Shelf>> GetShelvesAsync(CancellationToken ct = default);
     Task<Book?> GetBookAsync(Guid id, CancellationToken ct = default);
@@ -29,6 +31,5 @@ public interface ILibraryService
     Task DeletePermanentlyAsync(Guid id, CancellationToken ct = default);
     Task EmptyTrashAsync(CancellationToken ct = default);
     Task SetShelfAsync(Guid bookId, Guid shelfId, bool included, CancellationToken ct = default);
-    Task<IReadOnlyList<LibraryNote>> GetNotesAsync(string? search, CancellationToken ct = default);
     Task RelinkAsync(Guid id, string sourcePath, CancellationToken ct = default);
 }

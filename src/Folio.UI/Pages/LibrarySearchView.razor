@@ -3,12 +3,12 @@
 @implements IDisposable
 @inject IServiceScopeFactory Scopes
 @inject IDocumentTextService Text
-<section class="folio-notebook-page">
+<section class="folio-search-page">
     <div class="folio-eyebrow">ACROSS YOUR LIBRARY</div><h1>Search PDF contents</h1>
-    <p class="folio-muted">Find words inside PDFs, notes, bookmarks, and book details. Scanned pages use offline Windows OCR.</p>
+    <p class="folio-muted">Find words inside PDFs, highlights, bookmarks, and book details. Scanned PDFs without a text layer cannot be searched and are listed below.</p>
     @if (_busy) { <p role="status">@_status</p><MudProgressLinear Indeterminate="true" Color="Color.Primary" /><button class="folio-subtle-btn" @onclick="Cancel">Cancel search</button> }
     @if (_error != null) { <p class="folio-error-text" role="alert">@_error</p> }
-    @if (_warnings.Count > 0) { <details class="folio-index-warnings"><summary>Some PDFs could not be indexed</summary>@foreach (var warning in _warnings) { <p>@warning</p> }</details> }
+    @if (_warnings.Count > 0) { <details class="folio-index-warnings"><summary>Some PDFs could not be indexed (@_warnings.Count)</summary>@foreach (var warning in _warnings) { <p>@warning</p> }</details> }
     @if (!_busy && string.IsNullOrWhiteSpace(Query)) { <p>Enter a phrase in the search box.</p> }
     @foreach (var result in _results)
     {

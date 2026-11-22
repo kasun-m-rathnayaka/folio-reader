@@ -1,0 +1,9 @@
+@page "/not-found"
+@inject FolioNavigator Navigator
+
+<PageTitle>Not found · Folio</PageTitle>
+<div class="folio-empty-state" role="alert">
+    <h1 class="folio-display">Nothing lives at this address</h1>
+    <p>The link may be from an older version of Folio, or the book was deleted.</p>
+    <BracketButton Label="BACK TO LIBRARY" Plus="false" OnClick="() => Navigator.Go(FolioRoutes.Home)" />
+</div>

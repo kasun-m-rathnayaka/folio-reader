@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Local-first (WEB-6): every script, style, font and worker comes from this origin; PDFs and covers are blob: URLs. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' blob:; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'none';" />
+    <meta name="theme-color" content="#0B0B0C" />
+    <meta name="color-scheme" content="dark light" />
+    <title>Folio</title>
+    <base href="/" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" type="image/png" href="icon-192.png" />
+    <link rel="apple-touch-icon" href="icon-192.png" />
+    <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />
+    <link href="_content/Folio.UI/lib/pdfjs/pdf_viewer.css" rel="stylesheet" />
+    <link href="_content/Folio.UI/css/m3-tokens.css" rel="stylesheet" />
+    <link href="_content/Folio.UI/css/folio-reader.css" rel="stylesheet" />
+    <link href="_content/Folio.UI/css/folio-features.css" rel="stylesheet" />
+    <link href="_content/Folio.UI/css/folio-library.css" rel="stylesheet" />
+</head>
+<body>
+    <div id="app"><div class="folio-empty-state">Opening your library…</div></div>
+    <div id="blazor-error-ui" role="alert" hidden>Something went wrong. <a href="" class="reload">Reload</a></div>
+    <noscript>Folio needs JavaScript and WebAssembly to run in the browser.</noscript>
+    <script src="_content/MudBlazor/MudBlazor.min.js"></script>
+    <script src="_content/Folio.UI/js/folio-shell.js"></script>
+    <script type="module" src="_content/Folio.UI/js/folio-reader.js"></script>
+    <script src="_framework/blazor.webassembly.js"></script>
+    <script src="register-service-worker.js"></script>
+</body>
+</html>

@@ -34,6 +34,23 @@ public class LibraryService(IDbContextFactory<FolioDbContext> factory, IFileStor
         return new(result, total);
     }
 
+    public async Task<IReadOnlyList<Book>> GetAllAsync(LibrarySort sort = LibrarySort.Recent, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var books = await db.Books.AsNoTracking().Where(b => b.TrashedAt == null)
+            .Include(b => b.ReadingPosition).Include(b => b.BookShelves).ToListAsync(ct);
+        // Sorted in memory: SQLite cannot order by DateTimeOffset, and the whole library is loaded anyway.
+        IOrderedEnumerable<Book> ordered = sort switch
+        {
+            LibrarySort.Title => books.OrderBy(b => b.Title, StringComparer.CurrentCultureIgnoreCase),
+            LibrarySort.Author => books.OrderBy(b => b.Author ?? "\uffff", StringComparer.CurrentCultureIgnoreCase).ThenBy(b => b.Title, StringComparer.CurrentCultureIgnoreCase),
+            LibrarySort.Added => books.OrderByDescending(b => b.CreatedAt),
+            LibrarySort.Progress => books.OrderByDescending(b => b.PageCount > 0 ? (double)b.FurthestPageIndex / b.PageCount : 0),
+            _ => books.OrderByDescending(b => b.LastReadAt ?? b.CreatedAt),
+        };
+        return ordered.ThenBy(b => b.Id).ToList();
+    }
+
     public async Task<LibraryCounts> GetCountsAsync(CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
@@ -48,8 +65,8 @@ public class LibraryService(IDbContextFactory<FolioDbContext> factory, IFileStor
     {
         await using var db = await factory.CreateDbContextAsync(ct);
         return await db.Books.AsNoTracking().Include(b => b.ReadingPosition)
-            .Where(b => b.TrashedAt == null && b.LastReadAt != null && b.Status == ReadingStatus.Reading)
-            .OrderByDescending(b => b.LastReadAt).Take(4).ToListAsync(ct);
+            .Where(b => b.TrashedAt == null && b.LastReadAt != null)
+            .OrderByDescending(b => b.LastReadAt).Take(8).ToListAsync(ct);
     }
 
     public async Task<IReadOnlyList<Shelf>> GetShelvesAsync(CancellationToken ct = default)
@@ -184,35 +201,18 @@ public class LibraryService(IDbContextFactory<FolioDbContext> factory, IFileStor
         if (book == null) return;
         if (book.TrashedAt == null) throw new InvalidOperationException("Move the book to Trash before deleting it permanently.");
         // Only app-managed files are removed. Imported originals are never deleted.
-        var managed = files.GetBookPath(book.Sha256);
-        var cover = files.GetCoverPath(book.Sha256);
         db.ChapterSummaries.RemoveRange(db.ChapterSummaries.Where(s => s.BookId == id));
         db.Flashcards.RemoveRange(db.Flashcards.Where(s => s.BookId == id));
         db.VocabularyItems.RemoveRange(db.VocabularyItems.Where(s => s.BookId == id));
         db.Books.Remove(book);
         await db.SaveChangesAsync(ct);
-        if (Path.GetFullPath(managed).StartsWith(Path.GetFullPath(files.BooksDirectory) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) File.Delete(managed);
-        if (Path.GetFullPath(cover).StartsWith(Path.GetFullPath(files.CoversDirectory) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) File.Delete(cover);
+        await files.DeleteManagedFilesAsync(book.Sha256, ct);
     }
 
     public async Task EmptyTrashAsync(CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
         foreach (var id in await db.Books.Where(b => b.TrashedAt != null).Select(b => b.Id).ToListAsync(ct)) await DeletePermanentlyAsync(id, ct);
-    }
-
-    public async Task<IReadOnlyList<LibraryNote>> GetNotesAsync(string? search, CancellationToken ct = default)
-    {
-        await using var db = await factory.CreateDbContextAsync(ct);
-        var notes = db.Annotations.AsNoTracking().Include(a => a.Book).Where(a => a.Book != null && a.Book.TrashedAt == null);
-        if (!string.IsNullOrWhiteSpace(search))
-        {
-            var term = search.Trim().ToLower();
-            notes = notes.Where(a => (a.SelectedText != null && a.SelectedText.ToLower().Contains(term)) ||
-                (a.Note != null && a.Note.ToLower().Contains(term)) || a.Book!.Title.ToLower().Contains(term));
-        }
-        return (await notes.OrderByDescending(a => a.CreatedAt).Take(200).ToListAsync(ct))
-            .Select(a => new LibraryNote(a, a.Book!.Title, a.Book.Author)).ToList();
     }
 
     public async Task RelinkAsync(Guid id, string sourcePath, CancellationToken ct = default)

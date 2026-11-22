@@ -27,6 +27,7 @@ public class LibraryWorkflowTests : IDisposable
         _options = new DbContextOptionsBuilder<FolioDbContext>().UseSqlite($"Data Source={Path.Combine(_files.DatabaseDirectory, "folio.db")};Pooling=False").Options;
         _library = new(new Factory(_options), _files);
     }
+    private async Task<List<Annotation>> AnnotationsAsync() { await using var db = new FolioDbContext(_options); return await db.Annotations.AsNoTracking().ToListAsync(); }
     private async Task<Book> Seed()
     {
         await using var db = new FolioDbContext(_options); await new DatabaseMigrator(db, _files).MigrateAsync();
@@ -62,17 +63,33 @@ public class LibraryWorkflowTests : IDisposable
     }
 
     [Fact]
-    public async Task TrashRestore_PreservesNotesAndReadingPosition()
+    public async Task TrashRestore_PreservesHighlightsAndReadingPosition()
     {
         var book = await Seed();
         await _library.SetTrashAsync(book.Id, true);
         Assert.Equal(0, (await _library.QueryAsync(new())).Total);
         Assert.Equal(1, (await _library.QueryAsync(new(Trash:true))).Total);
-        Assert.Empty(await _library.GetNotesAsync(null));
         await _library.SetTrashAsync(book.Id, false);
         Assert.Equal(1, (await _library.QueryAsync(new())).Total);
-        Assert.Equal("Important thought", (await _library.GetNotesAsync(null)).Single().Annotation.Note);
+        Assert.Equal("Important thought", (await AnnotationsAsync()).Single().Note);
     }
+    [Fact]
+    public async Task GetAll_ReturnsLiveBooksWithShelvesInRequestedOrder()
+    {
+        var first = await Seed();
+        await using (var db = new FolioDbContext(_options))
+        {
+            db.Books.Add(new Book { Title = "Another Book", Author = "B", FilePath = "b.pdf", Sha256 = new string('b', 64), PageCount = 10 });
+            db.Books.Add(new Book { Title = "Binned", FilePath = "c.pdf", Sha256 = new string('c', 64), PageCount = 10, TrashedAt = DateTimeOffset.UtcNow });
+            await db.SaveChangesAsync();
+        }
+        var shelf = await _library.CreateShelfAsync("Design");
+        await _library.SetShelfAsync(first.Id, shelf.Id, true);
+        var all = await _library.GetAllAsync(LibrarySort.Title);
+        Assert.Equal(["A Reliable Reader", "Another Book"], all.Select(b => b.Title).ToArray());
+        Assert.Equal(shelf.Id, all[0].BookShelves.Single().ShelfId);
+    }
+
     [Fact]
     public async Task PagedQueries_FilterByAuthorStatusAndShelf_WithStableBoundaries()
     {
@@ -142,7 +159,7 @@ public class LibraryWorkflowTests : IDisposable
         await _library.DeleteShelfAsync(first.Id);
         Assert.NotNull(await _library.GetBookAsync(book.Id));
         Assert.Empty((await _library.GetBookAsync(book.Id))!.BookShelves);
-        Assert.Equal("Important thought", (await _library.GetNotesAsync(null)).Single().Annotation.Note);
+        Assert.Equal("Important thought", (await AnnotationsAsync()).Single().Note);
     }
 
     [Fact]

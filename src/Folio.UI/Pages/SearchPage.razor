@@ -1,0 +1,10 @@
+@page "/search"
+@inject FolioNavigator Navigator
+
+<PageTitle>Search · Folio</PageTitle>
+<LibrarySearchView Query="@(Q ?? "")" OnOpen="Open" />
+
+@code {
+    [SupplyParameterFromQuery(Name = "q")] public string? Q { get; set; }
+    private Task Open((Guid BookId, int PageIndex) result) => Navigator.OpenBookAsync(result.BookId, result.PageIndex);
+}
