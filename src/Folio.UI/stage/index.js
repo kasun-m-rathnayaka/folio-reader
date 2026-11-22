@@ -3,18 +3,24 @@
 // something is settling (render on demand), and never while paused or hidden.
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { damp, dampObject, idleTurn, motionSettings, travelLambda, LAMBDA } from './motion.js';
+import { damp, dampObject, dampKeys, idleTurn, motionSettings, travelLambda, LAMBDA } from './motion.js';
 import { GestureGate } from './input.js';
-import { rowsFor } from './layout.js';
+import { rowsFor, visibleRange, partedShift } from './layout.js';
+import { Bookcase } from './bookcase.js';
+import { Pan, panBounds } from './pan.js';
 import { BookFactory } from './book-factory.js';
-import { LruCache, loadCover, ensureFonts } from './textures.js';
+import { LruCache, ensureFonts } from './textures.js';
+import { loadSpineLook, loadCoverLook } from './book-look.js';
+import { COVER_SIZES, composeCover, composeSpine } from './cover-composer.js';
+import { designFor } from './cover-design.js';
 import { QualityMonitor, SOFTWARE_RENDERER, percentile } from './quality.js';
-import { cameraPose, featuredPose, shelfPose, layoutRows, rowY, CAMERA_FOV, SHELF_DISTANCE } from './scenes.js';
+import { cameraPose, featuredPose, shelfPose, poseLambdas, layoutRows, rowY, CAMERA_FOV, SHELF_DISTANCE } from './scenes.js';
 import { readableAccent, accentTint, parseHex } from '../wwwroot/js/folio-color.mjs';
 import { alignmentPose, cornerError, OPENING } from './opening.js';
 import { BOOK_WIDTH, BOOK_HEIGHT, thicknessCm } from './layout.js';
 import { FEATURE_Y } from './scenes.js';
 
+const DWELL_MS = 250;         // a pointer resting this long on a book presents it
 const IDLE_STOP_MS = 20000;   // idle turn stops 20 s after the last input
 const LOOK_LIMIT = 120;       // ~120 books keep their detailed textures
 const POINTER_MAX = { hero: 4 };
@@ -73,6 +79,10 @@ export class Stage {
         this.world.add(new THREE.AmbientLight(0xffffff, 0.12));
 
         this.factory = new BookFactory();
+        this.bookcase = new Bookcase(this.world, this.renderer.capabilities.getMaxAnisotropy());
+        this.bookcase.onTextures = () => this.invalidate();
+        this.pan = new Pan(); this.pool = []; this.window = null; this.memory = new Map(); this.arriving = new Set();
+        this.lastPointerAt = 0; this.suppressClick = false;
         this.looks = new LruCache(LOOK_LIMIT, (look, id) => { this.undressMeshes(id); look.dispose?.(); });
         this.loading = new Map();
         this.accents = new Map();
@@ -115,26 +125,16 @@ export class Stage {
         this.byId = new Map(books.map(b => [b.id, b]));
         const visible = visibleIds ? new Set(visibleIds) : null;
         this.rows = layoutRows(rowsFor(visible ? books.filter(b => visible.has(b.id)) : books, shelves));
-        const wanted = new Set();
-        this.rows.forEach((row, r) => row.books.forEach(book => {
-            const key = `${r}:${book.id}`; wanted.add(key);
-            let mesh = this.instances.get(key);
-            if (!mesh || mesh.userData.pages !== book.pages) {
-                if (mesh) { this.world.remove(mesh); }
-                mesh = this.factory.create(book); mesh.userData.pages = book.pages; mesh.userData.row = r;
-                this.instances.set(key, mesh); this.world.add(mesh);
-                const pose = shelfPose(r, row.layout.positions.get(book.id).x, false);
-                // LIB-7: a newly imported book slides onto the shelf from the front; others appear in place.
-                const arriving = !firstLoad && !known.has(book.id) && this.motion.travel;
-                mesh.userData.state = arriving ? { ...pose, z: pose.z + 30, ry: pose.ry - 0.6 } : { ...pose };
-                this.applyPose(mesh, mesh.userData.state);
-            }
-        }));
-        for (const [key, mesh] of this.instances) if (!wanted.has(key)) { this.world.remove(mesh); this.instances.delete(key); }
-        this.buildPlanks();
+        // Meshes are windowed (WP3): only books near the camera stand on the rows. Poses survive a reload.
+        for (const [key, mesh] of [...this.instances]) { this.memory.set(key, mesh.userData.state); this.release(key); }
+        this.arriving = new Set(firstLoad || !this.motion.travel ? [] : books.filter(b => !known.has(b.id)).map(b => b.id));   // LIB-7
+        this.window = null;
+        this.bookcase.rebuild(this.rows);
         for (const id of [...this.looks.map.keys()]) if (!this.byId.has(id)) this.looks.delete(id);
         if (this.featuredId && !this.byId.has(this.featuredId)) this.setFeatured(null);
-        this.refreshLooks();
+        this.updatePanBounds();
+        this.syncWindow(true);
+        this.memory.clear(); this.arriving.clear();
         this.invalidate();
         this.applyPendingScene();
     }
@@ -145,21 +145,69 @@ export class Stage {
         if (pending && (pending.rowsVersion == null || pending.rowsVersion === this.rowsVersion)) { this.pendingScene = null; this.setScene(pending); }
     }
 
-    /** One plank under each row: the books stand on something, and an empty library still shows a shelf (LIB-7). */
-    buildPlanks() {
-        this.planks ??= new THREE.Group();
-        if (!this.planks.parent) this.world.add(this.planks);
-        for (const plank of this.planks.children) plank.geometry.dispose();
-        this.planks.clear();
-        this.plankMaterial ??= new THREE.MeshStandardMaterial({ color: 0x1c1a17, roughness: 0.7, metalness: 0 });
-        this.rows.forEach((row, r) => {
-            const width = Math.max(40, row.layout.width + 16);
-            const plank = new THREE.Mesh(new THREE.BoxGeometry(width, 1.2, 18), this.plankMaterial);
-            plank.position.set(row.layout.width / 2, rowY(r) - 10.6, -1);
-            plank.userData.plank = true;
-            this.planks.add(plank);
-        });
+    // ---- windowed meshes (WP3) ---------------------------------------------------------------------------------------
+
+    /** x range of books that get meshes: 1.5 view widths either side of the camera, on the current row and its neighbours. */
+    windowRanges() {
+        const half = this.halfViewWidth() * 1.5 * 2, x = this.pan.x;
+        const ranges = [];
+        for (let r = Math.max(0, this.rowIndex - 1); r <= Math.min(this.rows.length - 1, this.rowIndex + 1); r++) {
+            const [a, b] = visibleRange(this.rows[r].layout, x - half, x + half);
+            ranges.push([r, a, b]);
+        }
+        return ranges;
     }
+
+    /** Creates meshes for books that entered the window and recycles those that left (from a pool of meshes). */
+    syncWindow(force = false) {
+        if (!this.rows.length) return false;
+        const ranges = this.windowRanges();
+        const signature = ranges.map(r => r.join(':')).join('|');
+        if (!force && signature === this.window) return false;
+        this.window = signature;
+        const wanted = new Set();
+        for (const [r, a, b] of ranges) {
+            const row = this.rows[r];
+            for (let i = a; i < b; i++) {
+                const book = row.books[i], key = `${r}:${book.id}`; wanted.add(key);
+                if (!this.instances.has(key)) this.acquire(key, book, r, row.layout.positions.get(book.id).x);
+            }
+        }
+        for (const key of [...this.instances.keys()]) if (!wanted.has(key)) this.release(key);
+        this.refreshLooks();
+        return true;
+    }
+
+    acquire(key, book, row, x) {
+        const mesh = this.pool.pop() ?? this.factory.create(book);
+        this.factory.retarget(mesh, book);
+        mesh.userData.row = row; mesh.userData.pages = book.pages; mesh.visible = true;
+        const pose = shelfPose(row, x);
+        const remembered = this.memory.get(key);
+        mesh.userData.state = remembered ? { ...remembered } : this.arriving.has(book.id) ? { ...pose, z: pose.z + 30, ry: pose.ry - 0.6 } : { ...pose };
+        this.applyPose(mesh, mesh.userData.state);
+        this.instances.set(key, mesh); this.world.add(mesh);
+        this.applyLook(mesh, book.id);
+        return mesh;
+    }
+
+    release(key) {
+        const mesh = this.instances.get(key);
+        if (!mesh) return;
+        this.world.remove(mesh); this.instances.delete(key);
+        mesh.material = this.factory.plainMaterials();
+        if (this.pool.length < 400) this.pool.push(mesh); else this.factory.discard(mesh);
+    }
+
+    /** Camera x limits of the current row; wide rows pan, narrow ones sit centred. */
+    updatePanBounds() {
+        const row = this.rows[this.rowIndex];
+        const [min, max] = panBounds(row?.layout.width ?? 0, this.halfViewWidth());
+        this.pan.setBounds(min, max);
+    }
+
+    /** x of a book on the current row (its centre), or null when it is not on it. */
+    focusX(id = this.focusId) { return this.rows[this.rowIndex]?.layout.positions.get(id)?.x ?? null; }
 
     setScene(scene) {
         const next = { kind: scene?.kind || 'hero', bookId: scene?.bookId ?? null, rowIndex: Number.isInteger(scene?.rowIndex) ? scene.rowIndex : null,
@@ -170,11 +218,16 @@ export class Stage {
             return;
         }
         this.pendingScene = null;
-        const previousCamera = this.cameraState;
+        const previousCamera = this.cameraState, previousKind = this.scene.kind, previousRow = this.rowIndex;
         if (next.kind === 'shelf') {
             const wanted = next.rowIndex ?? this.rowIndex;
             this.rowIndex = Math.min(Math.max(0, wanted), Math.max(0, this.rows.length - 1));
+            // Entering the bookcase from the hero starts panning from where the camera is.
+            if (previousKind !== 'shelf' && previousCamera) this.pan.x = previousCamera.px;
+            this.updatePanBounds();
+            this.pan.x = this.pan.clamp(this.pan.x);
         }
+        const previousFocus = this.focusId, focusChanged = !!next.bookId && next.bookId !== this.focusId;
         if (next.bookId) this.focusId = next.bookId;
         if (next.kind !== 'shelf') this.setFeatured(next.bookId || this.featuredId || this.books[0]?.id || null);
         this.scene = next; this.settledKind = null; this.reportedKey = null;
@@ -185,14 +238,52 @@ export class Stage {
             this.cameraLambda = travelLambda(Math.abs(target.py - previousCamera.py));
         }
         this.touch();
-        this.refreshLooks();
+        if (next.kind === 'shelf') {
+            this.followFocus(focusChanged || previousKind !== 'shelf' || previousRow !== this.rowIndex);
+            this.syncWindow(true);
+            this.syncPresented(previousFocus);
+        } else this.refreshLooks();
         if (!this.motion.travel && this.cameraState) this.snap();
         this.invalidate();
     }
 
+    /**
+     * The presented book tints the page with its accent (contrast-checked, λ = 5) and gets its painted cover; the one it replaces
+     * gives its large cover back once it has turned away. Off the shelf there is no presented book and no tint.
+     */
+    syncPresented(previous) {
+        if (this.scene.kind !== 'shelf') { this.backgroundTarget = null; return; }
+        const id = this.focusId;
+        this.backgroundTarget = id ? this.accentBackground(id) : null;
+        if (id) { this.requestLook(id); if (this.looks.has(id)) this.requestCover(id, 'full'); }
+        if (previous && previous !== id) setTimeout(() => this.dropCover(previous), 1500);
+        if (this.hoverId === id) clearTimeout(this.dwell);
+    }
+
+    /** Frees a book's large cover texture once it is neither presented, featured nor opening: memory stays bounded while browsing. */
+    dropCover(id) {
+        if (this.disposed) return;
+        if (id === this.featuredId || this.opening?.id === id || (this.scene.kind === 'shelf' && id === this.focusId)) return;
+        const look = this.looks.map.get(id);
+        if (!look?.cover) return;
+        look.disposeMaterials?.(); look.materials = null;
+        look.disposeCover(); look.coverWidth = 0;
+        this.applyLookEverywhere(id);
+    }
+
+    /** A presented book (arrow keys, click, dwell, entering a row) recentres the row on it; a plain hover never presents (WP3/WP4). */
+    followFocus(changed) {
+        if (!changed || this.scene.kind !== 'shelf') return;
+        const x = this.focusX();
+        if (x != null) { if (this.motion.travel) this.pan.recenter(x); else { this.pan.x = this.pan.clamp(x); this.pan.target = null; } }
+    }
+
     focusBook(id) {
         if (this.focusId === id) return;
+        const previous = this.focusId;
         this.focusId = id;
+        this.followFocus(true);
+        this.syncPresented(previous);
         if (this.scene.kind !== 'shelf' && id) this.setFeatured(id);
         this.touch(); this.invalidate();
     }
@@ -371,7 +462,7 @@ export class Stage {
     worldPoseOfSlot(bookId) {
         const row = this.rows[this.rowIndex];
         const x = row?.layout.positions.get(bookId)?.x;
-        return x == null ? { x: 0, y: FEATURE_Y, z: 0, ry: 0 } : shelfPose(this.rowIndex, x, true);
+        return x == null ? { x: 0, y: FEATURE_Y, z: 0, ry: 0 } : shelfPose(this.rowIndex, x, 'presented');
     }
 
     applyOpeningPose() {
@@ -398,6 +489,7 @@ export class Stage {
         this.baseBackground = new THREE.Color(bg);
         this.world.background = this.baseBackground.clone();
         this.world.fog = new THREE.Fog(this.world.background.clone(), 120, 260);
+        this.bookcase?.setTheme(theme);
         this.invalidate();
     }
 
@@ -418,14 +510,19 @@ export class Stage {
         this.featured.userData.featured = true;
         this.world.add(this.featured);
         this.applyLook(this.featured, book.id);
+        if (this.looks.has(id)) this.requestCover(id, 'full');
     }
 
     /** Detailed textures for the books nearest the camera, up to the LRU limit; others keep the placeholder. */
     refreshLooks() {
         const priority = [];
         if (this.featuredId) priority.push(this.featuredId);
-        const rows = this.scene.kind === 'shelf' ? [this.rowIndex, this.rowIndex - 1, this.rowIndex + 1] : [0];
-        for (const r of rows) for (const book of this.rows[r]?.books ?? []) priority.push(book.id);
+        // Detailed textures go to the books nearest the camera: the current row first, then its neighbours (WP3).
+        const near = [...this.instances.keys()].map(key => {
+            const split = key.indexOf(':'), row = +key.slice(0, split), id = key.slice(split + 1);
+            return { id, current: row === this.rowIndex ? 0 : 1, d: Math.abs((this.rows[row]?.layout.positions.get(id)?.x ?? 0) - this.pan.x) };
+        }).sort((a, b) => a.current - b.current || a.d - b.d);
+        for (const entry of near) priority.push(entry.id);
         const ids = [...new Set(priority)].slice(0, LOOK_LIMIT);
         ids.forEach(id => this.requestLook(id));
         for (const [key, mesh] of this.instances) this.applyLook(mesh, key.slice(key.indexOf(':') + 1));
@@ -437,33 +534,56 @@ export class Stage {
         const book = this.byId.get(id); if (!book) return;
         const task = (async () => {
             await ensureFonts();
-            let cover = null, accent = book.color || null;
-            if (book.coverUrl) {
-                try { const loaded = await loadCover(book.coverUrl, this.renderer.capabilities.getMaxAnisotropy()); cover = loaded.texture; accent ||= loaded.color; }
-                catch (error) { console.warn('[FolioStage] cover', book.id, error?.message); }
-            }
-            if (this.disposed) { cover?.dispose(); return; }
-            accent = accent ? readableAccent(accent, '#0B0B0C', 3) : null;
+            let loaded;
+            try { loaded = await loadSpineLook(book, { anisotropy: this.renderer.capabilities.getMaxAnisotropy() }); }
+            catch (error) { console.warn('[FolioStage] look', book.id, error?.message); return; }
+            if (this.disposed || this.byId.get(id) !== book && !this.byId.has(id)) { loaded.spine.dispose(); return; }
+            const accent = loaded.dominant ? readableAccent(loaded.dominant, '#0B0B0C', 3) : null;
             this.accents.set(id, accent);
-            const look = { cover, accent, materials: null, dispose: null };
+            const look = { ...loaded, accent, cover: null, coverWidth: 0, materials: null, disposeMaterials: null,
+                dispose() { this.disposeMaterials?.(); this.spine.dispose(); this.disposeCover?.(); } };
+            look.disposeCover = () => { look.cover?.color.dispose(); look.cover?.orm.dispose(); look.cover?.normal?.dispose(); look.cover = null; };
             this.looks.set(id, look);
-            for (const [key, mesh] of this.instances) if (key.endsWith(`:${id}`)) this.applyLook(mesh, id);
-            if (this.featuredId === id && this.featured) this.applyLook(this.featured, id);
+            this.applyLookEverywhere(id);
             this.callbacks.onAccent?.(id, accent);
+            if (this.scene.kind === 'shelf' && id === this.focusId) this.backgroundTarget = this.accentBackground(id);
+            if (this.wantsCover(id)) this.requestCover(id);
             this.invalidate();
         })().finally(() => this.loading.delete(id));
         this.loading.set(id, task);
     }
 
+    /** Books whose cover is visible (the featured book, and later the presented one) get a painted cover. */
+    wantsCover(id) { return id === this.featuredId || (this.scene.kind === 'shelf' && id === this.focusId); }
+
+    /** Paints (or loads from the cache) the book's cover at 'shelf' (512 px) or 'full' (1024 px); no-op if already there. */
+    async requestCover(id, level = 'full') {
+        const look = this.looks.get(id), book = this.byId.get(id);
+        if (!look || !book) return;
+        const width = COVER_SIZES[level] ?? COVER_SIZES.full;
+        if (look.coverWidth >= width || look.coverPending >= width) return;
+        look.coverPending = width;
+        try {
+            const cover = await loadCoverLook(book, { level, dominant: look.dominant, anisotropy: this.renderer.capabilities.getMaxAnisotropy() });
+            if (this.disposed || this.looks.map.get(id) !== look) { cover.color.dispose(); cover.orm.dispose(); cover.normal?.dispose(); return; }
+            look.disposeMaterials?.(); look.materials = null;
+            look.disposeCover();
+            look.cover = cover; look.coverWidth = width;
+            this.applyLookEverywhere(id);
+            this.invalidate();
+        } catch (error) { console.warn('[FolioStage] cover', id, error?.message); }
+        finally { look.coverPending = 0; }
+    }
+
+    applyLookEverywhere(id) {
+        for (const [key, mesh] of this.instances) if (key.endsWith(`:${id}`)) this.applyLook(mesh, id);
+        if (this.featuredId === id && this.featured) this.applyLook(this.featured, id);
+    }
+
     applyLook(mesh, id) {
         const look = this.looks.map.get(id);
         if (!look) return;
-        if (!look.materials) {
-            const probe = this.factory.create(this.byId.get(id) ?? { id, pages: 0 });
-            const undress = this.factory.dress(probe, this.byId.get(id) ?? { id }, look.cover, look.accent);
-            look.materials = probe.material;
-            look.dispose = () => { undress(); look.cover?.dispose(); };
-        }
+        if (!look.materials) { const made = this.factory.materialsFor(look); look.materials = made.materials; look.disposeMaterials = made.dispose; }
         if (mesh.material !== look.materials) mesh.material = look.materials;
     }
 
@@ -506,7 +626,10 @@ export class Stage {
         let remaining = 0;
         const idle = this.motion.idle && !this.testMode && !this.powerSaver && this.scene.kind === 'hero' && now - this.lastInputAt < IDLE_STOP_MS;
         if (idle) this.idleClock += dt;
-        const ctx = { rowIndex: this.rowIndex, rows: this.rows, focusId: this.focusId, halfViewWidth: this.halfViewWidth() };
+        const ctx = { rowIndex: this.rowIndex, rows: this.rows, focusId: this.focusId, halfViewWidth: this.halfViewWidth(), panX: this.pan.x };
+        // Horizontal browsing: the pan position is the camera's x (the row moves under the user's hand, undamped).
+        let panActive = false;
+        if (this.scene.kind === 'shelf' && !this.opening) { this.updatePanBounds(); panActive = this.pan.step(dt); }
 
         // camera
         const target = cameraPose(this.scene, ctx);
@@ -514,6 +637,7 @@ export class Stage {
         else remaining = Math.max(remaining, dampObject(this.cameraState, target, this.scene.kind === 'opening' ? LAMBDA.opening : this.cameraLambda, dt));
         if (this.scene.kind === 'shelf' && !this.pendingScene && cameraRemaining(this.cameraState, target) < 0.3) this.report('shelf');
         const c = this.cameraState;
+        if (this.scene.kind === 'shelf' && !this.opening) { c.px = c.lx = this.pan.x; if (panActive) remaining = Math.max(remaining, 1); if (this.syncWindow()) this.invalidate(); }
         // Scenes centre on the main area (right of the sidebar, below the header); opening uses the whole window.
         const offsetTarget = this.scene.kind === 'opening' || this.opening ? { x: 0, y: 0 } : this.mainOffset();
         remaining = Math.max(remaining, this.motion.travel ? dampObject(this.viewOffset, offsetTarget, LAMBDA.camera * 2, dt) : (Object.assign(this.viewOffset, offsetTarget), 0));
@@ -541,18 +665,31 @@ export class Stage {
             if (idle) remaining = Math.max(remaining, 1);
         }
 
-        // shelf books: only the focused book (and the one returning) moves
+        // shelf books: rest, lifted (hovered) or presented (facing the camera); neighbours of the presented book part (WP4)
+        const presented = this.scene.kind === 'shelf' ? this.presentedInfo() : null;
         for (const [key, mesh] of this.instances) {
             const row = mesh.userData.row, id = key.slice(key.indexOf(':') + 1);
             const layout = this.rows[row]?.layout; if (!layout) continue;
-            const focused = this.scene.kind === 'shelf' && row === this.rowIndex && id === this.focusId;
-            const pose = shelfPose(row, layout.positions.get(id).x, focused);
-            const s = mesh.userData.state;
-            remaining = Math.max(remaining, dampObject(s, pose, this.motion.travel ? LAMBDA.pullOut : 1e3, dt));
-            this.applyPose(mesh, s);
+            const entry = layout.positions.get(id);
+            let mode = 'rest', shift = 0, distance = 0;
+            if (presented && row === presented.row) {
+                if (id === this.focusId) mode = 'presented';
+                else { distance = Math.abs(entry.index - presented.index); shift = entry.index < presented.index ? -presented.shift : presented.shift; }
+            }
+            if (mode === 'rest' && this.motion.lift && this.scene.kind === 'shelf' && row === this.rowIndex && id === this.hoverId) mode = 'lifted';
+            const pose = shelfPose(row, entry.x + shift, mode);
+            const state = mesh.userData.state;
+            remaining = Math.max(remaining, this.motion.travel ? dampKeys(state, pose, poseLambdas(mode, distance), dt) : (Object.assign(state, pose), 0));
+            this.applyPose(mesh, state);
             mesh.visible = Math.abs(rowY(row) - c.ly) < 90 && !(this.opening && this.opening.id === id && row === this.rowIndex);
         }
         return remaining > 0;
+    }
+
+    /** The presented book on the current row and how far its neighbours part, or null. */
+    presentedInfo() {
+        const entry = this.rows[this.rowIndex]?.layout.positions.get(this.focusId);
+        return entry ? { row: this.rowIndex, index: entry.index, shift: partedShift(entry.thickness) } : null;
     }
 
     applyPose(mesh, p) { mesh.position.set(p.x, p.y, p.z); mesh.rotation.set(p.rx, p.ry, p.rz); }
@@ -597,6 +734,13 @@ export class Stage {
             },
             get settled() { return stage.raf === 0 && stage.settledKind === stage.scene.kind; },
             resetFrameTimes() { stage.stats.frameTimes = []; stage.stats.cpuTimes = []; },
+            /** Test hook: paints a cover (optionally forcing a template) and returns it with its design as data URLs. */
+            composeCover(book, { template = null, width = 512, dominant = null } = {}) {
+                const design = { ...designFor(book, dominant), ...(template ? { template } : {}) };
+                const painted = composeCover(book, { width, dominant, design });
+                return { color: painted.color.toDataURL(), orm: painted.orm.toDataURL(), normal: painted.normal?.toDataURL() ?? null, design: painted.design,
+                    spine: composeSpine(book, { width: 64, dominant, design }).toDataURL() };
+            },
             /** Test hook: force continuous frames for a duration to measure frame time. */
             async measure(ms) {
                 stage.stats.frameTimes = []; stage.stats.cpuTimes = [];
@@ -620,6 +764,39 @@ export class Stage {
         if (this.featured) this.factory.setShadows(this.featured, step.shadows);
         this.stats.quality = step;
         this.resize();
+    }
+
+    /** Where a book's centre is on screen (client pixels), or null when it has no mesh right now. Used by tests and keyboard helpers. */
+    screenPoint(id) {
+        const mesh = [...this.instances].find(([key]) => key.endsWith(`:${id}`))?.[1];
+        if (!mesh) return null;
+        const v = mesh.position.clone().project(this.camera), rect = this.canvas.getBoundingClientRect();
+        return { x: rect.left + (v.x + 1) / 2 * rect.width, y: rect.top + (1 - v.y) / 2 * rect.height };
+    }
+
+    /** Hover lifts a spine at once; resting on the same book for 250 ms presents it (a click or an arrow key presents sooner). */
+    setHover(id) {
+        if (id === this.hoverId) return;
+        this.hoverId = id;
+        clearTimeout(this.dwell);
+        if (id && id !== this.focusId && this.motion.lift) {
+            this.dwell = setTimeout(() => { if (this.hoverId === id && this.scene.kind === 'shelf' && !this.disposed) this.callbacks.onBookActivated?.(id, 'present'); }, DWELL_MS);
+        }
+        this.invalidate();
+    }
+
+    /** Centimetres of the row per CSS pixel at shelf distance. */
+    cmPerPx() {
+        const width = this.mainRect?.width || this.canvas.clientWidth || 1;
+        return (this.halfViewWidth() * 2) / width;
+    }
+
+    /** Wheel and trackpad panning (horizontal gestures, Shift + wheel); discrete notches keep a short glide. */
+    panBy(pixels) {
+        const cm = pixels * this.cmPerPx();
+        this.pan.dragBy(cm);
+        if (Math.abs(pixels) >= 40) this.pan.v = cm * 5;
+        this.touch(); this.invalidate();
     }
 
     halfViewWidth() {
@@ -663,27 +840,53 @@ export class Stage {
         const onControl = event => event.target instanceof Element && !!event.target.closest('button, a[href], input, select, textarea, [role="button"], [role="menu"], .mud-popover');
         on(window, 'resize', () => this.resize());
         on(document, 'visibilitychange', () => { if (!document.hidden) { this.lastTick = 0; this.invalidate(); } });
+        // Click and drag on empty wood or the back panel pans the row; a release with speed keeps gliding (WP3).
+        on(this.input, 'pointerdown', event => {
+            if (!live() || this.scene.kind !== 'shelf' || this.opening || event.button !== 0 || onControl(event) || this.pick(event)) return;
+            this.drag = { id: event.pointerId, x: event.clientX, moved: 0, lastMove: event.timeStamp };
+            this.pan.beginDrag(); this.touch();
+            try { this.input.setPointerCapture?.(event.pointerId); } catch { /* the pointer may already be gone */ }
+            this.invalidate();
+        });
+        const endDrag = event => {
+            if (!this.drag || event.pointerId !== this.drag.id) return;
+            const moved = this.drag.moved > 4;
+            // Input timestamps, not the clock: a busy main thread must not look like a pause before release.
+            this.pan.endDrag(this.testMode ? 0 : event.timeStamp - this.drag.lastMove);
+            this.drag = null; this.suppressClick = moved;
+            if (moved) setTimeout(() => { this.suppressClick = false; }, 0);
+            this.invalidate();
+        };
+        on(this.input, 'pointerup', endDrag);
+        on(this.input, 'pointercancel', endDrag);
         on(this.input, 'pointermove', event => {
+            if (!this.drag || event.pointerId !== this.drag.id) return;
+            const now = event.timeStamp, dx = event.clientX - this.drag.x;
+            this.drag.x = event.clientX; this.drag.moved += Math.abs(dx);
+            // Test mode runs on a fixed clock (software GL stretches real time), so its drags use a fixed 60 Hz sample interval.
+            this.pan.dragBy(-dx * this.cmPerPx(), this.testMode ? 1 / 60 : Math.max(0.004, (now - this.drag.lastMove) / 1000));
+            this.drag.lastMove = now; this.touch(); this.invalidate();
+        });
+        on(this.input, 'pointermove', event => {
+            this.lastPointerAt = performance.now();
             if (!live()) return;
             const rect = this.canvas.getBoundingClientRect();
             this.pointer.x = Math.max(-1, Math.min(1, ((event.clientX - rect.left) / rect.width) * 2 - 1));
             this.pointer.y = Math.max(-1, Math.min(1, ((event.clientY - rect.top) / rect.height) * 2 - 1));
             this.touch();
-            if (this.scene.kind === 'shelf') {
-                const id = this.pick(event);
-                if (id && id !== this.hoverId) { this.hoverId = id; this.callbacks.onBookHovered?.(id); }
-            }
+            if (this.scene.kind === 'shelf') this.setHover(this.pick(event));
             if (this.motion.tilt || this.scene.kind === 'shelf') this.invalidate();
         });
-        on(this.input, 'pointerleave', () => { this.pointer.x = 0; this.pointer.y = 0; this.invalidate(); });
+        on(this.input, 'pointerleave', () => { this.pointer.x = 0; this.pointer.y = 0; this.setHover(null); this.invalidate(); });
         on(this.input, 'click', event => {
+            if (this.suppressClick) { this.suppressClick = false; return; }
             if (!live() || onControl(event)) return;
             const id = this.pick(event);
             if (!id) return;
             this.touch();
             // A click presents a book; a click on the presented book (or the hero's book) opens it.
             if (id === this.focusId || (this.scene.kind === 'hero' && id === this.featuredId)) this.callbacks.onBookActivated?.(id, 'open');
-            else { this.callbacks.onBookHovered?.(id); this.callbacks.onBookActivated?.(id, 'present'); }
+            else this.callbacks.onBookActivated?.(id, 'present');
         });
         on(this.input, 'contextmenu', event => {
             if (!live() || onControl(event)) return;
@@ -698,7 +901,7 @@ export class Stage {
             const { intent, pan } = this.gate.wheel(event, performance.now());
             if (!event.deltaX && !event.deltaY) return;
             event.preventDefault();
-            if (pan) this.panBy?.(pan);
+            if (pan && this.scene.kind === 'shelf' && !this.opening) this.panBy(pan);
             if (intent) { this.touch(); this.callbacks.onScrollIntent?.(intent); }
         }, { passive: false });
         let touchStart = null;
@@ -732,6 +935,7 @@ export class Stage {
         this.unbind?.forEach(f => f());
         this.resizeObserver?.disconnect();
         this.looks.clear();
+        this.bookcase.dispose();
         this.factory.dispose();
         this.environment.dispose();
         this.renderer.dispose();

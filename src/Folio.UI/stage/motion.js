@@ -31,6 +31,17 @@ export function dampObject(state, target, lambda, dt) {
     return remaining;
 }
 
+/** Like `dampObject`, but each key has its own rate (`rates[key]`, else `fallback`). */
+export function dampKeys(state, target, rates, dt, fallback = LAMBDA.camera) {
+    let remaining = 0;
+    for (const key in target) {
+        const next = damp(state[key] ?? target[key], target[key], rates[key] ?? fallback, dt);
+        state[key] = Math.abs(next - target[key]) < EPSILON ? target[key] : next;
+        remaining = Math.max(remaining, Math.abs(state[key] - target[key]));
+    }
+    return remaining;
+}
+
 /** Seconds for a damped value to cover all but `fraction` of the distance (≈ settle time). */
 export const settleTime = (lambda, fraction = 0.06) => Math.log(1 / fraction) / lambda;
 
@@ -42,8 +53,8 @@ export function idleTurn(seconds, amplitudeDeg = 12, periodS = 16) {
 export const MOTION_LEVELS = ['full', 'reduced', 'off'];
 export function motionSettings(level) {
     switch (level) {
-        case 'off': return { level, idle: false, tilt: false, travel: false, crossfadeMs: 0 };
-        case 'reduced': return { level, idle: false, tilt: false, travel: false, crossfadeMs: 150 };
-        default: return { level: 'full', idle: true, tilt: true, travel: true, crossfadeMs: 120 };
+        case 'off': return { level, idle: false, tilt: false, travel: false, lift: false, crossfadeMs: 0 };
+        case 'reduced': return { level, idle: false, tilt: false, travel: false, lift: false, crossfadeMs: 150 };
+        default: return { level: 'full', idle: true, tilt: true, travel: true, lift: true, crossfadeMs: 120 };
     }
 }

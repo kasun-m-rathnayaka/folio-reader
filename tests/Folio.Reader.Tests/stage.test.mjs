@@ -92,14 +92,6 @@ test('software renderers are detected', () => {
     assert.ok(!SOFTWARE_RENDERER.test('ANGLE (Intel, Intel(R) Iris(R) Xe Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)'));
 });
 
-test('spine cloth keeps spine text at 4.5:1 for any cover colour', async () => {
-    globalThis.document ??= undefined;
-    const { clothColor } = await import('../../src/Folio.UI/stage/textures.js').catch(() => ({}));
-    if (!clothColor) return; // three needs a DOM only for canvases; clothColor itself is pure
-    const { contrast } = await import('../../src/Folio.UI/wwwroot/js/folio-color.mjs');
-    for (const accent of ['#FFFFFF', '#F5E6A1', '#1B2A6B', '#C0392B', null]) assert.ok(contrast(clothColor(accent), '#F2EEE6') >= 4.5, String(accent));
-});
-
 import { alignmentPose, projectedRect, cornerError, OPENING } from '../../src/Folio.UI/stage/opening.js';
 
 test('handoff alignment round-trips to the reader rectangle within a pixel', () => {

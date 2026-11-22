@@ -51,6 +51,12 @@ else if (Mode == View.Shelf)
                 else { <p class="folio-muted">Add books with MOVE TO SHELF on their details, or change the filter.</p> }
             </div>
         }
+        @* The presented book's title slides to the centre; its neighbours' titles are cut off at the edges (decorative: the list below is the real library). *@
+        <div class="folio-marquee folio-shelf-marquee" aria-hidden="true" @ref="_marquee">
+            <div class="folio-marquee-track">
+                @foreach (var item in MarqueeBooks) { <span @key="item.Id" class="folio-marquee-title @(item.Id == _focusId ? "is-current" : "")">@item.Title</span> }
+            </div>
+        </div>
         <ul class="folio-focus-layer" aria-label="@($"Books on {RowName}")" @onfocusin="() => _layerFocused = true" @onfocusout="() => _layerFocused = false">
             @foreach (var book in _row)
             {
@@ -94,7 +100,10 @@ else if (Mode == View.TwoD)
     private Guid? _focusId;
     private bool _trash, _home, _shelfRoute, _loaded, _layerFocused;
     private string? _announcement;
-    private Guid? _arrivedFor;
+    private Guid? _arrivedFor, _marqueeFor;
+    private ElementReference _marquee;
+    /// <summary>The presented book and up to 12 neighbours either side: enough to fill the marquee without a title per book.</summary>
+    private IEnumerable<Book> MarqueeBooks { get { var i = Math.Max(0, _row.ToList().FindIndex(b => b.Id == _focusId)); return _row.Skip(Math.Max(0, i - 12)).Take(25); } }
 
     private View Mode => !_loaded || (Stage.Starting && !_trash) ? View.Waiting
         : Stage.Available && _home && string.IsNullOrWhiteSpace(Q) && HeroBooks.Count > 0 ? View.Hero
@@ -159,7 +168,11 @@ else if (Mode == View.TwoD)
         UpdateStage();
     }
 
-    protected override async Task OnAfterRenderAsync(bool firstRender) { if (firstRender) _keys = await Keys.AttachAsync(Key); }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) _keys = await Keys.AttachAsync(Key);
+        if (Mode == View.Shelf && _focusId != _marqueeFor && _row.Count > 0) { _marqueeFor = _focusId; await JS.InvokeVoidAsync("folioShell.centerMarquee", _marquee); }
+    }
 
     private void UpdateStage()
     {
@@ -230,8 +243,8 @@ else if (Mode == View.TwoD)
         {
             case "open": await Navigator.OpenBookAsync(id); break;
             case "menu": await OpenMenuFor(id); break;
-            default: // "present": a click brings the book forward
-                await InvokeAsync(() => { if (_row.Any(b => b.Id == id)) { Focus(id); StateHasChanged(); } });
+            default: // "present": a click or a 250 ms rest on a book brings it forward
+                await InvokeAsync(() => { var book = _row.FirstOrDefault(b => b.Id == id); if (book != null) { Focus(id); _announcement = BookGeometry.AccessibleName(book); StateHasChanged(); } });
                 break;
         }
     }

@@ -1,7 +1,7 @@
 // Target poses per scene (SPEC: scenes). The stage damps every book and the camera toward these each frame.
 // The featured book (hero, opening) lives at the top of the world; shelf rows hang below it, so moving from
 // the hero to the shelf is one continuous camera travel downwards (LIB-3).
-import { BOOK_HEIGHT, ROW_SPACING, PULL_OUT, rowPositions, cameraX } from './layout.js';
+import { BOOK_HEIGHT, ROW_SPACING, rowPositions, cameraX } from './layout.js';
 
 export const FEATURE_Y = 0;
 export const SHELF_TOP_Y = -70;
@@ -20,7 +20,8 @@ export function cameraPose(scene, ctx) {
             const y = rowY(row);
             const layout = ctx.rows?.[row]?.layout;
             const focus = layout?.positions.get(ctx.focusId)?.x ?? (layout ? Math.min(layout.width / 2, 20) : 0);
-            const x = layout ? cameraX(focus, layout.width, ctx.halfViewWidth ?? 30) : 0;
+            // The pan position (drag, wheel, momentum, recentre) is the camera's x; without one, follow the focused book.
+            const x = ctx.panX ?? (layout ? cameraX(focus, layout.width, ctx.halfViewWidth ?? 30) : 0);
             return { px: x, py: y + 6, pz: SHELF_DISTANCE, lx: x, ly: y + 1, lz: 0 };
         }
         case 'opening':
@@ -40,12 +41,29 @@ export function featuredPose(scene, t) {
     }
 }
 
-/** Pose of a book standing spine-out on a row; the focused one slides out 24 mm and tilts 6° (LIB-5). */
-export function shelfPose(rowIndex, x, focused) {
-    return {
-        x, y: rowY(rowIndex) + BOOK_HEIGHT / 2 - 10, z: focused ? PULL_OUT : 0,
-        ry: Math.PI / 2 + (focused ? -6 * DEG : 0), rx: 0, rz: 0,
-    };
+export const LIFT = { y: 0.8, z: 0.4 };            // a hovered spine lifts 8 mm and comes 4 mm forward
+export const PRESENT = { z: 9, lean: 2 * DEG };    // a presented book faces the camera, 9 cm forward, leaning back 2°
+
+/**
+ * Pose of a book on a row. 'rest': spine out on the plank. 'lifted': a hovered spine, up and slightly forward. 'presented':
+ * turned from spine-out (90°) to face the camera, forward and leaning back (WP4).
+ */
+export function shelfPose(rowIndex, x, mode = 'rest') {
+    const y = rowY(rowIndex) + BOOK_HEIGHT / 2 - 10;
+    if (mode === 'presented') return { x, y, z: PRESENT.z, ry: 0, rx: -PRESENT.lean, rz: 0 };
+    if (mode === 'lifted') return { x, y: y + LIFT.y, z: LIFT.z, ry: Math.PI / 2, rx: 0, rz: 0 };
+    return { x, y, z: 0, ry: Math.PI / 2, rx: 0, rz: 0 };
+}
+
+/**
+ * Damping rates per pose value. A lifted book settles in about 250 ms (λ = 12); a presented book turns at λ = 7 and comes
+ * forward at λ = 9; neighbours part faster when nearer (λ = 10) than farther (λ = 7), so the row ripples open.
+ */
+export function poseLambdas(mode, neighbourDistance = 0) {
+    if (mode === 'presented') return { x: 10, y: 12, z: 9, ry: 7, rx: 7, rz: 7 };
+    if (mode === 'lifted') return { x: 12, y: 12, z: 12, ry: 12, rx: 12, rz: 12 };
+    const x = neighbourDistance === 1 ? 10 : 7;
+    return { x, y: 12, z: 9, ry: 7, rx: 7, rz: 7 };
 }
 
 export function layoutRows(rows) {

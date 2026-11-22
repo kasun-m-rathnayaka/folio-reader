@@ -15,14 +15,34 @@ export function rowsFor(books, shelves) {
 
 /** Spine-out positions along a row, centred on x = 0 for the first book's left edge. */
 export function rowPositions(books) {
-    const positions = new Map();
-    let x = 0;
+    const positions = new Map(), xs = new Float64Array(books.length);
+    let x = 0, index = 0;
     for (const book of books) {
         const t = thicknessCm(book.pages);
-        positions.set(book.id, { x: x + t / 2, thickness: t });
+        positions.set(book.id, { x: x + t / 2, thickness: t, index });
+        xs[index++] = x + t / 2;
         x += t + SHELF_GAP;
     }
-    return { positions, width: Math.max(0, x - SHELF_GAP) };
+    return { positions, xs, books, width: Math.max(0, x - SHELF_GAP) };
+}
+
+/** Index range [first, last) of the books whose centre lies within [x0, x1]: binary search over the row's sorted centres. */
+export function visibleRange(layout, x0, x1) {
+    const xs = layout.xs, bound = value => { let lo = 0, hi = xs.length; while (lo < hi) { const mid = (lo + hi) >> 1; if (xs[mid] < value) lo = mid + 1; else hi = mid; } return lo; };
+    const first = bound(x0), last = bound(x1 + 1e-9);
+    return [first, Math.max(first, last)];
+}
+
+/** How far each neighbour moves when a book is presented: half the cover width, minus half this book's thickness, plus 1 cm of air. */
+export const partedShift = thickness => BOOK_WIDTH / 2 - thickness / 2 + 1;
+
+/**
+ * Where every book in a row stands while the book at `presentedIndex` faces the camera: books on its left move left and books on
+ * its right move right by the same shift, so the row opens like a book rather than sliding as a block. Returns x per index.
+ */
+export function partedPositions(layout, presentedIndex) {
+    const shift = partedShift(thicknessCm(layout.books[presentedIndex].pages));
+    return Array.from(layout.xs, (x, i) => i < presentedIndex ? x - shift : i > presentedIndex ? x + shift : x);
 }
 
 /** Clamps a camera x so the row never scrolls past its ends by more than half the view. */

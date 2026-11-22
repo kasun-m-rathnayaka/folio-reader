@@ -12,6 +12,7 @@ public static class FolioUIServiceCollectionExtensions
         services.AddScoped<LibraryEvents>();
         services.AddScoped<SceneKeys>();
         services.AddScoped<ShelfNavigator>();
+        services.AddScoped<CoverService>();
         services.AddScoped<Folio.UI.Stage.StageState>();
         services.AddScoped<Folio.UI.Stage.StageJsBridge>();
         services.AddSingleton<Folio.Application.Common.Interfaces.IReadingSessionLifetime, ReadingSessionLifetime>();

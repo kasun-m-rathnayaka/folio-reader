@@ -1,6 +1,8 @@
 // The only module .NET calls (SPEC: bridge contract). It validates input, owns the single Stage instance and forwards
 // user intent to .NET. Per-frame work never crosses this boundary.
 import { Stage } from './index.js';
+import { bookImageBlobs } from './book-look.js';
+import { ensureFonts } from './textures.js';
 
 let stage = null, dotnet = null;
 const call = (method, ...args) => dotnet?.invokeMethodAsync(method, ...args).catch(error => console.warn(`[FolioStage] ${method}`, error));
@@ -78,6 +80,20 @@ export function beginClose(id, rect, scene) {
     const r = cleanRect(rect);
     const next = cleanScene(scene);
     if (!r || typeof id !== 'string') stage.setScene(next); else stage.beginClose(id, r, next);
+}
+
+const imageUrls = new Map();
+/** WP5: the generated front and spine of a book as image URLs, for the 2D library (CssBook). Cached per book and title. */
+export async function bookImages(book) {
+    const clean = cleanBook(book);
+    if (!clean) return null;
+    const key = `${clean.id}|${clean.title}|${clean.author}|${clean.coverUrl}`;
+    if (!imageUrls.has(key)) imageUrls.set(key, (async () => {
+        await ensureFonts();
+        const { front, spine } = await bookImageBlobs(clean);
+        return { front: URL.createObjectURL(front), spine: URL.createObjectURL(spine) };
+    })().catch(error => { imageUrls.delete(key); console.warn('[FolioStage] images', error?.message); return null; }));
+    return imageUrls.get(key);
 }
 
 export const focusBook = id => stage?.focusBook(typeof id === 'string' ? id : null);

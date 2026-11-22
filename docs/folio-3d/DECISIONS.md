@@ -223,3 +223,32 @@ the cross-browser gates for M2 are proven on Chromium only and need a manual che
 - The reading-status buttons on the shelf scene stay for now: they filter the row (LIB-6) and are not duplicated by the
   sidebar's links, which change the route rather than the filter on the current shelf. Revisit if the user asks.
 
+
+## D-026 · Shelf navigation, UI clean-up and the bookcase (WP2, WP7, WP3)
+
+- **One step per gesture (WP2).** `GestureGate` (`stage/input.js`) adds wheel deltas within a gesture and fires one intent at
+  40 px; a gesture ends only after 180 ms with no wheel events, so trackpad momentum cannot fire a second step. Horizontal
+  gestures and Shift + wheel are pans. `ShelfNavigator` owns the rows, a version, `CurrentIndex`, `TargetIndex` and
+  Idle/Travelling; the stage reports arrival (camera within 3 mm of the row) and the navigator returns to Idle then, with a
+  900 ms watchdog. A scene carries `rowIndex` and `rowsVersion`; a stage holding another version asks .NET to resend the
+  library (`OnRowsStale`) and applies the scene afterwards, never falling back to row 0.
+- **Held ↑ / ↓ keys.** SPEC-V2 says repeats are ignored and also that a held key moves one shelf per settle. Both hold: a
+  repeat while travelling is dropped, and once the navigator is idle again the next repeat moves one more shelf. A fresh press
+  while travelling queues at most one more step. Every row change is a camera move; long jumps (keys 1–9, sidebar) use a
+  faster damping rate so they land within 0.7 s.
+- **WP7.** Icons are one `FolioIcon` component with inline paths (1.25 px, `currentColor`) instead of separate `.svg` files, so
+  they take the muted/active text colour from CSS. `MudDialogProvider` now closes on Escape (it did not before). Manage shelves
+  renames in place (Enter or leaving the field), reorders by handle drag or arrows, confirms deletion in the row, and refreshes
+  the shared row list after every change so the sidebar and bookcase update live. The reading-status buttons stay (D-025).
+- **Wood textures are generated, not downloaded.** Poly Haven and ambientCG are not reachable from this build environment, so
+  `scripts/gen-wood.mjs` writes 1K seamless colour, normal and roughness maps (`wwwroot/assets/wood/oak-*.png`) from
+  deterministic periodic noise. They are original work, need no licence, and can be replaced by photographed CC0 sets under
+  the same file names. Wood adds three shared textures and no per-book cost.
+- **Bookcase.** One case: a plank under every row plus a crown, uprights every 96 cm and at both ends, a back panel per row
+  (one plane per row, not per bay, so the grain is continuous), a baked shadow strip under each plank, and a brass plate on each
+  bay's plank with the shelf name. UVs are in world units (one tile per 60 cm) with a random offset and the odd flip per board.
+  Dark theme multiplies the oak toward walnut. A short row sits in a case at least 288 cm wide, centred on its books.
+- **Endless browsing.** `Pan` keeps position and velocity (friction 4/s, 20 cm rubber band, spring 8/s, recentre 6/s). Drag on
+  empty wood or the back panel, horizontal wheel and Shift + wheel pan; the pan position is the camera's x (undamped, so the
+  row follows the hand). Only books within 1.5 view widths of the camera on the current and adjacent rows have meshes (a pool of
+  reused meshes, binary search over the row's sorted positions).

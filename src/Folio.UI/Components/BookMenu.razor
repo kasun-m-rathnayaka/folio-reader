@@ -10,7 +10,7 @@
         <ChildContent>
             <MudMenuItem Icon="@Icons.Material.Outlined.Edit" OnClick="Edit">Edit details</MudMenuItem>
             <MudDivider />
-            @if (_shelves.Count == 0) { <MudMenuItem Disabled="true">Create a shelf to organize books</MudMenuItem> }
+            @if (_shelves.Count == 0) { <p class="folio-menu-hint">Create a shelf from the sidebar to organize books.</p> }
             @foreach (var shelf in _shelves)
             {
                 var on = _book?.BookShelves.Any(s => s.ShelfId == shelf.Id) == true;

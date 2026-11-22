@@ -202,3 +202,15 @@ select { border-radius:2px; background:var(--folio-surface); border-color:var(--
 /* ---- backup (WEB-4) ---------------------------------------------------------------------------------------------------- */
 .folio-settings-actions { display:flex; flex-wrap:wrap; gap:8px 18px; margin:6px 0 10px; }
 .folio-storage-status { color:var(--folio-text-muted); margin:4px 0 10px; }
+.folio-stage-page { touch-action:none; }
+.folio-menu-hint { margin:0; padding:8px 16px; font-size:12px; color:var(--folio-text-muted); max-width:240px; }
+
+/* The bookcase fills the stage, so the page title and status filter sit on a soft scrim to stay readable on wood (WP3). */
+.folio-stage-shelf { isolation:isolate; }
+.folio-stage-shelf::before { content:''; position:absolute; left:0; right:0; top:0; height:190px; z-index:-1; pointer-events:none;
+  background:linear-gradient(to bottom, color-mix(in srgb, var(--folio-bg) 92%, transparent) 0%, color-mix(in srgb, var(--folio-bg) 70%, transparent) 62%, transparent 100%); }
+
+/* The presented book's title marquee on the shelf (WP4): large serif, centred on the presented book, neighbours cut off. */
+.folio-shelf-marquee { position:absolute; left:0; right:0; top:184px; margin:0; pointer-events:none; z-index:0; }
+.folio-shelf-marquee .folio-marquee-title { font-size:clamp(30px, 4vw, 54px); color:color-mix(in srgb, var(--folio-text) 22%, transparent); text-shadow:0 2px 24px var(--folio-bg); }
+.folio-shelf-marquee .folio-marquee-title.is-current { color:var(--folio-text); }

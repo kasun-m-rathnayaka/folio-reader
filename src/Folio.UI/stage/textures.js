@@ -1,9 +1,9 @@
-// Generated textures (LIB-4): cover from the PDF's first-page render, spine drawn from title and author, cream
-// page edges, and the cover's dominant colour as the book's accent. Covers and spines live in an LRU of ~120 books.
+// Shared texture helpers (LIB-4): the PDF's first-page render (used for its dominant colour and the Plate artwork), cream page
+// edges, contact shadows, and an LRU of per-book looks (~120). Covers and spines themselves are painted by cover-composer.js.
 import * as THREE from 'three';
-import { dominantColor, parseHex, toHex, mix, contrast } from '../wwwroot/js/folio-color.mjs';
+import { dominantColor } from '../wwwroot/js/folio-color.mjs';
 
-export const COVER_MAX = 512, SPINE_W = 64, SPINE_H = 512;
+export const COVER_MAX = 512;
 
 export class LruCache {
     constructor(limit, dispose) { this.limit = limit; this.dispose = dispose; this.map = new Map(); }
@@ -43,58 +43,14 @@ export async function loadCover(url, anisotropy = 4) {
     return { texture, color, aspect: width / height };
 }
 
-/** Cloth colour for a book: the accent darkened enough that light spine text reads on it. */
-export function clothColor(accent) {
-    let rgb = mix(accent ? parseHex(accent) : [58, 54, 48], [18, 17, 16], 0.35);
-    // 7:1 in the texture leaves headroom for the key light, so spine text stays above 4.5:1 on screen.
-    for (let i = 0; i < 16 && contrast(rgb, SPINE_TEXT) < 7; i++) rgb = mix(rgb, [12, 11, 10], 0.2);
-    return toHex(rgb);
-}
-const SPINE_TEXT = '#F2EEE6';
-
 let fontsReady = null;
 export function ensureFonts() {
     fontsReady ??= Promise.all([
         document.fonts?.load?.('48px "Instrument Serif"'),
         document.fonts?.load?.('500 20px "Inter"'),
+        document.fonts?.load?.('500 20px "JetBrains Mono"'),
     ]).catch(() => {});
     return fontsReady;
-}
-
-/** Spine texture 64 × 512: title in Instrument Serif, author in Inter, reading top to bottom. */
-export function spineTexture(book, cloth, ribbon) {
-    const canvas = document.createElement('canvas');
-    canvas.width = SPINE_W; canvas.height = SPINE_H;
-    const g = canvas.getContext('2d');
-    g.fillStyle = cloth; g.fillRect(0, 0, SPINE_W, SPINE_H);
-    // subtle cloth weave
-    g.globalAlpha = 0.05; g.fillStyle = '#fff';
-    for (let y = 0; y < SPINE_H; y += 3) g.fillRect(0, y, SPINE_W, 1);
-    g.globalAlpha = 1;
-    g.save();
-    g.translate(SPINE_W / 2, 0); g.rotate(Math.PI / 2);
-    g.fillStyle = SPINE_TEXT; g.textBaseline = 'middle';
-    const fit = (text, font, max, size) => {
-        let s = size;
-        do { g.font = `${font.replace('{s}', s)}`; s -= 1; } while (g.measureText(text).width > max && s > 10);
-        let t = text;
-        while (g.measureText(t).width > max && t.length > 2) t = t.slice(0, -2) + '…';
-        return t;
-    };
-    const title = fit(book.title || 'Untitled', '{s}px "Instrument Serif", Georgia, serif', SPINE_H * 0.66, 34);
-    g.fillText(title, 26, 2);
-    const author = fit(book.author || '', '500 {s}px Inter, system-ui, sans-serif', SPINE_H * 0.24, 15);
-    g.fillStyle = 'rgba(242,238,230,.72)'; g.textAlign = 'right';
-    g.fillText(author.toUpperCase(), SPINE_H - 22, 2);
-    g.restore();
-    // LIB-8: a thin ribbon down the spine's edge marks reading progress.
-    if (book.progress > 0) {
-        g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(SPINE_W - 7, 0, 4, SPINE_H);
-        g.fillStyle = ribbon || '#D9B98C'; g.fillRect(SPINE_W - 7, 0, 4, Math.max(6, SPINE_H * book.progress));
-    }
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.colorSpace = THREE.SRGBColorSpace;
-    return texture;
 }
 
 let pageEdge = null;
